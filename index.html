@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#050505" />
+    <title>NOVA — Run &amp; Gun Prototype</title>
+    <link rel="stylesheet" href="./styles.css?v=20260904-7" />
+  </head>
+  <body>
+    <main class="game-shell" aria-label="NOVA 게임 프로토타입">
+      <canvas id="game" width="720" height="1280" aria-label="게임 화면"></canvas>
+
+      <section class="test-controls" data-test-controls hidden aria-label="테스트 모드 도구">
+        <button
+          type="button"
+          class="test-jump-path-button"
+          data-test-jump-path
+          aria-label="가로형 점프길 바로 보기"
+        >
+          JUMP
+        </button>
+        <button
+          type="button"
+          class="test-resolution-button"
+          data-test-resolution
+          aria-label="현재 해상도 720 곱하기 1280, 해상도 전환"
+        >
+          RES 720
+        </button>
+      </section>
+
+      <section class="touch-controls" aria-label="터치 조작 버튼">
+        <div class="move-controls">
+          <button
+            type="button"
+            class="movement-joystick"
+            data-movement-joystick
+            aria-label="이동, 점프, 앉기 조이스틱"
+          >
+            <span class="joystick-arrow up" aria-hidden="true">▲</span>
+            <span class="joystick-arrow right" aria-hidden="true">▶</span>
+            <span class="joystick-arrow down" aria-hidden="true">▼</span>
+            <span class="joystick-arrow left" aria-hidden="true">◀</span>
+            <span class="joystick-knob" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="action-controls">
+          <button class="control-button action fire" data-control="fire" aria-label="사격">FIRE</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="./js/config.js?v=20260907-2"></script>
+    <script src="./js/assets.js?v=20260907-1"></script>
+    <script src="./js/state.js?v=20260906-3"></script>
+    <script src="./js/world.js?v=20260907-2"></script>
+    <script src="./js/combat.js?v=20260906-6"></script>
+    <script src="./js/player.js?v=20260906-5"></script>
+    <script src="./js/enemies.js?v=20260907-1"></script>
+    <script src="./js/renderer.js?v=20260907-1"></script>
+    <script src="./js/input.js?v=20260906-2"></script>
+    <script src="./js/main.js?v=20260904-1"></script>
+  </body>
+</html>
