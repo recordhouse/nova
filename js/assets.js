@@ -35,8 +35,10 @@ const playerSprites = {
 };
 
 const enemySprites = {
-  monster1: loadImageAsset("./assets/images/monsters/monster1.png"),
+  monster1: loadImageAsset("./assets/images/monsters/monster_01.png"),
 };
+
+const turretSprite = loadImageAsset("./assets/images/monsters/turret_01.png");
 
 const fixedBackground = {
   image: new Image(),

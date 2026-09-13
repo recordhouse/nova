@@ -57,8 +57,8 @@ const bullets = [];
 const enemyBullets = [];
 const particles = [];
 const enemies = [];
+const turrets = [];
 const midBosses = [];
-const props = [];
 const stars = [];
 const platforms = [];
 const branches = [];
@@ -66,6 +66,8 @@ const branches = [];
 let cameraX = 0;
 let cameraY = 0;
 let cameraLookDirection = 1;
+let cameraPendingDirection = 0;
+let cameraDirectionHoldTime = 0;
 let previousTime = performance.now();
 let gameTime = 0;
 let shake = 0;
@@ -79,8 +81,11 @@ let maxWorldX = WIDTH;
 let goalPlatform = null;
 let goalX = 0;
 let jumpQueued = false;
+let showPlayerArea = false;
+let showMonsterArea = false;
+let testOrientationOverride = null;
 let testJumpRouteIndex = -1;
-let testResolutionPresetIndex = TEST_RESOLUTION_PRESETS.findIndex(
-  (preset) => preset.width === WIDTH && preset.height === HEIGHT,
+let testResolutionPresetIndex = TEST_RESOLUTION_SHORT_SIDES.indexOf(
+  Math.min(WIDTH, HEIGHT),
 );
 if (testResolutionPresetIndex < 0) testResolutionPresetIndex = 0;

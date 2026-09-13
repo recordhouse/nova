@@ -202,6 +202,47 @@ testResolutionButton?.addEventListener("click", (event) => {
   cycleTestResolution();
 });
 
+testOrientationButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  toggleTestOrientation();
+});
+
+function updateTestAreaButton(button, enabled, subject) {
+  if (!button || !TEST_MODE) return;
+  button.setAttribute("aria-pressed", String(enabled));
+  button.setAttribute(
+    "aria-label",
+    `${subject} 영역 표시 ${enabled ? "켜짐" : "꺼짐"}`,
+  );
+}
+
+testPlayerAreaButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  showPlayerArea = !showPlayerArea;
+  updateTestAreaButton(testPlayerAreaButton, showPlayerArea, "주인공");
+});
+
+testMonsterAreaButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  showMonsterArea = !showMonsterArea;
+  updateTestAreaButton(testMonsterAreaButton, showMonsterArea, "몬스터");
+});
+
+updateTestAreaButton(testPlayerAreaButton, showPlayerArea, "주인공");
+updateTestAreaButton(testMonsterAreaButton, showMonsterArea, "몬스터");
+
+let orientationSyncFrame = null;
+function scheduleCanvasOrientationSync() {
+  if (orientationSyncFrame !== null) cancelAnimationFrame(orientationSyncFrame);
+  orientationSyncFrame = requestAnimationFrame(() => {
+    orientationSyncFrame = null;
+    syncCanvasOrientation();
+  });
+}
+
+window.addEventListener("resize", scheduleCanvasOrientationSync);
+window.addEventListener("orientationchange", scheduleCanvasOrientationSync);
+window.screen?.orientation?.addEventListener("change", scheduleCanvasOrientationSync);
 window.addEventListener("blur", resetAllInputs);
 window.addEventListener("pagehide", resetAllInputs);
 document.addEventListener("visibilitychange", () => {

@@ -43,6 +43,23 @@ button {
   box-shadow: 0 0 48px rgb(0 0 0 / 65%);
 }
 
+@media (orientation: landscape) {
+  .game-shell {
+    width: min(100vw, calc(100dvh * 16 / 9));
+    height: min(100dvh, calc(100vw * 9 / 16));
+  }
+}
+
+.game-shell[data-test-layout="portrait"] {
+  width: min(100vw, calc(100dvh * 9 / 16));
+  height: min(100dvh, calc(100vw * 16 / 9));
+}
+
+.game-shell[data-test-layout="landscape"] {
+  width: min(100vw, calc(100dvh * 16 / 9));
+  height: min(100dvh, calc(100vw * 9 / 16));
+}
+
 #game {
   display: block;
   width: 100%;
@@ -66,7 +83,9 @@ button {
 }
 
 .test-jump-path-button,
-.test-resolution-button {
+.test-resolution-button,
+.test-orientation-button,
+.test-area-button {
   display: grid;
   width: auto;
   min-width: 54px;
@@ -100,7 +119,9 @@ button {
 }
 
 .test-jump-path-button:active,
-.test-resolution-button:active {
+.test-resolution-button:active,
+.test-orientation-button:active,
+.test-area-button:active {
   transform: translate(2px, 2px);
   border-color: #9af5ff;
   background: rgb(89 225 240 / 10%);
@@ -111,6 +132,34 @@ button {
   min-width: 66px;
   color: #e8ddff;
   border-color: rgb(180 151 255 / 76%);
+}
+
+.test-orientation-button {
+  min-width: 72px;
+  color: #fff1b8;
+  border-color: rgb(255 205 91 / 78%);
+}
+
+.test-area-button {
+  min-width: 58px;
+  padding-inline: 6px;
+}
+
+.test-area-button.player-area {
+  color: #c9ffd8;
+  border-color: rgb(105 255 145 / 76%);
+}
+
+.test-area-button.monster-area {
+  color: #ffd5dc;
+  border-color: rgb(255 104 111 / 76%);
+}
+
+.test-area-button[aria-pressed="false"] {
+  color: #737b81;
+  border-color: rgb(115 123 129 / 48%);
+  background: rgb(13 18 22 / 32%);
+  opacity: 0.72;
 }
 
 .touch-controls {

@@ -133,7 +133,11 @@ function platformVisualBounds(platform, verticalShift = 0) {
       left: platform.start,
       right: platform.end,
       top: Math.min(platform.entryY, platform.exitY) + verticalShift,
-      bottom: Math.max(platform.entryY, platform.exitY) + 32 + verticalShift,
+      bottom: (
+        Math.max(platform.entryY, platform.exitY) +
+        PLATFORM_DECK_THICKNESS +
+        verticalShift
+      ),
     };
   }
   return {
@@ -144,7 +148,7 @@ function platformVisualBounds(platform, verticalShift = 0) {
       platform.y +
       (isInvertedTrianglePlatform(platform)
         ? invertedTrianglePlatformDepth(platform)
-        : 32) +
+        : PLATFORM_DECK_THICKNESS) +
       verticalShift
     ),
   };
@@ -252,6 +256,24 @@ function roadRiseCount(length, chance = 0.94, maximumRises = 4) {
   return 1 + Math.floor(mapRandom() * possibleRises);
 }
 
+function roadElevationChange(
+  length,
+  currentLevel,
+  chance = 0.82,
+  maximumSteps = 3,
+  preferredTrend = 0,
+) {
+  const magnitude = roadRiseCount(length, chance, maximumSteps);
+  if (magnitude <= 0) return 0;
+
+  let trend = preferredTrend !== 0 && mapRandom() < 0.5
+    ? preferredTrend
+    : (mapRandom() < 0.5 ? 1 : -1);
+  if (currentLevel - magnitude < -MAP_FLOW_VERTICAL_SOFT_LIMIT) trend = -1;
+  if (currentLevel + magnitude > MAP_FLOW_VERTICAL_SOFT_LIMIT) trend = 1;
+  return trend * magnitude;
+}
+
 function rampHorizontalRun(angleDegrees, verticalRise = LEVEL_GAP) {
   return verticalRise / Math.tan(angleDegrees * Math.PI / 180);
 }
@@ -319,7 +341,16 @@ function addRisingPath(
   }
 
   if (actualRiseCount <= 0) {
-    const endPlatform = addPlatform(entryX, exitX, startLevel, type, group);
+    const flatRun = addBrokenFlatRun(
+      entryX,
+      exitX,
+      startLevel,
+      type,
+      group,
+      minimumFirstTread,
+      80,
+    );
+    const endPlatform = flatRun.platforms[flatRun.platforms.length - 1];
     return { endLevel: startLevel, endPlatform };
   }
 
@@ -339,7 +370,16 @@ function addRisingPath(
   }
   actualRiseCount = rampPlans.length;
   if (actualRiseCount === 0) {
-    const endPlatform = addPlatform(entryX, exitX, startLevel, type, group);
+    const flatRun = addBrokenFlatRun(
+      entryX,
+      exitX,
+      startLevel,
+      type,
+      group,
+      minimumFirstTread,
+      80,
+    );
+    const endPlatform = flatRun.platforms[flatRun.platforms.length - 1];
     return { endLevel: startLevel, endPlatform };
   }
 
@@ -361,13 +401,16 @@ function addRisingPath(
 
   for (let rise = 0; rise <= actualRiseCount; rise += 1) {
     const flatExitX = pathX + direction * flatLengths[rise];
-    endPlatform = addPlatform(
+    const flatRun = addBrokenFlatRun(
       pathX,
       flatExitX,
       startLevel - rise,
       segmentType,
       group,
+      rise === 0 ? minimumFirstTread : 0,
+      65,
     );
+    endPlatform = flatRun.platforms[flatRun.platforms.length - 1];
     pathX = flatExitX;
     if (rise >= actualRiseCount) continue;
 
@@ -501,6 +544,96 @@ function addJumpRisePath(
   };
 }
 
+function mirrorGeneratedElevationPath(
+  startLevel,
+  startPlatformIndex,
+  path,
+  pattern,
+) {
+  const pivotY = BASE_GROUND_Y + startLevel * LEVEL_GAP;
+  for (const platform of platforms.slice(startPlatformIndex)) {
+    platform.level = startLevel + (startLevel - platform.level);
+    platform.elevationPattern = pattern;
+    platform.type = platform.type
+      .replace("jump-rise", "jump-drop")
+      .replace(/-rise$/, "-drop");
+
+    if (platform.kind === "ramp") {
+      platform.entryY = pivotY * 2 - platform.entryY;
+      platform.exitY = pivotY * 2 - platform.exitY;
+      platform.y = Math.min(platform.entryY, platform.exitY);
+    } else {
+      platform.y = pivotY * 2 - platform.y;
+    }
+
+    if (platform.jumpRiseStep !== undefined) {
+      platform.jumpDropStep = platform.jumpRiseStep;
+      delete platform.jumpRiseStep;
+    }
+  }
+
+  return {
+    ...path,
+    endLevel: startLevel + (startLevel - path.endLevel),
+    pattern,
+  };
+}
+
+function addJumpDropPath(
+  entryX,
+  exitX,
+  startLevel,
+  dropCount,
+  type,
+  group,
+  minimumFirstTread = 0,
+) {
+  const startPlatformIndex = platforms.length;
+  const risingPath = addJumpRisePath(
+    entryX,
+    exitX,
+    startLevel,
+    dropCount,
+    type,
+    group,
+    minimumFirstTread,
+  );
+  if (!risingPath) return null;
+  return mirrorGeneratedElevationPath(
+    startLevel,
+    startPlatformIndex,
+    risingPath,
+    "jump-drop",
+  );
+}
+
+function addDescendingPath(
+  entryX,
+  exitX,
+  startLevel,
+  dropCount,
+  type,
+  group,
+  minimumFirstTread = 0,
+) {
+  const startPlatformIndex = platforms.length;
+  const risingPath = addRisingPath(
+    entryX,
+    exitX,
+    startLevel,
+    dropCount,
+    type,
+    group,
+    minimumFirstTread,
+  );
+  return mirrorGeneratedElevationPath(
+    startLevel,
+    startPlatformIndex,
+    risingPath,
+    "descending",
+  );
+}
+
 function addDipThenRisePath(
   entryX,
   exitX,
@@ -619,6 +752,31 @@ function addVariedElevationPath(
   minimumFirstTread = 0,
   forceDip = false,
 ) {
+  if (riseCount < 0) {
+    const dropCount = Math.abs(riseCount);
+    if (group > 0 && mapRandom() < JUMP_DROP_PATH_CHANCE) {
+      const jumpDropPath = addJumpDropPath(
+        entryX,
+        exitX,
+        startLevel,
+        dropCount,
+        type,
+        group,
+        minimumFirstTread,
+      );
+      if (jumpDropPath) return jumpDropPath;
+    }
+    return addDescendingPath(
+      entryX,
+      exitX,
+      startLevel,
+      dropCount,
+      type,
+      group,
+      minimumFirstTread,
+    );
+  }
+
   if (group > 0) {
     if (forceDip) {
       const forcedDipPath = addDipThenRisePath(
@@ -694,23 +852,175 @@ function branchLengthFor() {
   ]);
 }
 
-function turnDistanceFor() {
-  return TURN_DISTANCE_MIN + mapRandom() * (TURN_DISTANCE_MAX - TURN_DISTANCE_MIN);
+function flowDistanceFor() {
+  return (
+    MAP_FLOW_DISTANCE_MIN +
+    mapRandom() * (MAP_FLOW_DISTANCE_MAX - MAP_FLOW_DISTANCE_MIN)
+  );
+}
+
+function chooseMapFlowTransition(
+  direction,
+  currentLevel,
+  previousVerticalTrend,
+  verticalStreak,
+) {
+  const reversesDirection = mapRandom() < MAP_FLOW_REVERSE_CHANCE;
+  const continuesVerticalFlow = (
+    previousVerticalTrend !== 0 &&
+    verticalStreak < MAP_FLOW_VERTICAL_STREAK_MAX &&
+    mapRandom() < MAP_FLOW_VERTICAL_STREAK_CHANCE
+  );
+  let verticalTrend;
+
+  if (continuesVerticalFlow) {
+    verticalTrend = previousVerticalTrend;
+  } else {
+    const verticalRoll = mapRandom();
+    verticalTrend = verticalRoll < 0.34
+      ? 1
+      : verticalRoll < 0.68
+        ? -1
+        : 0;
+  }
+
+  if (reversesDirection && verticalTrend === 0) {
+    verticalTrend = mapRandom() < 0.5 ? 1 : -1;
+  }
+  if (
+    currentLevel <= -MAP_FLOW_VERTICAL_SOFT_LIMIT &&
+    verticalTrend > 0
+  ) verticalTrend = -1;
+  if (
+    currentLevel >= MAP_FLOW_VERTICAL_SOFT_LIMIT &&
+    verticalTrend < 0
+  ) verticalTrend = 1;
+
+  const transitionLevels = verticalTrend === 0
+    ? 0
+    : (
+      MAP_FLOW_TRANSITION_LEVEL_MIN +
+      mapRandom() * (
+        MAP_FLOW_TRANSITION_LEVEL_MAX - MAP_FLOW_TRANSITION_LEVEL_MIN
+      )
+    );
+  const levelOffset = -verticalTrend * transitionLevels;
+  const gap = (
+    MAP_FLOW_TRANSITION_GAP_MIN +
+    mapRandom() * (MAP_FLOW_TRANSITION_GAP_MAX - MAP_FLOW_TRANSITION_GAP_MIN)
+  );
+
+  return {
+    direction: reversesDirection ? -direction : direction,
+    horizontal: reversesDirection ? "reverse" : "forward",
+    vertical: verticalTrend > 0 ? "up" : verticalTrend < 0 ? "down" : "level",
+    verticalTrend,
+    levelOffset,
+    gap,
+  };
+}
+
+function addBrokenFlatRun(
+  entryX,
+  exitX,
+  level,
+  type,
+  group,
+  protectedStartLength = 0,
+  protectedEndLength = 0,
+) {
+  const direction = exitX >= entryX ? 1 : -1;
+  const length = Math.abs(exitX - entryX);
+  const possibleGapCounts = [];
+
+  for (let gapCount = 1; gapCount <= ROAD_BREAK_MAX_GAPS; gapCount += 1) {
+    const sectionCount = gapCount + 1;
+    const minimumFlatLength = (
+      Math.max(ROAD_BREAK_MIN_SECTION_LENGTH, protectedStartLength) +
+      Math.max(ROAD_BREAK_MIN_SECTION_LENGTH, protectedEndLength) +
+      Math.max(0, sectionCount - 2) * ROAD_BREAK_MIN_SECTION_LENGTH
+    );
+    const minimumLength = minimumFlatLength + gapCount * ROAD_BREAK_MIN_GAP;
+    if (minimumLength <= length) possibleGapCounts.push(gapCount);
+  }
+
+  if (possibleGapCounts.length === 0 || mapRandom() >= ROAD_BREAK_CHANCE) {
+    return {
+      platforms: [addPlatform(entryX, exitX, level, type, group)],
+      gapLengths: [],
+    };
+  }
+
+  const maximumGapCount = possibleGapCounts[possibleGapCounts.length - 1];
+  const gapCount = Math.max(
+    1,
+    maximumGapCount - (mapRandom() < 0.7 ? 0 : 1),
+  );
+  const sectionMinimums = Array.from(
+    { length: gapCount + 1 },
+    (_, section) => {
+      if (section === 0) {
+        return Math.max(ROAD_BREAK_MIN_SECTION_LENGTH, protectedStartLength);
+      }
+      if (section === gapCount) {
+        return Math.max(ROAD_BREAK_MIN_SECTION_LENGTH, protectedEndLength);
+      }
+      return ROAD_BREAK_MIN_SECTION_LENGTH;
+    },
+  );
+  const baseGapTotal = gapCount * ROAD_BREAK_MIN_GAP;
+  const baseFlatTotal = sectionMinimums.reduce((total, value) => total + value, 0);
+  const extraBudget = Math.max(0, length - baseGapTotal - baseFlatTotal);
+  const desiredGapExtras = Array.from(
+    { length: gapCount },
+    () => mapRandom() * (MAIN_PATH_MAX_GAP - ROAD_BREAK_MIN_GAP),
+  );
+  const desiredGapExtraTotal = desiredGapExtras.reduce((total, value) => total + value, 0);
+  const gapExtraScale = desiredGapExtraTotal > 0
+    ? Math.min(1, extraBudget * 0.34 / desiredGapExtraTotal)
+    : 0;
+  const gapLengths = desiredGapExtras.map(
+    (extra) => ROAD_BREAK_MIN_GAP + extra * gapExtraScale,
+  );
+  const remainingFlatExtra = (
+    length -
+    gapLengths.reduce((total, value) => total + value, 0) -
+    baseFlatTotal
+  );
+  const sectionWeights = sectionMinimums.map(() => 0.7 + mapRandom() * 0.8);
+  const totalWeight = sectionWeights.reduce((total, value) => total + value, 0);
+  const sectionLengths = sectionMinimums.map((minimum, section) => (
+    minimum + remainingFlatExtra * sectionWeights[section] / totalWeight
+  ));
+
+  const routePlatforms = [];
+  let pathX = entryX;
+  for (let section = 0; section < sectionLengths.length; section += 1) {
+    const sectionExitX = pathX + direction * sectionLengths[section];
+    const platform = addPlatform(pathX, sectionExitX, level, type, group);
+    platform.roadBreakSection = section;
+    platform.roadBreakGapAfter = gapLengths[section] ?? 0;
+    routePlatforms.push(platform);
+    pathX = sectionExitX;
+    if (section < gapLengths.length) pathX += direction * gapLengths[section];
+  }
+
+  return { platforms: routePlatforms, gapLengths };
 }
 
 function addSegmentedMainPath(entryX, exitX, level, type, group) {
   const direction = exitX >= entryX ? 1 : -1;
   const length = Math.abs(exitX - entryX);
-  const possibleGaps = Math.min(2, Math.floor((length - 220) / 300));
-  const gapCount = possibleGaps > 0 && mapRandom() < 0.68
+  const possibleGaps = Math.min(ROAD_BREAK_MAX_GAPS, Math.floor((length - 220) / 260));
+  const gapCount = possibleGaps > 0 && mapRandom() < ROAD_BREAK_CHANCE
     ? 1 + Math.floor(mapRandom() * possibleGaps)
     : 0;
   const gapLengths = Array.from({ length: gapCount }, () => (
-    38 + mapRandom() * (MAIN_PATH_MAX_GAP - 38)
+    ROAD_BREAK_MIN_GAP + mapRandom() * (MAIN_PATH_MAX_GAP - ROAD_BREAK_MIN_GAP)
   ));
   const flatBudget = length - gapLengths.reduce((total, gap) => total + gap, 0);
   const sectionCount = gapCount + 1;
-  const minimumSectionLength = 210;
+  const minimumSectionLength = ROAD_BREAK_MIN_SECTION_LENGTH;
   const extraFlatLength = Math.max(0, flatBudget - sectionCount * minimumSectionLength);
   const sectionWeights = Array.from({ length: sectionCount }, () => 0.65 + mapRandom());
   const totalWeight = sectionWeights.reduce((total, weight) => total + weight, 0);
@@ -992,6 +1302,14 @@ function finalizePlatformVariety() {
       continue;
     }
 
+    if (platform.elevationPattern === "jump-drop") {
+      platform.zone = "jump-drop";
+      platform.architecture = "open";
+      platform.lightColor = "#ff9f73";
+      platform.lightSpacing = 74;
+      continue;
+    }
+
     if (platform.routeRole === "sub") {
       platform.zone = "sub";
       platform.architecture = mapRandom() < 0.52 ? "conduit" : "open";
@@ -1095,16 +1413,18 @@ function generateMap() {
   let currentLevel = 0;
   let group = 0;
   let traveledDistance = 0;
-  let distanceSinceTurn = 0;
+  let distanceSinceFlowChange = 0;
   let distanceSinceDip = 0;
-  let nextTurnDistance = turnDistanceFor();
+  let nextFlowDistance = flowDistanceFor();
+  let verticalFlowTrend = 0;
+  let verticalFlowStreak = 0;
   let lastHorizontalJumpGroup = -4;
 
   const addTrackedElevationPath = (
     entryX,
     exitX,
     startLevel,
-    riseCount,
+    elevationChange,
     type,
     pathGroup,
     minimumFirstTread = 0,
@@ -1112,13 +1432,14 @@ function generateMap() {
     const pathLength = Math.abs(exitX - entryX);
     const forceDip = (
       pathGroup > 0 &&
+      elevationChange >= 0 &&
       distanceSinceDip + pathLength >= DIP_PATH_FORCE_DISTANCE
     );
     const path = addVariedElevationPath(
       entryX,
       exitX,
       startLevel,
-      riseCount,
+      elevationChange,
       type,
       pathGroup,
       minimumFirstTread,
@@ -1135,23 +1456,43 @@ function generateMap() {
     if (maximumApproach < 150) break;
     const approachLength = Math.min(approachLengthFor(group), maximumApproach);
     const splitEnd = cursor + direction * approachLength;
-    const approachRises = group === 0
-      ? 1
-      : roadRiseCount(approachLength);
-    const approachPath = addTrackedElevationPath(
-      cursor,
-      splitEnd,
-      currentLevel,
-      approachRises,
-      "main",
-      group,
-      group === 0 ? 420 : 0,
-    );
+    let approachPath;
+    if (group === 0) {
+      const startingRoad = addPlatform(
+        cursor,
+        splitEnd,
+        currentLevel,
+        "main",
+        group,
+      );
+      startingRoad.startingRoad = true;
+      approachPath = {
+        endLevel: currentLevel,
+        endPlatform: startingRoad,
+        pattern: "starting-road",
+      };
+      distanceSinceDip += approachLength;
+    } else {
+      approachPath = addTrackedElevationPath(
+        cursor,
+        splitEnd,
+        currentLevel,
+        roadElevationChange(
+          approachLength,
+          currentLevel,
+          0.76,
+          2,
+          verticalFlowTrend,
+        ),
+        "main",
+        group,
+      );
+    }
     currentLevel = approachPath.endLevel;
     traveledDistance += approachLength;
-    distanceSinceTurn += approachLength;
+    distanceSinceFlowChange += approachLength;
 
-    const entryGaps = [0, 0, 20, 38, 58, 82, 110];
+    const entryGaps = [0, 24, 40, 58, 76, 94, 112];
     const entryGap = entryGaps[Math.floor(mapRandom() * entryGaps.length)];
     const branchStart = splitEnd + direction * entryGap;
     const maximumBranch = WORLD_LENGTH - traveledDistance - entryGap - 320;
@@ -1199,16 +1540,22 @@ function generateMap() {
       distanceSinceDip += branchLength;
     } else if (hasSubPath) {
       const mainStartIndex = platforms.length;
-      const mainRiseCount = branchLength >= 700
-        ? roadRiseCount(branchLength, 0.92, 2)
+      const mainElevationChange = branchLength >= 700
+        ? roadElevationChange(
+          branchLength,
+          currentLevel,
+          0.82,
+          2,
+          verticalFlowTrend,
+        )
         : 0;
       let mainPlatforms;
-      if (mainRiseCount > 0) {
+      if (mainElevationChange !== 0) {
         const mainPath = addTrackedElevationPath(
           branchStart,
           branchEnd,
           currentLevel,
-          mainRiseCount,
+          mainElevationChange,
           "main-route",
           group,
         );
@@ -1227,7 +1574,7 @@ function generateMap() {
         distanceSinceDip += branchLength;
       }
 
-      const subRunsBackward = mainRiseCount > 0 || mapRandom() < 0.58;
+      const subRunsBackward = mainElevationChange !== 0 || mapRandom() < 0.58;
       const subEntryX = subRunsBackward ? branchEnd : branchStart;
       const subExitX = subRunsBackward ? branchStart : branchEnd;
       const subReferenceLevel = branchExitLevel;
@@ -1249,12 +1596,18 @@ function generateMap() {
         platforms: subPlatforms.map((platform) => platform.id),
       });
     } else {
-      const branchRises = roadRiseCount(branchLength, 0.96);
+      const branchElevationChange = roadElevationChange(
+        branchLength,
+        currentLevel,
+        0.88,
+        3,
+        verticalFlowTrend,
+      );
       const branchPath = addTrackedElevationPath(
         branchStart,
         branchEnd,
         currentLevel,
-        branchRises,
+        branchElevationChange,
         "branch",
         group,
       );
@@ -1275,49 +1628,70 @@ function generateMap() {
       entryLevelOffset,
     });
     traveledDistance += entryGap + branchLength;
-    distanceSinceTurn += entryGap + branchLength;
+    distanceSinceFlowChange += entryGap + branchLength;
 
-    const shouldTurn = distanceSinceTurn >= nextTurnDistance && traveledDistance < WORLD_LENGTH - 1400;
-    if (shouldTurn && MID_BOSS_ENABLED) {
-      addMidBoss(branchEnd, branchExitLevel, direction, group);
-    }
-    const exitGaps = [0, 0, 22, 42, 68, 96, 122];
-    const exitGap = shouldTurn ? 0 : exitGaps[Math.floor(mapRandom() * exitGaps.length)];
-    const exitLevelOffset = exitGap > 0 ? roadGapLevelOffset() : 0;
-    currentLevel = shouldTurn
-      ? branchExitLevel - TURN_PATH_RISE / LEVEL_GAP
-      : branchExitLevel + exitLevelOffset;
-    branches[branches.length - 1].exitGap = exitGap;
-    branches[branches.length - 1].exitLevelOffset = exitLevelOffset;
-    traveledDistance += exitGap;
-    distanceSinceTurn += exitGap;
-
-    if (shouldTurn) {
-      const turnStartOffset = (
-        TURN_PATH_START_OFFSET_MIN +
-        mapRandom() * (TURN_PATH_START_OFFSET_MAX - TURN_PATH_START_OFFSET_MIN)
+    const shouldChangeFlow = (
+      distanceSinceFlowChange >= nextFlowDistance &&
+      traveledDistance < WORLD_LENGTH - 1400
+    );
+    if (shouldChangeFlow) {
+      const transition = chooseMapFlowTransition(
+        direction,
+        branchExitLevel,
+        verticalFlowTrend,
+        verticalFlowStreak,
       );
-      cursor = branchEnd + direction * turnStartOffset;
-      branches[branches.length - 1].turnStartOffset = turnStartOffset;
+      if (
+        transition.horizontal === "reverse" &&
+        MID_BOSS_ENABLED
+      ) addMidBoss(branchEnd, branchExitLevel, direction, group);
+
+      currentLevel = branchExitLevel + transition.levelOffset;
+      cursor = branchEnd + direction * transition.gap;
+      branches[branches.length - 1].exitGap = transition.gap;
+      branches[branches.length - 1].exitLevelOffset = transition.levelOffset;
+      branches[branches.length - 1].flowTransition = transition;
       branches[branches.length - 1].nextRouteStartX = cursor;
-      direction *= -1;
-      distanceSinceTurn = 0;
+      traveledDistance += transition.gap;
+      direction = transition.direction;
+
+      if (transition.verticalTrend === verticalFlowTrend) {
+        verticalFlowStreak += transition.verticalTrend === 0 ? 0 : 1;
+      } else {
+        verticalFlowTrend = transition.verticalTrend;
+        verticalFlowStreak = transition.verticalTrend === 0 ? 0 : 1;
+      }
+      distanceSinceFlowChange = 0;
       distanceSinceDip = 0;
-      nextTurnDistance = turnDistanceFor();
+      nextFlowDistance = flowDistanceFor();
     } else {
+      const exitGaps = [0, 24, 42, 62, 82, 102, 122];
+      const exitGap = exitGaps[Math.floor(mapRandom() * exitGaps.length)];
+      const exitLevelOffset = exitGap > 0 ? roadGapLevelOffset() : 0;
+      currentLevel = branchExitLevel + exitLevelOffset;
       cursor = branchEnd + direction * exitGap;
+      branches[branches.length - 1].exitGap = exitGap;
+      branches[branches.length - 1].exitLevelOffset = exitLevelOffset;
+      traveledDistance += exitGap;
+      distanceSinceFlowChange += exitGap;
     }
     group += 1;
   }
 
   const remainingDistance = Math.max(300, WORLD_LENGTH - traveledDistance);
   goalX = cursor + direction * remainingDistance;
-  const goalRises = roadRiseCount(remainingDistance, 1, 3);
+  const goalElevationChange = roadElevationChange(
+    remainingDistance,
+    currentLevel,
+    1,
+    3,
+    verticalFlowTrend,
+  );
   const goalPath = addTrackedElevationPath(
     cursor,
     goalX,
     currentLevel,
-    goalRises,
+    goalElevationChange,
     "main",
     group,
   );
@@ -1365,9 +1739,27 @@ function addEnemy(platform, x, kind = "monster1") {
     kind,
     platform,
     hp: definition.hp,
+    maxHp: definition.hp,
     speed: definition.speed,
     chaseRange: definition.chaseRange,
+    chaseVerticalRange: definition.chaseVerticalRange,
+    climbSearchRange: definition.climbSearchRange,
+    climbVerticalRange: definition.climbVerticalRange,
+    climbMinimumHeight: definition.climbMinimumHeight,
     jumpAttackRange: definition.jumpAttackRange,
+    jumpAttackVerticalRange: definition.jumpAttackVerticalRange,
+    jumpLandingVerticalRange: definition.jumpLandingVerticalRange,
+    dropAttackRange: definition.dropAttackRange,
+    dropAttackMinHeight: definition.dropAttackMinHeight,
+    dropAttackMaxHeight: definition.dropAttackMaxHeight,
+    dropAttackHorizontalDistance: definition.dropAttackHorizontalDistance,
+    dropAttackLaunchSpeed: definition.dropAttackLaunchSpeed,
+    dropLandingClearance: definition.dropLandingClearance,
+    walkableStepHeight: definition.walkableStepHeight,
+    jumpGapRange: definition.jumpGapRange,
+    jumpGapMaxRise: definition.jumpGapMaxRise,
+    jumpGapMaxDrop: definition.jumpGapMaxDrop,
+    jumpGapMinHorizontalSpeed: definition.jumpGapMinHorizontalSpeed,
     jumpLaunchSpeed: definition.jumpLaunchSpeed,
     jumpGravity: definition.jumpGravity,
     jumpMinHorizontalSpeed: definition.jumpMinHorizontalSpeed,
@@ -1375,10 +1767,13 @@ function addEnemy(platform, x, kind = "monster1") {
     jumpWindupDuration: definition.jumpWindupDuration,
     jumpRecoveryDuration: definition.jumpRecoveryDuration,
     jumpCooldownDuration: definition.jumpCooldown,
-    jumpCooldown: 0.35 + mapRandom() * definition.jumpCooldown,
+    jumpCooldown: 0.05 + mapRandom() * 0.2,
     jumpVx: 0,
     jumpVy: 0,
     jumpHit: false,
+    jumpMode: "attack",
+    jumpOriginSurfaceY: null,
+    dropEdgeDirection: 0,
     state: "chase",
     stateTimer: 0,
     animationTime: mapRandom() * Math.PI * 2,
@@ -1386,9 +1781,38 @@ function addEnemy(platform, x, kind = "monster1") {
     moving: false,
     attackCooldown: definition.attackCooldown,
     attackTimer: 0,
+    hitDuration: definition.hitDuration,
+    hitTimer: 0,
+    hitDirection: 0,
+    hitKnockbackSpeed: definition.hitKnockbackSpeed,
+    hitKnockbackMaxSpeed: definition.hitKnockbackMaxSpeed,
+    hitKnockbackDamping: definition.hitKnockbackDamping,
+    hitKnockbackVelocity: 0,
+    hitAirImpulse: definition.hitAirImpulse,
     score: definition.score,
     alive: true,
     facing: -1,
+  });
+}
+
+function addTurret(platform, x) {
+  const surfaceY = platformSurfaceY(platform, x + TURRET.width / 2);
+  turrets.push({
+    x,
+    y: surfaceY - TURRET.height,
+    width: TURRET.width,
+    height: TURRET.height,
+    platform,
+    hp: TURRET.hp,
+    maxHp: TURRET.hp,
+    facing: -platform.direction,
+    fireTimer: TURRET.fireInterval,
+    chargeParticleTimer: 0,
+    recoilTimer: 0,
+    hitTimer: 0,
+    animationPhase: mapRandom() * Math.PI * 2,
+    active: false,
+    alive: true,
   });
 }
 
@@ -1420,10 +1844,16 @@ function buildStage() {
   for (const platform of platforms) {
     if (platform.kind !== "flat") continue;
     if (platform.trick === "horizontal-jump") continue;
+    const platformLength = platform.end - platform.start;
+    if (platformLength < ENEMY_SPAWN_MIN_PLATFORM_LENGTH) continue;
+    const edgeMargin = Math.min(
+      ENEMY_SPAWN_EDGE_MARGIN,
+      Math.max(16, platformLength * 0.12),
+    );
     const visibleStart = platform.group === 0
-      ? Math.max(460, platform.start + ENEMY_SPAWN_EDGE_MARGIN)
-      : platform.start + ENEMY_SPAWN_EDGE_MARGIN;
-    const visibleEnd = platform.end - ENEMY_SPAWN_EDGE_MARGIN;
+      ? Math.max(460, platform.start + edgeMargin)
+      : platform.start + edgeMargin;
+    const visibleEnd = platform.end - edgeMargin;
     const spawnLength = visibleEnd - visibleStart;
     if (spawnLength < ENEMY_SPAWN_MIN_LENGTH) continue;
 
@@ -1435,6 +1865,38 @@ function buildStage() {
     if (platform.routeRisk === "danger") enemyChance = Math.min(0.99, enemyChance * 1.2);
     if (platform.zone === "combat") enemyChance = Math.min(0.99, enemyChance * 1.12);
     if (platform.zone === "rest" || platform.zone === "connector") enemyChance *= 0.72;
+    if (platform.routeRole === "main") enemyChance = Math.max(0.9, enemyChance);
+    enemyChance *= ENEMY_SPAWN_DENSITY;
+
+    let turretX = null;
+    if (
+      !platform.startingRoad &&
+      platformLength >= TURRET.spawnMinPlatformLength &&
+      mapRandom() < TURRET.spawnChance
+    ) {
+      const turretStart = Math.max(
+        visibleStart,
+        platform.start + TURRET.spawnEdgeMargin,
+      );
+      const turretEnd = Math.min(
+        visibleEnd - TURRET.width,
+        platform.end - TURRET.spawnEdgeMargin - TURRET.width,
+      );
+
+      for (let attempt = 0; attempt < 8 && turretEnd > turretStart; attempt += 1) {
+        const candidateX = turretStart + mapRandom() * (turretEnd - turretStart);
+        const centerX = candidateX + TURRET.width / 2;
+        const surfaceY = platformSurfaceY(platform, centerX);
+        const tooCloseToTurret = turrets.some((turret) => (
+          Math.abs(centerX - (turret.x + turret.width / 2)) < TURRET.minimumSeparation &&
+          Math.abs(surfaceY - (turret.y + turret.height)) < LEVEL_GAP * 0.8
+        ));
+        if (!tooCloseToTurret) {
+          turretX = candidateX;
+          break;
+        }
+      }
+    }
 
     const enemySlots = Math.min(
       ENEMY_SPAWN_MAX_SLOTS,
@@ -1446,21 +1908,42 @@ function buildStage() {
         : Math.min(0.97, enemyChance * (platform.zone === "combat" ? 1 : 0.88));
       if (mapRandom() >= slotChance) continue;
       const slotLength = spawnLength / enemySlots;
-      const x = visibleStart + slotLength * slot + mapRandom() * Math.max(1, slotLength - 60);
-      addEnemy(platform, x, "monster1");
-    }
+      const slotStart = visibleStart + slotLength * slot;
+      const slotEnd = Math.min(visibleEnd, slotStart + slotLength);
+      const availableWidth = Math.max(
+        0,
+        slotEnd - slotStart - MONSTER_TYPES.monster1.width,
+      );
+      const fittingGroupSize = Math.max(
+        ENEMY_GROUP_MIN_SIZE,
+        Math.min(
+          ENEMY_GROUP_MAX_SIZE,
+          Math.floor(availableWidth / ENEMY_GROUP_MIN_SPACING) + 1,
+        ),
+      );
+      const groupSize = ENEMY_GROUP_MIN_SIZE + Math.floor(
+        mapRandom() * (fittingGroupSize - ENEMY_GROUP_MIN_SIZE + 1),
+      );
+      const desiredSpacing = ENEMY_GROUP_MIN_SPACING + mapRandom() * (
+        ENEMY_GROUP_MAX_SPACING - ENEMY_GROUP_MIN_SPACING
+      );
+      const groupSpacing = groupSize > 1
+        ? Math.min(desiredSpacing, availableWidth / (groupSize - 1))
+        : 0;
+      const groupWidth = groupSpacing * (groupSize - 1);
+      const groupStart = slotStart + mapRandom() * Math.max(0, availableWidth - groupWidth);
+      const groupEnd = groupStart + groupWidth + MONSTER_TYPES.monster1.width;
+      if (
+        turretX !== null &&
+        groupStart < turretX + TURRET.width + 28 &&
+        groupEnd + 28 > turretX
+      ) continue;
 
-    let propChance = rising ? 0.38 : 0.62;
-    if (platform.routeRisk === "safe") propChance *= 0.72;
-    if (platform.zone === "connector") propChance *= 0.28;
-    if (mapRandom() < propChance) {
-      props.push({
-        platform,
-        x: visibleStart + mapRandom() * (visibleEnd - visibleStart),
-        width: 34 + mapRandom() * 46,
-        height: 25 + mapRandom() * 28,
-      });
+      for (let member = 0; member < groupSize; member += 1) {
+        addEnemy(platform, groupStart + groupSpacing * member, "monster1");
+      }
     }
+    if (turretX !== null) addTurret(platform, turretX);
   }
 }
 
@@ -1572,7 +2055,9 @@ function movePlayerToHorizontalJumpPath() {
   gameOver = false;
 
   cameraLookDirection = direction;
-  const screenPosition = direction > 0 ? WIDTH * 0.14 : WIDTH * 0.86;
+  cameraPendingDirection = 0;
+  cameraDirectionHoldTime = 0;
+  const screenPosition = cameraAnchorScreenX(direction);
   cameraX = Math.max(
     minWorldX,
     Math.min(maxWorldX - WIDTH, player.x + player.width / 2 - screenPosition),
@@ -1583,11 +2068,18 @@ function movePlayerToHorizontalJumpPath() {
 
 function updateTestResolutionButton() {
   if (!testResolutionButton || !TEST_MODE) return;
-  const currentPreset = TEST_RESOLUTION_PRESETS[testResolutionPresetIndex];
-  const nextPreset = TEST_RESOLUTION_PRESETS[
-    (testResolutionPresetIndex + 1) % TEST_RESOLUTION_PRESETS.length
-  ];
-  testResolutionButton.textContent = `RES ${currentPreset.width}`;
+  const landscape = WIDTH > HEIGHT;
+  const currentPreset = canvasResolutionForOrientation(
+    TEST_RESOLUTION_SHORT_SIDES[testResolutionPresetIndex],
+    landscape,
+  );
+  const nextPreset = canvasResolutionForOrientation(
+    TEST_RESOLUTION_SHORT_SIDES[
+      (testResolutionPresetIndex + 1) % TEST_RESOLUTION_SHORT_SIDES.length
+    ],
+    landscape,
+  );
+  testResolutionButton.textContent = `RES ${currentPreset.width}×${currentPreset.height}`;
   testResolutionButton.setAttribute(
     "aria-label",
     `현재 해상도 ${currentPreset.width} 곱하기 ${currentPreset.height}, ` +
@@ -1595,23 +2087,39 @@ function updateTestResolutionButton() {
   );
 }
 
-function cycleTestResolution() {
-  if (!TEST_MODE) return;
-  resetAllInputs();
+function updateTestOrientationButton() {
+  if (!testOrientationButton || !TEST_MODE) return;
+  const landscape = WIDTH > HEIGHT;
+  const currentLabel = landscape ? "가로" : "세로";
+  const nextLabel = landscape ? "세로" : "가로";
+  testOrientationButton.textContent = `VIEW ${currentLabel}`;
+  testOrientationButton.setAttribute(
+    "aria-label",
+    `현재 ${currentLabel} 화면, ${nextLabel} 화면으로 전환`,
+  );
+}
 
+function applyTestOrientationLayout() {
+  if (!gameShellElement) return;
+  if (!TEST_MODE || testOrientationOverride === null) {
+    gameShellElement.removeAttribute("data-test-layout");
+    return;
+  }
+  gameShellElement.dataset.testLayout = (
+    testOrientationOverride ? "landscape" : "portrait"
+  );
+}
+
+function resizeGameResolution(width, height) {
+  if (width === WIDTH && height === HEIGHT) return false;
   const previousWidth = WIDTH;
-  const previousHeight = HEIGHT;
   const previousGroundY = BASE_GROUND_Y;
   const playerCenterX = player.x + player.width / 2;
   const playerScreenRatio = previousWidth > 0
     ? (playerCenterX - cameraX) / previousWidth
     : 0.5;
 
-  testResolutionPresetIndex = (
-    testResolutionPresetIndex + 1
-  ) % TEST_RESOLUTION_PRESETS.length;
-  const nextPreset = TEST_RESOLUTION_PRESETS[testResolutionPresetIndex];
-  configureCanvasResolution(nextPreset.width, nextPreset.height);
+  configureCanvasResolution(width, height);
 
   const verticalShift = BASE_GROUND_Y - previousGroundY;
   for (const platform of platforms) {
@@ -1624,6 +2132,7 @@ function cycleTestResolution() {
   player.y += verticalShift;
   player.fallReferenceY += verticalShift;
   for (const enemy of enemies) enemy.y += verticalShift;
+  for (const turret of turrets) turret.y += verticalShift;
   for (const boss of midBosses) {
     boss.y += verticalShift;
     boss.baseY += verticalShift;
@@ -1632,7 +2141,8 @@ function cycleTestResolution() {
   for (const bullet of bullets) bullet.y += verticalShift;
   for (const bullet of enemyBullets) bullet.y += verticalShift;
   for (const particle of particles) particle.y += verticalShift;
-  for (const star of stars) star.y *= HEIGHT / previousHeight;
+  stars.length = 0;
+  buildStars();
   lowestPlatformY += verticalShift;
 
   const preservedScreenX = Math.max(0, Math.min(1, playerScreenRatio)) * WIDTH;
@@ -1642,6 +2152,51 @@ function cycleTestResolution() {
   );
   shake = 0;
   updateTestResolutionButton();
+  updateTestOrientationButton();
+  return true;
+}
+
+function syncCanvasOrientation() {
+  const shortSide = Math.min(WIDTH, HEIGHT);
+  const landscape = TEST_MODE && testOrientationOverride !== null
+    ? testOrientationOverride
+    : viewportIsLandscape();
+  const nextResolution = canvasResolutionForOrientation(shortSide, landscape);
+  if (
+    nextResolution.width === WIDTH &&
+    nextResolution.height === HEIGHT
+  ) return;
+
+  resetAllInputs();
+  resizeGameResolution(nextResolution.width, nextResolution.height);
+}
+
+function toggleTestOrientation() {
+  if (!TEST_MODE) return;
+  testOrientationOverride = !(WIDTH > HEIGHT);
+  applyTestOrientationLayout();
+  resetAllInputs();
+
+  const shortSide = Math.min(WIDTH, HEIGHT);
+  const nextResolution = canvasResolutionForOrientation(
+    shortSide,
+    testOrientationOverride,
+  );
+  resizeGameResolution(nextResolution.width, nextResolution.height);
+}
+
+function cycleTestResolution() {
+  if (!TEST_MODE) return;
+  resetAllInputs();
+
+  testResolutionPresetIndex = (
+    testResolutionPresetIndex + 1
+  ) % TEST_RESOLUTION_SHORT_SIDES.length;
+  const nextResolution = canvasResolutionForOrientation(
+    TEST_RESOLUTION_SHORT_SIDES[testResolutionPresetIndex],
+    WIDTH > HEIGHT,
+  );
+  resizeGameResolution(nextResolution.width, nextResolution.height);
 }
 
 function resetGame() {
@@ -1649,7 +2204,7 @@ function resetGame() {
   enemyBullets.length = 0;
   particles.length = 0;
   enemies.length = 0;
-  props.length = 0;
+  turrets.length = 0;
   generateMap();
   resetPlayerPosition();
 
@@ -1657,11 +2212,13 @@ function resetGame() {
   player.score = 0;
   player.invincible = 0;
   cameraLookDirection = 1;
+  cameraPendingDirection = 0;
+  cameraDirectionHoldTime = 0;
   cameraX = Math.max(
     minWorldX,
     Math.min(
       maxWorldX - WIDTH,
-      player.x + player.width / 2 - CAMERA_DEAD_ZONE_LEFT,
+      player.x + player.width / 2 - cameraAnchorScreenX(1),
     ),
   );
   cameraY = 0;
@@ -1670,4 +2227,5 @@ function resetGame() {
   testJumpRouteIndex = -1;
   updateTestJumpPathButton();
   updateTestResolutionButton();
+  updateTestOrientationButton();
 }

@@ -19,6 +19,53 @@ function burst(x, y, color, count = 10, force = 220) {
   }
 }
 
+function burstMonsterFragments(bullet, enemy, lethal = false) {
+  const bulletSpeed = Math.max(1, Math.hypot(bullet.vx, bullet.vy));
+  const baseAngle = Math.atan2(bullet.vy, bullet.vx);
+  const colors = ["#70ff37", "#c9ff55", "#34ba32", "#713aa0", "#2b1647"];
+  const count = lethal ? 30 : 16;
+  const spread = lethal ? Math.PI * 0.9 : Math.PI * 0.58;
+
+  for (let i = 0; i < count; i += 1) {
+    const angle = baseAngle + (Math.random() - 0.5) * spread;
+    const force = (lethal ? 390 : 275) * (0.38 + Math.random() * 0.62);
+    const life = 0.3 + Math.random() * (lethal ? 0.42 : 0.28);
+    particles.push({
+      x: bullet.x + bullet.vx / bulletSpeed * 4,
+      y: bullet.y + bullet.vy / bulletSpeed * 4,
+      vx: Math.cos(angle) * force,
+      vy: Math.sin(angle) * force - 35 - Math.random() * 55,
+      life,
+      maxLife: life,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: 2.5 + Math.random() * (lethal ? 6 : 4.5),
+      shard: true,
+    });
+  }
+}
+
+function applyEnemyBulletImpact(enemy, bullet) {
+  const direction = Math.sign(bullet.vx) || enemy.facing;
+  enemy.hitDirection = direction;
+  enemy.hitTimer = enemy.hitDuration;
+  enemy.hitKnockbackVelocity = Math.max(
+    -enemy.hitKnockbackMaxSpeed,
+    Math.min(
+      enemy.hitKnockbackMaxSpeed,
+      enemy.hitKnockbackVelocity + direction * enemy.hitKnockbackSpeed,
+    ),
+  );
+  if (enemy.state === "jump") {
+    enemy.jumpVx = Math.max(
+      -enemy.jumpMaxHorizontalSpeed,
+      Math.min(
+        enemy.jumpMaxHorizontalSpeed,
+        enemy.jumpVx + direction * enemy.hitAirImpulse,
+      ),
+    );
+  }
+}
+
 function shootPlayer() {
   const direction = playerFireDirection();
   const isHighAim = playerIsAimingHigh();
@@ -80,11 +127,9 @@ function playerFireDirection() {
 }
 
 function playerIsAimingHigh() {
-  const horizontalInput = Number(controls.right) - Number(controls.left);
   return (
     controls.fire &&
     controls.up &&
-    horizontalInput !== 0 &&
     !(player.crouching && player.grounded)
   );
 }
@@ -154,7 +199,7 @@ function projectileSurfaceCollision(bullet, previousX, previousY) {
     const previousSurfaceY = platformSurfaceY(ramp, previousX);
     const signedDistance = (bullet.y - surfaceY) / normalLength;
     const previousSignedDistance = (previousY - previousSurfaceY) / normalLength;
-    const thickness = 32 / normalLength;
+    const thickness = PLATFORM_DECK_THICKNESS / normalLength;
     if (
       signedDistance <= -bullet.radius ||
       signedDistance >= thickness + bullet.radius
@@ -225,16 +270,6 @@ function projectileSurfaceCollision(bullet, previousX, previousY) {
     return nearestCollision;
   };
 
-  for (const prop of props) {
-    const collision = collisionForRect({
-      x: prop.x,
-      y: prop.platform.y - prop.height,
-      width: prop.width,
-      height: prop.height,
-    });
-    if (collision) return collision;
-  }
-
   for (const platform of platforms) {
     if (platform.kind === "ramp") {
       const collision = collisionForRamp(platform);
@@ -248,17 +283,58 @@ function projectileSurfaceCollision(bullet, previousX, previousY) {
     }
     const collision = collisionForRect({
       x: platform.start,
-      y: platform.y - 5,
+      y: platform.y - 3,
       width: platform.end - platform.start,
-      height: 37,
+      height: PLATFORM_DECK_THICKNESS + 3,
     });
     if (collision) return collision;
   }
   return null;
 }
 
+function burstTurretLaserImpact(bullet, collision, finalImpact = false) {
+  const normalX = collision.normalX ?? 0;
+  const normalY = collision.normalY ?? -1;
+  const tangentX = -normalY;
+  const tangentY = normalX;
+  const sparkCount = finalImpact ? 18 : 12;
+  const colors = ["#f2c8ff", "#dc79ff", "#9c2de0", "#511074"];
+
+  for (let spark = 0; spark < sparkCount; spark += 1) {
+    const outwardSpeed = 95 + Math.random() * (finalImpact ? 250 : 190);
+    const tangentSpeed = (Math.random() - 0.5) * (finalImpact ? 320 : 235);
+    const life = 0.16 + Math.random() * 0.25;
+    particles.push({
+      x: bullet.x + normalX * bullet.radius,
+      y: bullet.y + normalY * bullet.radius,
+      vx: normalX * outwardSpeed + tangentX * tangentSpeed,
+      vy: normalY * outwardSpeed + tangentY * tangentSpeed,
+      life,
+      maxLife: life,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: 2 + Math.random() * 4.5,
+      shard: true,
+    });
+  }
+
+  const flashLife = finalImpact ? 0.3 : 0.22;
+  particles.push({
+    x: bullet.x,
+    y: bullet.y,
+    vx: 0,
+    vy: 0,
+    life: flashLife,
+    maxLife: flashLife,
+    color: "#e8a2ff",
+    size: finalImpact ? 34 : 27,
+    lightImpact: true,
+  });
+  shake = Math.max(shake, finalImpact ? 8 : 5.5);
+}
+
 function moveRicochetingBullet(bullet, dt, ricochetColor) {
   bullet.ricochets ??= 0;
+  const maxRicochets = bullet.maxRicochets ?? PROJECTILE_MAX_RICOCHETS;
   const travelDistance = Math.hypot(bullet.vx, bullet.vy) * dt;
   const steps = Math.max(1, Math.ceil(travelDistance / Math.max(3, bullet.radius * 0.8)));
   const stepTime = dt / steps;
@@ -272,11 +348,14 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
     if (!collision) continue;
 
     shake = Math.max(shake, PROJECTILE_SURFACE_HIT_SHAKE);
-
-    if (bullet.ricochets >= PROJECTILE_MAX_RICOCHETS) {
-      burst(bullet.x, bullet.y, ricochetColor, 6, 115);
-      return false;
+    const finalImpact = bullet.ricochets >= maxRicochets;
+    if (bullet.kind === "turret-laser") {
+      burstTurretLaserImpact(bullet, collision, finalImpact);
+    } else {
+      burst(bullet.x, bullet.y, ricochetColor, finalImpact ? 6 : 5, 115);
     }
+
+    if (finalImpact) return false;
 
     if (collision.resolveX !== undefined) {
       bullet.x = collision.resolveX;
@@ -297,7 +376,6 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
     bullet.vx -= 2 * velocityAlongNormal * collision.normalX;
     bullet.vy -= 2 * velocityAlongNormal * collision.normalY;
     bullet.ricochets += 1;
-    burst(bullet.x, bullet.y, ricochetColor, 5, 105);
   }
   return true;
 }
@@ -316,15 +394,49 @@ function updateBullets(dt) {
       if (!enemy.alive || !overlapsCircleRect(bullet, enemy)) continue;
       enemy.hp -= 1;
       hit = true;
-      burst(bullet.x, bullet.y, "#ffce49", 7, 160);
+      applyEnemyBulletImpact(enemy, bullet);
+      burstMonsterFragments(bullet, enemy, enemy.hp <= 0);
+      burst(bullet.x, bullet.y, "#baff63", 5, 125);
+      shake = Math.max(shake, enemy.hp <= 0 ? 9 : 4.5);
 
       if (enemy.hp <= 0) {
         enemy.alive = false;
         player.score += enemy.score;
-        burst(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, "#ff542e", 22, 330);
+        burst(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, "#62ed38", 16, 330);
+        burst(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, "#5d2f82", 12, 290);
         shake = 9;
       }
       break;
+    }
+
+    if (!hit) {
+      for (const turret of turrets) {
+        if (!turret.alive || !overlapsCircleRect(bullet, turret)) continue;
+        turret.hp -= 1;
+        turret.hitTimer = 0.18;
+        hit = true;
+        burst(bullet.x, bullet.y, "#d75cff", 11, 205);
+        shake = Math.max(shake, turret.hp <= 0 ? 11 : 5);
+        if (turret.hp <= 0) {
+          turret.alive = false;
+          player.score += TURRET.score;
+          burst(
+            turret.x + turret.width / 2,
+            turret.y + turret.height * 0.48,
+            "#8d25d0",
+            28,
+            350,
+          );
+          burst(
+            turret.x + turret.width / 2,
+            turret.y + turret.height * 0.48,
+            "#ff76f1",
+            16,
+            280,
+          );
+        }
+        break;
+      }
     }
 
     if (!hit) {
@@ -362,7 +474,7 @@ function updateBullets(dt) {
 
   for (let i = enemyBullets.length - 1; i >= 0; i -= 1) {
     const bullet = enemyBullets[i];
-    if (!moveRicochetingBullet(bullet, dt, "#ff6b42")) {
+    if (!moveRicochetingBullet(bullet, dt, bullet.ricochetColor ?? "#ff6b42")) {
       enemyBullets.splice(i, 1);
       continue;
     }

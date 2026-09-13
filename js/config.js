@@ -6,15 +6,35 @@ const TEST_MODE = /(?:^|[?&])test=1(?:&|$)/.test(window.location?.search ?? "");
 const testControlsElement = document.querySelector("[data-test-controls]");
 const testJumpPathButton = document.querySelector("[data-test-jump-path]");
 const testResolutionButton = document.querySelector("[data-test-resolution]");
+const testOrientationButton = document.querySelector("[data-test-orientation]");
+const testPlayerAreaButton = document.querySelector("[data-test-player-area]");
+const testMonsterAreaButton = document.querySelector("[data-test-monster-area]");
+const gameShellElement = document.querySelector(".game-shell");
 if (testControlsElement) testControlsElement.hidden = !TEST_MODE;
 
-const TEST_RESOLUTION_PRESETS = [
-  { width: 540, height: 960 },
-  { width: 720, height: 1280 },
-];
+const TEST_RESOLUTION_SHORT_SIDES = [540, 720];
+const DEFAULT_CANVAS_SHORT_SIDE = 720;
+
+function viewportIsLandscape() {
+  return window.matchMedia?.("(orientation: landscape)").matches ?? (
+    window.innerWidth > window.innerHeight
+  );
+}
+
+function canvasResolutionForOrientation(
+  shortSide = DEFAULT_CANVAS_SHORT_SIDE,
+  landscape = viewportIsLandscape(),
+) {
+  const longSide = Math.round(shortSide * 16 / 9);
+  return landscape
+    ? { width: longSide, height: shortSide }
+    : { width: shortSide, height: longSide };
+}
+
+const initialCanvasResolution = canvasResolutionForOrientation();
 const BASE_GROUND_SCREEN_RATIO = 748 / 960;
-let WIDTH = canvas.width;
-let HEIGHT = canvas.height;
+let WIDTH = initialCanvasResolution.width;
+let HEIGHT = initialCanvasResolution.height;
 const RENDER_SCALE = 1;
 let BASE_GROUND_Y = HEIGHT * BASE_GROUND_SCREEN_RATIO;
 const GRAVITY = 2100;
@@ -24,7 +44,8 @@ const JUMP_ANIMATION_DURATION = (JUMP_SPEED * 2) / GRAVITY;
 const FIRE_AIM_ANGLE_DIAGONAL = Math.PI / 6;
 const WORLD_LENGTH = 52000;
 const LEVEL_GAP = 180;
-const RAMP_ANGLE_DEGREES = [10, 20, 30, 40];
+const PLATFORM_DECK_THICKNESS = 16;
+const RAMP_ANGLE_DEGREES = [20];
 const RAMP_MIN_LANDING_LENGTH = 54;
 const RAMP_MAX_LANDING_LENGTH = 150;
 const RISING_PATH_MIN_FLAT_LENGTH = 48;
@@ -40,6 +61,10 @@ const FLOATING_PATH_MUTUAL_CLEARANCE_X = 68;
 const FLOATING_PATH_MUTUAL_CLEARANCE_Y = 58;
 const FLOATING_PATH_CLEARANCE_SHIFTS = [0, -42, 42, -72, 72];
 const MAIN_PATH_MAX_GAP = 112;
+const ROAD_BREAK_CHANCE = 0.94;
+const ROAD_BREAK_MIN_GAP = 48;
+const ROAD_BREAK_MIN_SECTION_LENGTH = 60;
+const ROAD_BREAK_MAX_GAPS = 4;
 const ROAD_GAP_LEVEL_OFFSETS = [-0.18, -0.14, -0.1, 0.1, 0.14];
 const PLATFORM_FEATURE_MIN_LENGTH = 190;
 const PLATFORM_FEATURE_SLOT_LENGTH = 200;
@@ -47,12 +72,17 @@ const PLATFORM_FEATURE_WIDTH_MIN = 92;
 const PLATFORM_FEATURE_WIDTH_MAX = 156;
 const PLATFORM_FEATURE_LARGE_WIDTH_MIN = 150;
 const PLATFORM_FEATURE_LARGE_WIDTH_MAX = 240;
-const TURN_PATH_RISE = 270;
-const TURN_DISTANCE_MIN = 1800;
-const TURN_DISTANCE_MAX = 4400;
-const TURN_PATH_START_OFFSET_MIN = 36;
-const TURN_PATH_START_OFFSET_MAX = 78;
-const HORIZONTAL_JUMP_PATH_CHANCE = 0.32;
+const MAP_FLOW_DISTANCE_MIN = 1200;
+const MAP_FLOW_DISTANCE_MAX = 3000;
+const MAP_FLOW_REVERSE_CHANCE = 0.34;
+const MAP_FLOW_VERTICAL_STREAK_CHANCE = 0.56;
+const MAP_FLOW_VERTICAL_STREAK_MAX = 3;
+const MAP_FLOW_VERTICAL_SOFT_LIMIT = 10;
+const MAP_FLOW_TRANSITION_LEVEL_MIN = 1.15;
+const MAP_FLOW_TRANSITION_LEVEL_MAX = 1.9;
+const MAP_FLOW_TRANSITION_GAP_MIN = 42;
+const MAP_FLOW_TRANSITION_GAP_MAX = 86;
+const HORIZONTAL_JUMP_PATH_CHANCE = 0.42;
 const HORIZONTAL_JUMP_PATH_MIN_LENGTH = 1250;
 const HORIZONTAL_JUMP_SINGLE_GAP_MIN = 180;
 const HORIZONTAL_JUMP_SINGLE_GAP_MAX = 205;
@@ -65,22 +95,24 @@ const HORIZONTAL_JUMP_PAD_HEIGHTS = [
   { name: "lower", levelOffset: 0.38 },
 ];
 const HORIZONTAL_JUMP_PAD_TRIANGLE_ANGLES = [30, 45, 60];
-const FLOATING_PATH_TRIANGLE_ANGLES = [10, 20];
+const FLOATING_PATH_TRIANGLE_ANGLES = [10];
 const HORIZONTAL_JUMP_MIN_RUNWAY_LENGTH = 360;
-const JUMP_RISE_PATH_CHANCE = 0.28;
+const JUMP_RISE_PATH_CHANCE = 0.4;
+const JUMP_DROP_PATH_CHANCE = 0.7;
 const DIP_PATH_CHANCE = 0.36;
 const DIP_PATH_FORCE_DISTANCE = 1250;
 const DIP_PATH_DEPTH_LEVELS = [0.35, 0.5];
-const DIP_PATH_ANGLE_DEGREES = [10, 20];
+const DIP_PATH_ANGLE_DEGREES = [20];
 const JUMP_RISE_GAP_MIN = 48;
 const JUMP_RISE_GAP_MAX = 68;
 const JUMP_RISE_LANDING_MIN = 170;
 const JUMP_RISE_LANDING_MAX = 230;
-let CAMERA_DEAD_ZONE_LEFT = WIDTH * 0.12;
-let CAMERA_DEAD_ZONE_RIGHT = WIDTH * 0.16;
-let CAMERA_REVERSE_ZONE_LEFT = WIDTH - CAMERA_DEAD_ZONE_RIGHT;
-let CAMERA_REVERSE_ZONE_RIGHT = WIDTH - CAMERA_DEAD_ZONE_LEFT;
-const CAMERA_HORIZONTAL_FOLLOW_SPEED = 5;
+const CAMERA_LOOK_RIGHT_ANCHOR_RATIO = 0.3;
+const CAMERA_LOOK_LEFT_ANCHOR_RATIO = 0.7;
+const CAMERA_LOOK_SWITCH_DELAY = 0.25;
+const CAMERA_LOOK_MOVEMENT_SPEED_THRESHOLD = 32;
+const CAMERA_HORIZONTAL_FOLLOW_SPEED = 10;
+const CAMERA_MAX_PAN_SPEED_RATIO = 0.75;
 const PLAYER_SPRITE_DRAW_HEIGHT = 149.6;
 const PLAYER_STAND_SPRITE_SCALE = 1.12;
 const PLAYER_BLAST_SPRITE_SCALE = 1.1;
@@ -101,15 +133,41 @@ const PLAYER_MUZZLE_BARREL_OFFSET = 7;
 const PLAYER_FIRE_STAGGER_DELAY = 0.065;
 const PLAYER_FIRE_PAIR_DELAY = 0.14;
 const PROJECTILE_SURFACE_HIT_SHAKE = 4;
-const PLAYER_HITBOX_WIDTH = 80;
+const PLAYER_HITBOX_WIDTH = 70;
 const PLAYER_HITBOX_HEIGHT = 144;
-const PLAYER_CROUCH_HITBOX_WIDTH = 82;
+const PLAYER_CROUCH_HITBOX_WIDTH = 72;
 const PLAYER_CROUCH_HITBOX_HEIGHT = 123;
 const PROJECTILE_MAX_RICOCHETS = 3;
 const ENEMY_SPAWN_EDGE_MARGIN = 64;
-const ENEMY_SPAWN_MIN_LENGTH = 104;
-const ENEMY_SPAWN_SLOT_LENGTH = 235;
-const ENEMY_SPAWN_MAX_SLOTS = 6;
+const ENEMY_SPAWN_MIN_PLATFORM_LENGTH = 132;
+const ENEMY_SPAWN_MIN_LENGTH = 92;
+const ENEMY_SPAWN_SLOT_LENGTH = 420;
+const ENEMY_SPAWN_MAX_SLOTS = 5;
+const ENEMY_SPAWN_DENSITY = 0.5;
+const ENEMY_GROUP_MIN_SIZE = 2;
+const ENEMY_GROUP_MAX_SIZE = 5;
+const ENEMY_GROUP_MIN_SPACING = 44;
+const ENEMY_GROUP_MAX_SPACING = 58;
+const TURRET = {
+  width: 72,
+  height: 104,
+  spriteWidth: 88,
+  spriteHeight: 116,
+  spriteBottomOffset: 2,
+  hp: 18,
+  activationRangeX: 980,
+  activationRangeY: 660,
+  fireInterval: 7,
+  chargeDuration: 1.35,
+  laserSpeed: 350,
+  laserRadius: 10,
+  laserRicochets: 5,
+  spawnMinPlatformLength: 320,
+  spawnEdgeMargin: 90,
+  spawnChance: 0.48,
+  minimumSeparation: 520,
+  score: 350,
+};
 const MID_BOSS_ENABLED = false;
 const MID_BOSS = {
   width: 118,
@@ -130,17 +188,39 @@ const MONSTER_TYPES = {
     spriteHeight: 112,
     spriteBottomOffset: 14,
     hp: 3,
-    speed: 72,
-    chaseRange: 620,
-    jumpAttackRange: 220,
-    jumpLaunchSpeed: 410,
-    jumpGravity: 1200,
-    jumpMinHorizontalSpeed: 130,
-    jumpMaxHorizontalSpeed: 300,
-    jumpWindupDuration: 0.24,
-    jumpRecoveryDuration: 0.18,
-    jumpCooldown: 1.45,
-    attackCooldown: 1,
+    speed: 128,
+    chaseRange: 900,
+    chaseVerticalRange: 300,
+    climbSearchRange: 1400,
+    climbVerticalRange: 720,
+    climbMinimumHeight: 34,
+    jumpAttackRange: 180,
+    jumpAttackVerticalRange: 72,
+    jumpLandingVerticalRange: 72,
+    dropAttackRange: 720,
+    dropAttackMinHeight: 90,
+    dropAttackMaxHeight: 720,
+    dropAttackHorizontalDistance: 72,
+    dropAttackLaunchSpeed: 150,
+    dropLandingClearance: 30,
+    walkableStepHeight: 20,
+    jumpGapRange: 140,
+    jumpGapMaxRise: 72,
+    jumpGapMaxDrop: 72,
+    jumpGapMinHorizontalSpeed: 90,
+    jumpLaunchSpeed: 440,
+    jumpGravity: 1150,
+    jumpMinHorizontalSpeed: 70,
+    jumpMaxHorizontalSpeed: 260,
+    jumpWindupDuration: 0.12,
+    jumpRecoveryDuration: 0.1,
+    jumpCooldown: 0.7,
+    attackCooldown: 0.65,
+    hitDuration: 0.2,
+    hitKnockbackSpeed: 360,
+    hitKnockbackMaxSpeed: 600,
+    hitKnockbackDamping: 9.5,
+    hitAirImpulse: 90,
     score: 100,
   },
 };
@@ -194,10 +274,6 @@ function configureCanvasResolution(width, height) {
   WIDTH = width;
   HEIGHT = height;
   BASE_GROUND_Y = HEIGHT * BASE_GROUND_SCREEN_RATIO;
-  CAMERA_DEAD_ZONE_LEFT = WIDTH * 0.12;
-  CAMERA_DEAD_ZONE_RIGHT = WIDTH * 0.16;
-  CAMERA_REVERSE_ZONE_LEFT = WIDTH - CAMERA_DEAD_ZONE_RIGHT;
-  CAMERA_REVERSE_ZONE_RIGHT = WIDTH - CAMERA_DEAD_ZONE_LEFT;
   canvas.width = Math.round(WIDTH * RENDER_SCALE);
   canvas.height = Math.round(HEIGHT * RENDER_SCALE);
   ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);

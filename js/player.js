@@ -2,6 +2,37 @@
 
 // Player movement, jumping, crouching, and camera tracking.
 
+function cameraAnchorScreenX(direction = cameraLookDirection) {
+  const anchorRatio = direction > 0
+    ? CAMERA_LOOK_RIGHT_ANCHOR_RATIO
+    : CAMERA_LOOK_LEFT_ANCHOR_RATIO;
+  return WIDTH * anchorRatio;
+}
+
+function updateCameraLookDirection(dt) {
+  const movementDirection = Math.abs(player.vx) >= CAMERA_LOOK_MOVEMENT_SPEED_THRESHOLD
+    ? Math.sign(player.vx)
+    : 0;
+
+  if (movementDirection === 0 || movementDirection === cameraLookDirection) {
+    cameraPendingDirection = 0;
+    cameraDirectionHoldTime = 0;
+    return;
+  }
+
+  if (movementDirection !== cameraPendingDirection) {
+    cameraPendingDirection = movementDirection;
+    cameraDirectionHoldTime = dt;
+  } else {
+    cameraDirectionHoldTime += dt;
+  }
+
+  if (cameraDirectionHoldTime < CAMERA_LOOK_SWITCH_DELAY) return;
+  cameraLookDirection = cameraPendingDirection;
+  cameraPendingDirection = 0;
+  cameraDirectionHoldTime = 0;
+}
+
 function updatePlayer(dt) {
   const jumpInputActive = controls.jump || controls.up;
   const jumpPressed = jumpQueued || (jumpInputActive && !player.jumpLatch);
@@ -149,25 +180,18 @@ function updatePlayer(dt) {
   player.invincible = Math.max(0, player.invincible - dt);
   if (controls.fire && player.fireTimer <= 0) shootPlayer();
 
-  const playerScreenX = playerCenterX - cameraX;
-  if (player.facing !== cameraLookDirection) cameraLookDirection = player.facing;
-
-  const deadZoneLeft = cameraLookDirection > 0
-    ? CAMERA_DEAD_ZONE_LEFT
-    : CAMERA_REVERSE_ZONE_LEFT;
-  const deadZoneRight = cameraLookDirection > 0
-    ? CAMERA_DEAD_ZONE_RIGHT
-    : CAMERA_REVERSE_ZONE_RIGHT;
-  let targetCameraX = cameraX;
-  if (playerScreenX < deadZoneLeft) {
-    targetCameraX = playerCenterX - deadZoneLeft;
-  } else if (playerScreenX > deadZoneRight) {
-    targetCameraX = playerCenterX - deadZoneRight;
-  }
+  updateCameraLookDirection(dt);
+  let targetCameraX = playerCenterX - cameraAnchorScreenX();
   targetCameraX = Math.max(minWorldX, Math.min(maxWorldX - WIDTH, targetCameraX));
-  cameraX += (
-    targetCameraX - cameraX
-  ) * Math.min(1, dt * CAMERA_HORIZONTAL_FOLLOW_SPEED);
+  const cameraDistance = targetCameraX - cameraX;
+  const easedCameraStep = cameraDistance * (
+    1 - Math.exp(-dt * CAMERA_HORIZONTAL_FOLLOW_SPEED)
+  );
+  const maximumCameraStep = WIDTH * CAMERA_MAX_PAN_SPEED_RATIO * dt;
+  cameraX += Math.max(
+    -maximumCameraStep,
+    Math.min(maximumCameraStep, easedCameraStep),
+  );
   const playerFeetY = player.y + player.height;
   const targetCameraY = playerFeetY - BASE_GROUND_Y;
   cameraY += (targetCameraY - cameraY) * Math.min(1, dt * 4.2);

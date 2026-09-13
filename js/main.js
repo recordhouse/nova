@@ -18,6 +18,7 @@ function update(dt) {
   shake = Math.max(0, shake - dt * 28);
   if (gameOver) return;
   updatePlayer(dt);
+  updateTurrets(dt);
   updateMidBosses(dt);
   updateBullets(dt);
   updateEnemies(dt);

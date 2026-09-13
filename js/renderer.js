@@ -65,7 +65,7 @@ function drawBackground() {
   ctx.globalAlpha = 1;
 }
 
-function drawStationPanels(platform, thickness = 24) {
+function drawStationPanels(platform, thickness = PLATFORM_DECK_THICKNESS - 4) {
   const panelWidths = [84, 112, 140];
   const panelPalettes = [
     ["#18232d", "#1c2934"],
@@ -83,50 +83,135 @@ function drawStationPanels(platform, thickness = 24) {
     ctx.fillStyle = Math.floor((x - platform.start) / panelWidth) % 2 === 0
       ? palette[0]
       : palette[1];
-    ctx.fillRect(-panelWidth / 2 - 1, 5, panelWidth + 2, thickness);
+    ctx.fillRect(-panelWidth / 2 - 1, 3, panelWidth + 2, thickness);
     ctx.strokeStyle = "rgba(89, 112, 128, 0.62)";
     ctx.lineWidth = 1;
-    ctx.strokeRect(-panelWidth / 2, 6, panelWidth, thickness - 2);
+    ctx.strokeRect(-panelWidth / 2, 4, panelWidth, thickness - 2);
 
     ctx.strokeStyle = "rgba(111, 151, 170, 0.28)";
     ctx.beginPath();
     if (platform.style === 0) {
-      ctx.moveTo(0, 7);
-      ctx.lineTo(0, thickness + 3);
+      ctx.moveTo(0, 5);
+      ctx.lineTo(0, thickness + 1);
     } else if (platform.style === 1) {
-      ctx.moveTo(-panelWidth * 0.32, thickness + 2);
-      ctx.lineTo(panelWidth * 0.32, 7);
+      ctx.moveTo(-panelWidth * 0.32, thickness + 1);
+      ctx.lineTo(panelWidth * 0.32, 5);
     } else {
-      ctx.moveTo(-panelWidth * 0.2, 7);
-      ctx.lineTo(-panelWidth * 0.2, thickness + 3);
-      ctx.moveTo(panelWidth * 0.2, 7);
-      ctx.lineTo(panelWidth * 0.2, thickness + 3);
+      ctx.moveTo(-panelWidth * 0.2, 5);
+      ctx.lineTo(-panelWidth * 0.2, thickness + 1);
+      ctx.moveTo(panelWidth * 0.2, 5);
+      ctx.lineTo(panelWidth * 0.2, thickness + 1);
     }
     ctx.stroke();
 
     ctx.fillStyle = "rgba(104, 211, 225, 0.28)";
-    ctx.fillRect(-panelWidth * 0.28, 10, panelWidth * 0.56, 2);
+    ctx.fillRect(-panelWidth * 0.28, 6, panelWidth * 0.56, 1.5);
     ctx.restore();
   }
 }
 
 function drawPlatformLights(platform) {
+  const frame = Math.floor(gameTime * 22);
+  const spacing = Math.min(150, platform.lightSpacing);
+  const platformLength = platform.end - platform.start;
+  if (platformLength < 36) return;
+  const firstLightX = Math.max(
+    platform.start + 18,
+    Math.min(platform.start + platform.lightOffset, platform.end - 18),
+  );
   for (
-    let x = platform.start + platform.lightOffset;
-    x <= platform.end - 22;
-    x += platform.lightSpacing
+    let x = firstLightX;
+    x <= platform.end - 18;
+    x += spacing
   ) {
-    const pulse = 0.7 + Math.sin(gameTime * 2.4 + platform.lightPhase + x * 0.015) * 0.18;
+    const seed = Math.floor(x - platform.start) + 330;
+    const damaged = platformFeatureNoise(platform, seed) > 0.72;
+    const flicker = platformFeatureNoise(platform, seed + frame * 19);
+    const lit = !damaged || flicker > 0.43;
+    const pulse = lit
+      ? 0.72 + Math.sin(gameTime * 2.8 + platform.lightPhase + x * 0.015) * 0.2
+      : 0.08;
     ctx.save();
-    ctx.fillStyle = "#071015";
-    ctx.fillRect(x - 8, platform.y + 13, 16, 6);
+    ctx.fillStyle = "#05090e";
+    ctx.fillRect(x - 8, platform.y + 4, 16, 8);
+    ctx.strokeStyle = "rgba(117, 139, 153, 0.82)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 7.5, platform.y + 4.5, 15, 7);
     ctx.globalAlpha = pulse;
     ctx.shadowColor = platform.lightColor;
-    ctx.shadowBlur = 9;
+    ctx.shadowBlur = lit ? 11 : 2;
     ctx.fillStyle = platform.lightColor;
-    ctx.fillRect(x - 5, platform.y + 15, 10, 2);
-    ctx.fillRect(x - 3, platform.y - 4, 6, 2);
+    ctx.fillRect(x - 5, platform.y + 7, 10, 2);
+    ctx.fillRect(x - 2, platform.y - 3, 4, 1.5);
     ctx.restore();
+
+    if (damaged && flicker > 0.76) {
+      drawPlatformElectricArc(
+        platform,
+        { seed },
+        x - 3,
+        platform.y + 6,
+        x + (flicker - 0.5) * 22,
+        platform.y - 8 - flicker * 7,
+        440,
+        platform.lightColor,
+      );
+    }
+  }
+}
+
+function drawRampLights(platform) {
+  const length = Math.hypot(
+    platform.exitX - platform.entryX,
+    platform.exitY - platform.entryY,
+  );
+  const spacing = Math.min(150, platform.lightSpacing);
+  const firstDistance = 24 + platform.lightOffset % 42;
+  const angle = Math.atan2(
+    platform.exitY - platform.entryY,
+    platform.exitX - platform.entryX,
+  );
+  const frame = Math.floor(gameTime * 22);
+
+  for (let distance = firstDistance; distance < length - 18; distance += spacing) {
+    const progress = distance / length;
+    const x = platform.entryX + (platform.exitX - platform.entryX) * progress;
+    const y = platform.entryY + (platform.exitY - platform.entryY) * progress;
+    const seed = Math.floor(distance) + 570;
+    const damaged = platformFeatureNoise(platform, seed) > 0.76;
+    const flicker = platformFeatureNoise(platform, seed + frame * 23);
+    const lit = !damaged || flicker > 0.4;
+    const pulse = lit
+      ? 0.72 + Math.sin(gameTime * 2.8 + platform.lightPhase + distance * 0.02) * 0.2
+      : 0.08;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.fillStyle = "#05090e";
+    ctx.fillRect(-8, 4, 16, 7);
+    ctx.strokeStyle = "rgba(117, 139, 153, 0.82)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-7.5, 4.5, 15, 6);
+    ctx.globalAlpha = pulse;
+    ctx.shadowColor = platform.lightColor;
+    ctx.shadowBlur = lit ? 11 : 2;
+    ctx.fillStyle = platform.lightColor;
+    ctx.fillRect(-5, 6.5, 10, 2);
+    ctx.restore();
+
+    if (damaged && flicker > 0.78) {
+      drawPlatformElectricArc(
+        platform,
+        { seed },
+        x,
+        y + 6,
+        x + (flicker - 0.5) * 20,
+        y - 10 - flicker * 6,
+        630,
+        platform.lightColor,
+      );
+    }
   }
 }
 
@@ -138,21 +223,21 @@ function drawPlatformArchitecture(platform) {
     ctx.strokeStyle = "rgba(113, 149, 171, 0.74)";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(platform.start + 8, platform.y + 10);
-    ctx.lineTo(platform.end - 8, platform.y + 10);
+    ctx.moveTo(platform.start + 8, platform.y + 5);
+    ctx.lineTo(platform.end - 8, platform.y + 5);
     ctx.stroke();
     ctx.strokeStyle = "rgba(126, 98, 196, 0.68)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(platform.start + 14, platform.y + 22);
-    ctx.lineTo(platform.end - 14, platform.y + 22);
+    ctx.moveTo(platform.start + 14, platform.y + 11);
+    ctx.lineTo(platform.end - 14, platform.y + 11);
     ctx.stroke();
   }
 
   if (platform.zone === "connector") {
     ctx.fillStyle = "rgba(105, 245, 255, 0.78)";
-    ctx.fillRect(platform.start + 10, platform.y + 6, Math.max(0, length - 20), 2);
-    ctx.fillRect(platform.start + 20, platform.y + 25, Math.max(0, length - 40), 2);
+    ctx.fillRect(platform.start + 10, platform.y + 4, Math.max(0, length - 20), 1.5);
+    ctx.fillRect(platform.start + 20, platform.y + 11, Math.max(0, length - 40), 1.5);
   } else if (platform.zone === "rest") {
     ctx.fillStyle = "rgba(141, 255, 189, 0.7)";
     const markerX = platform.start + length / 2;
@@ -160,7 +245,7 @@ function drawPlatformArchitecture(platform) {
   } else if (platform.zone === "sub") {
     ctx.fillStyle = "rgba(199, 169, 255, 0.78)";
     for (let x = platform.start + 18; x < platform.end - 12; x += 58) {
-      ctx.fillRect(x, platform.y + 6, Math.min(18, platform.end - x), 2);
+      ctx.fillRect(x, platform.y + 5, Math.min(18, platform.end - x), 1.5);
     }
   }
   ctx.restore();
@@ -366,8 +451,8 @@ function drawDamagedRoadFeature(platform, feature) {
     const holeWidth = 18 + platformFeatureNoise(platform, feature.seed + 840 + damage) * 18;
     const holeTop = (
       platform.y +
-      5 +
-      platformFeatureNoise(platform, feature.seed + 870 + damage) * 7
+      2 +
+      platformFeatureNoise(platform, feature.seed + 870 + damage) * 4
     );
     ctx.fillStyle = "rgba(2, 5, 8, 0.92)";
     ctx.beginPath();
@@ -375,8 +460,8 @@ function drawDamagedRoadFeature(platform, feature) {
     ctx.lineTo(centerX - holeWidth * 0.22, holeTop - 2);
     ctx.lineTo(centerX + holeWidth * 0.12, holeTop + 2);
     ctx.lineTo(centerX + holeWidth / 2, holeTop);
-    ctx.lineTo(centerX + holeWidth * 0.3, holeTop + 13);
-    ctx.lineTo(centerX - holeWidth * 0.34, holeTop + 11);
+    ctx.lineTo(centerX + holeWidth * 0.3, holeTop + 8);
+    ctx.lineTo(centerX - holeWidth * 0.34, holeTop + 7);
     ctx.closePath();
     ctx.fill();
 
@@ -389,8 +474,8 @@ function drawDamagedRoadFeature(platform, feature) {
     ctx.moveTo(centerX + 4, holeTop + 3);
     ctx.lineTo(centerX + 12, holeTop - 4);
     ctx.lineTo(centerX + 18, holeTop - 6);
-    ctx.moveTo(centerX, holeTop + 10);
-    ctx.lineTo(centerX - 5, holeTop + 22);
+    ctx.moveTo(centerX, holeTop + 7);
+    ctx.lineTo(centerX - 5, holeTop + 12);
     ctx.stroke();
 
     if (damage === 0) {
@@ -432,8 +517,8 @@ function drawLargeDamagedRoadFeature(platform, feature) {
   ctx.lineTo(startX + width * 0.52, platform.y + 5);
   ctx.lineTo(startX + width * 0.7, platform.y + 11);
   ctx.lineTo(endX - 8, platform.y + 5);
-  ctx.lineTo(endX - 16, platform.y + 28);
-  ctx.lineTo(startX + 18, platform.y + 27);
+  ctx.lineTo(endX - 16, platform.y + PLATFORM_DECK_THICKNESS);
+  ctx.lineTo(startX + 18, platform.y + PLATFORM_DECK_THICKNESS - 1);
   ctx.closePath();
   ctx.fill();
 
@@ -539,14 +624,16 @@ function traceFlatPlatformBody(platform, joinedAtStart, joinedAtEnd) {
   ctx.beginPath();
   ctx.moveTo(platform.start, platform.y);
   ctx.lineTo(platform.end, platform.y);
-  ctx.lineTo(bottomEnd, platform.y + 32);
-  ctx.lineTo(bottomStart, platform.y + 32);
+  ctx.lineTo(bottomEnd, platform.y + PLATFORM_DECK_THICKNESS);
+  ctx.lineTo(bottomStart, platform.y + PLATFORM_DECK_THICKNESS);
   ctx.closePath();
 }
 
 function drawRamp(platform, palette, railColor) {
   const topY = Math.min(platform.entryY, platform.exitY);
-  const bottomY = Math.max(platform.entryY, platform.exitY) + 32;
+  const bottomY = (
+    Math.max(platform.entryY, platform.exitY) + PLATFORM_DECK_THICKNESS
+  );
   const direction = Math.sign(platform.exitX - platform.entryX) || 1;
   const entryInset = direction > 0
     ? platform.edgeInsetStart
@@ -575,8 +662,8 @@ function drawRamp(platform, palette, railColor) {
   ctx.beginPath();
   ctx.moveTo(platform.entryX, platform.entryY);
   ctx.lineTo(platform.exitX, platform.exitY);
-  ctx.lineTo(bottomExitX, platform.exitY + 32);
-  ctx.lineTo(bottomEntryX, platform.entryY + 32);
+  ctx.lineTo(bottomExitX, platform.exitY + PLATFORM_DECK_THICKNESS);
+  ctx.lineTo(bottomEntryX, platform.entryY + PLATFORM_DECK_THICKNESS);
   ctx.closePath();
   ctx.fill();
 
@@ -588,19 +675,19 @@ function drawRamp(platform, palette, railColor) {
     const x = platform.entryX + (platform.exitX - platform.entryX) * progress;
     const y = platform.entryY + (platform.exitY - platform.entryY) * progress;
     ctx.beginPath();
-    ctx.moveTo(x, y + 5);
-    ctx.lineTo(x, y + 28);
+    ctx.moveTo(x, y + 3);
+    ctx.lineTo(x, y + PLATFORM_DECK_THICKNESS - 2);
     ctx.stroke();
   }
 
   ctx.strokeStyle = railColor;
-  ctx.lineWidth = 5;
+  ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(platform.entryX, platform.entryY);
   ctx.lineTo(platform.exitX, platform.exitY);
   ctx.stroke();
   ctx.strokeStyle = "rgba(105, 226, 238, 0.9)";
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 1;
   ctx.stroke();
 
   ctx.strokeStyle = "#0a1017";
@@ -608,13 +695,14 @@ function drawRamp(platform, palette, railColor) {
   ctx.beginPath();
   if (!joinedAtEntry) {
     ctx.moveTo(platform.entryX, platform.entryY);
-    ctx.lineTo(bottomEntryX, platform.entryY + 32);
+    ctx.lineTo(bottomEntryX, platform.entryY + PLATFORM_DECK_THICKNESS);
   }
   if (!joinedAtExit) {
     ctx.moveTo(platform.exitX, platform.exitY);
-    ctx.lineTo(bottomExitX, platform.exitY + 32);
+    ctx.lineTo(bottomExitX, platform.exitY + PLATFORM_DECK_THICKNESS);
   }
   ctx.stroke();
+  drawRampLights(platform);
 }
 
 function drawInvertedTrianglePlatform(platform, palette, railColor) {
@@ -643,18 +731,38 @@ function drawInvertedTrianglePlatform(platform, palette, railColor) {
   ctx.stroke();
 
   ctx.fillStyle = railColor;
-  ctx.fillRect(platform.start, platform.y - 5, platform.end - platform.start, 5);
+  ctx.fillRect(platform.start, platform.y - 3, platform.end - platform.start, 3);
   ctx.fillStyle = "rgba(105, 226, 238, 0.94)";
-  ctx.fillRect(platform.start, platform.y - 2, platform.end - platform.start, 1.5);
+  ctx.fillRect(platform.start, platform.y - 1.5, platform.end - platform.start, 1);
 
-  const pulse = 0.72 + Math.sin(gameTime * 2.4 + platform.lightPhase) * 0.18;
+  const fixtureSeed = 910 + platform.id * 3;
+  const frame = Math.floor(gameTime * 22);
+  const damaged = platformFeatureNoise(platform, fixtureSeed) > 0.72;
+  const flicker = platformFeatureNoise(platform, fixtureSeed + frame * 17);
+  const lit = !damaged || flicker > 0.42;
+  const pulse = lit
+    ? 0.72 + Math.sin(gameTime * 2.4 + platform.lightPhase) * 0.18
+    : 0.08;
   ctx.save();
   ctx.globalAlpha = pulse;
   ctx.shadowColor = platform.lightColor;
-  ctx.shadowBlur = 8;
+  ctx.shadowBlur = lit ? 9 : 2;
   ctx.fillStyle = platform.lightColor;
   ctx.fillRect(centerX - 4, platform.y + Math.min(12, depth * 0.24), 8, 2);
   ctx.restore();
+
+  if (damaged && flicker > 0.76) {
+    drawPlatformElectricArc(
+      platform,
+      { seed: fixtureSeed },
+      centerX,
+      platform.y + Math.min(12, depth * 0.24),
+      centerX + (flicker - 0.5) * 20,
+      platform.y - 10 - flicker * 7,
+      880,
+      platform.lightColor,
+    );
+  }
 }
 
 function drawTerrain() {
@@ -673,9 +781,9 @@ function drawTerrain() {
       ? platform.y + (
         isInvertedTrianglePlatform(platform)
           ? invertedTrianglePlatformDepth(platform)
-          : 32
+          : PLATFORM_DECK_THICKNESS
       )
-      : Math.max(platform.entryY, platform.exitY) + 32;
+      : Math.max(platform.entryY, platform.exitY) + PLATFORM_DECK_THICKNESS;
     if (
       platform.end < cameraX - 120 ||
       platform.start > cameraX + WIDTH + 120 ||
@@ -695,7 +803,12 @@ function drawTerrain() {
       drawInvertedTrianglePlatform(platform, palette, railColors[platform.style]);
       continue;
     }
-    const deckGradient = ctx.createLinearGradient(0, platform.y, 0, platform.y + 32);
+    const deckGradient = ctx.createLinearGradient(
+      0,
+      platform.y,
+      0,
+      platform.y + PLATFORM_DECK_THICKNESS,
+    );
     deckGradient.addColorStop(0, palette[0]);
     deckGradient.addColorStop(0.48, palette[1]);
     deckGradient.addColorStop(1, palette[2]);
@@ -708,19 +821,24 @@ function drawTerrain() {
     ctx.save();
     traceFlatPlatformBody(platform, joinedAtStart, joinedAtEnd);
     ctx.clip();
-    drawStationPanels(platform, 24);
+    drawStationPanels(platform);
     ctx.fillStyle = "#0a1118";
-    ctx.fillRect(platform.start, platform.y + 29, platform.end - platform.start, 3);
+    ctx.fillRect(
+      platform.start,
+      platform.y + PLATFORM_DECK_THICKNESS - 2,
+      platform.end - platform.start,
+      2,
+    );
     drawPlatformArchitecture(platform);
     ctx.restore();
 
     drawPlatformLights(platform);
     ctx.fillStyle = isSubPath ? "#8873ad" : railColors[platform.style];
-    ctx.fillRect(platform.start, platform.y - 5, platform.end - platform.start, 5);
+    ctx.fillRect(platform.start, platform.y - 3, platform.end - platform.start, 3);
     ctx.fillStyle = isSubPath
       ? "rgba(201, 174, 255, 0.94)"
       : "rgba(105, 226, 238, 0.9)";
-    ctx.fillRect(platform.start, platform.y - 2, platform.end - platform.start, 1.5);
+    ctx.fillRect(platform.start, platform.y - 1.5, platform.end - platform.start, 1);
     drawPlatformFeature(platform);
 
     ctx.strokeStyle = "#0a1017";
@@ -728,30 +846,18 @@ function drawTerrain() {
     ctx.beginPath();
     if (!joinedAtStart) {
       ctx.moveTo(platform.start, platform.y);
-      ctx.lineTo(platform.start + platform.edgeInsetStart, platform.y + 32);
+      ctx.lineTo(
+        platform.start + platform.edgeInsetStart,
+        platform.y + PLATFORM_DECK_THICKNESS,
+      );
     }
     if (!joinedAtEnd) {
       ctx.moveTo(platform.end, platform.y);
-      ctx.lineTo(platform.end - platform.edgeInsetEnd, platform.y + 32);
+      ctx.lineTo(
+        platform.end - platform.edgeInsetEnd,
+        platform.y + PLATFORM_DECK_THICKNESS,
+      );
     }
-    ctx.stroke();
-  }
-}
-
-function drawProps() {
-  ctx.fillStyle = "#1b2834";
-  ctx.strokeStyle = "#6a7b87";
-  ctx.lineWidth = 3;
-  for (const prop of props) {
-    if (prop.x < cameraX - 100 || prop.x > cameraX + WIDTH + 100) continue;
-    const surfaceY = prop.platform.y;
-    ctx.fillRect(prop.x, surfaceY - prop.height, prop.width, prop.height);
-    ctx.strokeRect(prop.x, surfaceY - prop.height, prop.width, prop.height);
-    ctx.beginPath();
-    ctx.moveTo(prop.x, surfaceY - prop.height);
-    ctx.lineTo(prop.x + prop.width, surfaceY);
-    ctx.moveTo(prop.x + prop.width, surfaceY - prop.height);
-    ctx.lineTo(prop.x, surfaceY);
     ctx.stroke();
   }
 }
@@ -762,13 +868,13 @@ function drawPlayer() {
 }
 
 function drawPlayerPhysicsDebug() {
-  if (!TEST_MODE) return;
+  if (!TEST_MODE || !showPlayerArea) return;
   const hitbox = getPlayerHitbox();
   ctx.save();
-  ctx.fillStyle = "rgba(55, 255, 105, 0.28)";
+  ctx.fillStyle = "rgba(55, 255, 105, 0.13)";
   ctx.fillRect(hitbox.x, hitbox.y, hitbox.width, hitbox.height);
-  ctx.strokeStyle = "rgba(105, 255, 145, 0.92)";
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = "rgba(105, 255, 145, 0.48)";
+  ctx.lineWidth = 1.25;
   ctx.strokeRect(hitbox.x, hitbox.y, hitbox.width, hitbox.height);
   ctx.restore();
 }
@@ -848,6 +954,85 @@ function drawPlayerSprite(centerX) {
   ctx.restore();
 }
 
+function drawCombatantHealthBar(centerX, topY, width, hp, maxHp) {
+  const ratio = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
+  const colorHue = Math.round(ratio * 120);
+  const height = 7;
+  const left = centerX - width / 2;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(4, 7, 10, 0.88)";
+  ctx.fillRect(left - 2, topY - 2, width + 4, height + 4);
+  ctx.fillStyle = "rgba(33, 38, 43, 0.94)";
+  ctx.fillRect(left, topY, width, height);
+  ctx.fillStyle = `hsl(${colorHue}, 92%, 52%)`;
+  ctx.shadowColor = `hsl(${colorHue}, 96%, 58%)`;
+  ctx.shadowBlur = 5;
+  ctx.fillRect(left, topY, width * ratio, height);
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(220, 231, 239, 0.6)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(left - 0.5, topY - 0.5, width + 1, height + 1);
+  ctx.restore();
+}
+
+function drawEnemyAwarenessDebug(enemy) {
+  if (!TEST_MODE || !showMonsterArea || !enemy.alive) return;
+  const centerX = enemy.x + enemy.width / 2;
+  const feetY = enemy.y + enemy.height;
+
+  ctx.save();
+  ctx.setLineDash([10, 8]);
+
+  ctx.fillStyle = "rgba(70, 220, 255, 0.035)";
+  ctx.strokeStyle = "rgba(105, 225, 255, 0.22)";
+  ctx.lineWidth = 1;
+  ctx.fillRect(
+    centerX - enemy.chaseRange,
+    feetY - enemy.chaseVerticalRange,
+    enemy.chaseRange * 2,
+    enemy.chaseVerticalRange * 2,
+  );
+  ctx.strokeRect(
+    centerX - enemy.chaseRange,
+    feetY - enemy.chaseVerticalRange,
+    enemy.chaseRange * 2,
+    enemy.chaseVerticalRange * 2,
+  );
+
+  ctx.fillStyle = "rgba(144, 111, 255, 0.025)";
+  ctx.strokeStyle = "rgba(176, 146, 255, 0.16)";
+  ctx.fillRect(
+    centerX - enemy.climbSearchRange,
+    feetY - enemy.climbVerticalRange,
+    enemy.climbSearchRange * 2,
+    enemy.climbVerticalRange - enemy.climbMinimumHeight,
+  );
+  ctx.strokeRect(
+    centerX - enemy.climbSearchRange,
+    feetY - enemy.climbVerticalRange,
+    enemy.climbSearchRange * 2,
+    enemy.climbVerticalRange - enemy.climbMinimumHeight,
+  );
+
+  ctx.setLineDash([5, 5]);
+  ctx.fillStyle = "rgba(255, 73, 83, 0.06)";
+  ctx.strokeStyle = "rgba(255, 104, 111, 0.32)";
+  ctx.fillRect(
+    centerX - enemy.jumpAttackRange,
+    feetY - enemy.jumpAttackVerticalRange,
+    enemy.jumpAttackRange * 2,
+    enemy.jumpAttackVerticalRange * 2,
+  );
+  ctx.strokeRect(
+    centerX - enemy.jumpAttackRange,
+    feetY - enemy.jumpAttackVerticalRange,
+    enemy.jumpAttackRange * 2,
+    enemy.jumpAttackVerticalRange * 2,
+  );
+  ctx.restore();
+}
+
 function drawEnemy(enemy) {
   const sprite = enemySprites[enemy.kind];
   const bottomY = enemy.y + enemy.height;
@@ -860,6 +1045,15 @@ function drawEnemy(enemy) {
   let scaleY = 1 - wobble * (enemy.moving ? 0.065 : 0.035);
   let skewX = counterWobble * (enemy.moving ? 0.055 : 0.025);
   let rotation = counterWobble * (enemy.moving ? 0.035 : 0.018);
+  const hitPulse = enemy.hitDuration > 0
+    ? Math.pow(Math.max(0, enemy.hitTimer / enemy.hitDuration), 0.55)
+    : 0;
+
+  if (hitPulse > 0) {
+    scaleX *= 1 - hitPulse * 0.22;
+    scaleY *= 1 + hitPulse * 0.11;
+    rotation += enemy.hitDirection * hitPulse * 0.085;
+  }
 
   if (enemy.state === "windup") {
     const progress = 1 - Math.max(0, enemy.stateTimer / enemy.jumpWindupDuration);
@@ -878,6 +1072,7 @@ function drawEnemy(enemy) {
 
   ctx.save();
   ctx.translate(enemy.x + enemy.width / 2, bottomY);
+  ctx.translate(enemy.hitDirection * hitPulse * 4, 0);
   ctx.fillStyle = "rgba(72, 255, 48, 0.18)";
   ctx.beginPath();
   ctx.ellipse(0, -1, enemy.width * 0.55, 6, 0, 0, Math.PI * 2);
@@ -888,6 +1083,7 @@ function drawEnemy(enemy) {
   if (sprite?.loaded && sprite.image.naturalWidth && sprite.image.naturalHeight) {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
+    if (hitPulse > 0) ctx.filter = "brightness(1.65) saturate(1.35)";
     ctx.shadowColor = "rgba(101, 255, 44, 0.48)";
     ctx.shadowBlur = 8;
     ctx.drawImage(
@@ -906,6 +1102,83 @@ function drawEnemy(enemy) {
     ctx.beginPath();
     ctx.ellipse(0, -enemy.height / 2, enemy.width / 2, enemy.height / 2, 0, 0, Math.PI * 2);
     ctx.fill();
+  }
+  ctx.restore();
+  drawCombatantHealthBar(
+    enemy.x + enemy.width / 2,
+    bottomY - enemy.spriteHeight + enemy.spriteBottomOffset - 13,
+    Math.max(48, Math.min(64, enemy.spriteWidth * 0.54)),
+    enemy.hp,
+    enemy.maxHp,
+  );
+}
+
+function drawTurret(turret) {
+  const bottomY = turret.y + turret.height;
+  const charge = turret.active && turret.fireTimer <= TURRET.chargeDuration
+    ? Math.max(0, Math.min(1, 1 - turret.fireTimer / TURRET.chargeDuration))
+    : 0;
+  const recoil = Math.max(0, turret.recoilTimer / 0.2);
+  const hitPulse = Math.max(0, turret.hitTimer / 0.18);
+  const pulse = 0.72 + Math.sin(gameTime * 19 + turret.animationPhase) * 0.28;
+
+  ctx.save();
+  ctx.translate(
+    turret.x + turret.width / 2 - turret.facing * recoil * 5,
+    bottomY,
+  );
+  ctx.scale(turret.facing, 1);
+  ctx.shadowColor = charge > 0 ? "rgba(183, 48, 255, 0.9)" : "rgba(119, 29, 164, 0.52)";
+  ctx.shadowBlur = 8 + charge * 18;
+  if (hitPulse > 0) ctx.filter = "brightness(1.8) saturate(1.35)";
+
+  if (
+    turretSprite.loaded &&
+    turretSprite.image.naturalWidth &&
+    turretSprite.image.naturalHeight
+  ) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(
+      turretSprite.image,
+      -TURRET.spriteWidth / 2,
+      -TURRET.spriteHeight + TURRET.spriteBottomOffset,
+      TURRET.spriteWidth,
+      TURRET.spriteHeight,
+    );
+  } else {
+    ctx.fillStyle = "#351343";
+    ctx.fillRect(-turret.width / 2, -turret.height, turret.width, turret.height);
+    ctx.fillStyle = "#b735e8";
+    ctx.fillRect(0, -turret.height * 0.82, turret.width * 0.62, 13);
+  }
+  ctx.restore();
+
+  drawCombatantHealthBar(
+    turret.x + turret.width / 2,
+    bottomY - TURRET.spriteHeight + TURRET.spriteBottomOffset - 13,
+    Math.max(58, Math.min(72, TURRET.spriteWidth * 0.72)),
+    turret.hp,
+    turret.maxHp,
+  );
+
+  if (charge <= 0) return;
+  const muzzle = turretMuzzlePosition(turret);
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.shadowColor = "#a71cff";
+  ctx.shadowBlur = 15 + charge * 28;
+  ctx.fillStyle = `rgba(119, 20, 184, ${0.42 + charge * 0.38})`;
+  ctx.beginPath();
+  ctx.arc(muzzle.x, muzzle.y, 5 + charge * 9 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(221, 116, 255, ${0.3 + charge * 0.55})`;
+  ctx.lineWidth = 2;
+  for (let ring = 0; ring < 2; ring += 1) {
+    const ringRadius = 10 + ring * 9 + (1 - charge) * 13;
+    ctx.beginPath();
+    ctx.arc(muzzle.x, muzzle.y, ringRadius, 0, Math.PI * 2);
+    ctx.stroke();
   }
   ctx.restore();
 }
@@ -1000,6 +1273,35 @@ function drawProjectiles() {
   }
 
   for (const bullet of enemyBullets) {
+    if (bullet.kind === "turret-laser") {
+      const pulse = 0.86 + Math.sin(gameTime * 28) * 0.14;
+      ctx.save();
+      ctx.translate(bullet.x, bullet.y);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.shadowColor = "#7512ad";
+      ctx.shadowBlur = 22;
+      ctx.fillStyle = "rgba(52, 3, 78, 0.92)";
+      ctx.beginPath();
+      ctx.arc(0, 0, 15 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      const orb = ctx.createRadialGradient(-3, -4, 1, 0, 0, 12);
+      orb.addColorStop(0, "#fff3ff");
+      orb.addColorStop(0.24, "#e293ff");
+      orb.addColorStop(0.58, "#9b2bdd");
+      orb.addColorStop(1, "#380752");
+      ctx.shadowBlur = 11;
+      ctx.fillStyle = orb;
+      ctx.beginPath();
+      ctx.arc(0, 0, 11 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(237, 180, 255, 0.9)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 13.5 * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      continue;
+    }
     if (bullet.kind === "boss-laser") {
       ctx.save();
       ctx.translate(bullet.x, bullet.y);
@@ -1038,7 +1340,43 @@ function drawParticles() {
   for (const particle of particles) {
     ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife);
     ctx.fillStyle = particle.color;
-    ctx.fillRect(particle.x, particle.y, particle.size, particle.size);
+    if (particle.lightImpact) {
+      const progress = 1 - Math.max(0, particle.life / particle.maxLife);
+      const radius = particle.size * (0.42 + progress * 0.82);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.shadowColor = particle.color;
+      ctx.shadowBlur = 24 * (1 - progress);
+      const flash = ctx.createRadialGradient(
+        particle.x,
+        particle.y,
+        1,
+        particle.x,
+        particle.y,
+        radius,
+      );
+      flash.addColorStop(0, "rgba(255, 239, 255, 0.98)");
+      flash.addColorStop(0.28, "rgba(210, 91, 255, 0.76)");
+      flash.addColorStop(1, "rgba(73, 4, 106, 0)");
+      ctx.fillStyle = flash;
+      ctx.beginPath();
+      ctx.arc(particle.x, particle.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(226, 137, 255, ${0.82 * (1 - progress)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(particle.x, particle.y, radius * 0.86, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    } else if (particle.shard) {
+      ctx.save();
+      ctx.translate(particle.x, particle.y);
+      ctx.rotate(Math.atan2(particle.vy, particle.vx));
+      ctx.fillRect(-particle.size, -particle.size * 0.3, particle.size * 2, particle.size * 0.6);
+      ctx.restore();
+    } else {
+      ctx.fillRect(particle.x, particle.y, particle.size, particle.size);
+    }
   }
   ctx.globalAlpha = 1;
 }
@@ -1049,7 +1387,26 @@ function drawWorld() {
   const shakeY = shake > 0 ? (Math.random() - 0.5) * shake : 0;
   ctx.translate(-cameraX + shakeX, -cameraY + shakeY);
   drawTerrain();
-  drawProps();
+  if (TEST_MODE && showMonsterArea) {
+    for (const enemy of enemies) {
+      if (
+        enemy.alive &&
+        enemy.x > cameraX - 100 &&
+        enemy.x < cameraX + WIDTH + 100 &&
+        enemy.y > cameraY - 100 &&
+        enemy.y < cameraY + HEIGHT + 100
+      ) drawEnemyAwarenessDebug(enemy);
+    }
+  }
+  for (const turret of turrets) {
+    if (
+      turret.alive &&
+      turret.x + turret.width > cameraX - 120 &&
+      turret.x < cameraX + WIDTH + 120 &&
+      turret.y + turret.height > cameraY - 120 &&
+      turret.y < cameraY + HEIGHT + 120
+    ) drawTurret(turret);
+  }
   for (const enemy of enemies) {
     if (
       enemy.alive &&

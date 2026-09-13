@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#050505" />
     <title>NOVA — Run &amp; Gun Prototype</title>
-    <link rel="stylesheet" href="./styles.css?v=20260904-7" />
+    <link rel="stylesheet" href="./styles.css?v=20260911-3" />
   </head>
   <body>
     <main class="game-shell" aria-label="NOVA 게임 프로토타입">
@@ -27,6 +27,32 @@
           aria-label="현재 해상도 720 곱하기 1280, 해상도 전환"
         >
           RES 720
+        </button>
+        <button
+          type="button"
+          class="test-orientation-button"
+          data-test-orientation
+          aria-label="현재 세로 화면, 가로 화면으로 전환"
+        >
+          VIEW 세로
+        </button>
+        <button
+          type="button"
+          class="test-area-button player-area"
+          data-test-player-area
+          aria-label="주인공 영역 표시 꺼짐"
+          aria-pressed="false"
+        >
+          P AREA
+        </button>
+        <button
+          type="button"
+          class="test-area-button monster-area"
+          data-test-monster-area
+          aria-label="몬스터 영역 표시 꺼짐"
+          aria-pressed="false"
+        >
+          M AREA
         </button>
       </section>
 
@@ -51,15 +77,15 @@
       </section>
     </main>
 
-    <script src="./js/config.js?v=20260907-2"></script>
-    <script src="./js/assets.js?v=20260907-1"></script>
-    <script src="./js/state.js?v=20260906-3"></script>
-    <script src="./js/world.js?v=20260907-2"></script>
-    <script src="./js/combat.js?v=20260906-6"></script>
-    <script src="./js/player.js?v=20260906-5"></script>
-    <script src="./js/enemies.js?v=20260907-1"></script>
-    <script src="./js/renderer.js?v=20260907-1"></script>
-    <script src="./js/input.js?v=20260906-2"></script>
-    <script src="./js/main.js?v=20260904-1"></script>
+    <script src="./js/config.js?v=20260911-8"></script>
+    <script src="./js/assets.js?v=20260910-2"></script>
+    <script src="./js/state.js?v=20260911-4"></script>
+    <script src="./js/world.js?v=20260911-5"></script>
+    <script src="./js/combat.js?v=20260910-3"></script>
+    <script src="./js/player.js?v=20260911-1"></script>
+    <script src="./js/enemies.js?v=20260911-1"></script>
+    <script src="./js/renderer.js?v=20260911-3"></script>
+    <script src="./js/input.js?v=20260911-3"></script>
+    <script src="./js/main.js?v=20260910-1"></script>
   </body>
 </html>
