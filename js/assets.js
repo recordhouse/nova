@@ -36,6 +36,7 @@ const playerSprites = {
 
 const enemySprites = {
   monster1: loadImageAsset("./assets/images/monsters/monster_01.png"),
+  monster2: loadImageAsset("./assets/images/monsters/monster_02.png"),
 };
 
 const turretSprite = loadImageAsset("./assets/images/monsters/turret_01.png");

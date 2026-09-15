@@ -9,6 +9,8 @@ const testResolutionButton = document.querySelector("[data-test-resolution]");
 const testOrientationButton = document.querySelector("[data-test-orientation]");
 const testPlayerAreaButton = document.querySelector("[data-test-player-area]");
 const testMonsterAreaButton = document.querySelector("[data-test-monster-area]");
+const testSpawnMonster1Button = document.querySelector("[data-test-spawn-monster1]");
+const testSpawnMonster2Button = document.querySelector("[data-test-spawn-monster2]");
 const gameShellElement = document.querySelector(".game-shell");
 if (testControlsElement) testControlsElement.hidden = !TEST_MODE;
 
@@ -42,6 +44,7 @@ const JUMP_SPEED = 950;
 const PLAYER_MAX_FALL_SPEED = 760;
 const JUMP_ANIMATION_DURATION = (JUMP_SPEED * 2) / GRAVITY;
 const FIRE_AIM_ANGLE_DIAGONAL = Math.PI / 6;
+const CURRENT_STAGE = 1;
 const WORLD_LENGTH = 52000;
 const LEVEL_GAP = 180;
 const PLATFORM_DECK_THICKNESS = 16;
@@ -82,6 +85,10 @@ const MAP_FLOW_TRANSITION_LEVEL_MIN = 1.15;
 const MAP_FLOW_TRANSITION_LEVEL_MAX = 1.9;
 const MAP_FLOW_TRANSITION_GAP_MIN = 42;
 const MAP_FLOW_TRANSITION_GAP_MAX = 86;
+const BOSS_GATE_WIDTH = 126;
+const BOSS_GATE_HEIGHT = 184;
+const BOSS_GATE_EDGE_INSET = 88;
+const BOSS_GATE_TRIGGER_DISTANCE = 92;
 const HORIZONTAL_JUMP_PATH_CHANCE = 0.42;
 const HORIZONTAL_JUMP_PATH_MIN_LENGTH = 1250;
 const HORIZONTAL_JUMP_SINGLE_GAP_MIN = 180;
@@ -118,7 +125,7 @@ const PLAYER_STAND_SPRITE_SCALE = 1.12;
 const PLAYER_BLAST_SPRITE_SCALE = 1.1;
 const PLAYER_BLAST_HIGH_SPRITE_SCALE = PLAYER_BLAST_SPRITE_SCALE * 1.2;
 const PLAYER_SIT_SPRITE_SCALE = 1;
-const PLAYER_BLAST_SIT_SPRITE_SCALE = 0.9;
+const PLAYER_BLAST_SIT_SPRITE_SCALE = 0.972;
 const PLAYER_JUMP_SPRITE_SCALE = 1.12;
 const PLAYER_GET_OFF_SPRITE_SCALE = PLAYER_JUMP_SPRITE_SCALE;
 const PLAYER_DEEP_FALL_THRESHOLD = 28;
@@ -144,16 +151,18 @@ const ENEMY_SPAWN_MIN_LENGTH = 92;
 const ENEMY_SPAWN_SLOT_LENGTH = 420;
 const ENEMY_SPAWN_MAX_SLOTS = 5;
 const ENEMY_SPAWN_DENSITY = 0.5;
+const MONSTER1_SPAWN_COUNT_RATIO = 2 / 3;
+const ENEMY_BODY_SEPARATION = 8;
 const ENEMY_GROUP_MIN_SIZE = 2;
 const ENEMY_GROUP_MAX_SIZE = 5;
-const ENEMY_GROUP_MIN_SPACING = 44;
-const ENEMY_GROUP_MAX_SPACING = 58;
+const ENEMY_GROUP_MIN_SPACING = 76;
+const ENEMY_GROUP_MAX_SPACING = 94;
 const TURRET = {
-  width: 72,
-  height: 104,
-  spriteWidth: 88,
-  spriteHeight: 116,
-  spriteBottomOffset: 2,
+  width: 108,
+  height: 156,
+  spriteWidth: 132,
+  spriteHeight: 174,
+  spriteBottomOffset: 3,
   hp: 18,
   activationRangeX: 980,
   activationRangeY: 660,
@@ -182,12 +191,13 @@ const MID_BOSS = {
 };
 const MONSTER_TYPES = {
   monster1: {
+    displayName: "몹1",
     width: 64,
     height: 72,
     spriteWidth: 104,
     spriteHeight: 112,
     spriteBottomOffset: 14,
-    hp: 3,
+    hp: 2,
     speed: 128,
     chaseRange: 900,
     chaseVerticalRange: 300,
@@ -205,13 +215,14 @@ const MONSTER_TYPES = {
     dropLandingClearance: 30,
     walkableStepHeight: 20,
     jumpGapRange: 140,
-    jumpGapMaxRise: 72,
+    jumpGapMaxRise: LEVEL_GAP + 12,
     jumpGapMaxDrop: 72,
     jumpGapMinHorizontalSpeed: 90,
+    climbJumpLaunchSpeed: 680,
     jumpLaunchSpeed: 440,
     jumpGravity: 1150,
     jumpMinHorizontalSpeed: 70,
-    jumpMaxHorizontalSpeed: 260,
+    jumpMaxHorizontalSpeed: 290,
     jumpWindupDuration: 0.12,
     jumpRecoveryDuration: 0.1,
     jumpCooldown: 0.7,
@@ -222,6 +233,40 @@ const MONSTER_TYPES = {
     hitKnockbackDamping: 9.5,
     hitAirImpulse: 90,
     score: 100,
+  },
+  monster2: {
+    displayName: "몹2",
+    width: 132,
+    height: 138,
+    spriteWidth: 174,
+    spriteHeight: 234,
+    spriteBottomOffset: 12,
+    spriteFacing: -1,
+    hp: 8,
+    speed: 76,
+    chaseRange: 760,
+    chaseVerticalRange: 100,
+    walkableStepHeight: 18,
+    attackRange: 370,
+    attackVerticalRange: 105,
+    inhaleDuration: 1.15,
+    flameDuration: 2,
+    flameLength: 350,
+    flameRampDuration: 0.78,
+    flameRise: 42,
+    flameNearHalfHeight: 18,
+    flameFarHalfHeight: 52,
+    flameMouthForwardOffset: 51,
+    flameMouthHeight: 87,
+    attackCooldown: 2.4,
+    hitDuration: 0.24,
+    hitKnockbackSpeed: 230,
+    hitKnockbackMaxSpeed: 360,
+    hitKnockbackDamping: 11,
+    hitAirImpulse: 0,
+    spawnChance: 0.24,
+    spawnMinPlatformLength: 420,
+    score: 300,
   },
 };
 const RUN_FRAME_WIDTH = 400;

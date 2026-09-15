@@ -80,6 +80,7 @@ let minWorldX = -200;
 let maxWorldX = WIDTH;
 let goalPlatform = null;
 let goalX = 0;
+let bossDoor = null;
 let jumpQueued = false;
 let showPlayerArea = false;
 let showMonsterArea = false;

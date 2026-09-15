@@ -920,6 +920,50 @@ function chooseMapFlowTransition(
   };
 }
 
+function farthestBossGatePlacement(originX, originY) {
+  let farthestPlacement = null;
+
+  for (const platform of platforms) {
+    const platformLength = platform.end - platform.start;
+    if (
+      platform.kind !== "flat" ||
+      platform.routeRole === "sub" ||
+      platform.trick === "horizontal-jump" ||
+      platformLength < BOSS_GATE_WIDTH + 28
+    ) continue;
+
+    const edgeInset = Math.max(
+      BOSS_GATE_WIDTH / 2,
+      Math.min(BOSS_GATE_EDGE_INSET, platformLength / 2),
+    );
+    const candidateXs = [
+      platform.start + edgeInset,
+      platform.end - edgeInset,
+    ];
+
+    for (const centerX of candidateXs) {
+      const surfaceY = platformSurfaceY(platform, centerX);
+      const distanceSquared = (
+        (centerX - originX) ** 2 +
+        (surfaceY - originY) ** 2
+      );
+      if (
+        farthestPlacement &&
+        farthestPlacement.distanceSquared >= distanceSquared
+      ) continue;
+
+      farthestPlacement = {
+        centerX,
+        direction: centerX < (platform.start + platform.end) / 2 ? -1 : 1,
+        distanceSquared,
+        platform,
+      };
+    }
+  }
+
+  return farthestPlacement;
+}
+
 function addBrokenFlatRun(
   entryX,
   exitX,
@@ -1404,6 +1448,7 @@ function generateMap() {
   platforms.length = 0;
   branches.length = 0;
   midBosses.length = 0;
+  bossDoor = null;
   nextPlatformId = 1;
   mapSeed = Math.floor(Math.random() * 4294967295) >>> 0;
   mapRandom = createSeededRandom(mapSeed);
@@ -1679,7 +1724,7 @@ function generateMap() {
   }
 
   const remainingDistance = Math.max(300, WORLD_LENGTH - traveledDistance);
-  goalX = cursor + direction * remainingDistance;
+  const goalEndpointX = cursor + direction * remainingDistance;
   const goalElevationChange = roadElevationChange(
     remainingDistance,
     currentLevel,
@@ -1689,14 +1734,28 @@ function generateMap() {
   );
   const goalPath = addTrackedElevationPath(
     cursor,
-    goalX,
+    goalEndpointX,
     currentLevel,
     goalElevationChange,
     "main",
     group,
   );
-  goalPlatform = goalPath.endPlatform;
   resolveFloatingPathClearance();
+  const startingRoad = platforms.find((platform) => platform.startingRoad) ?? platforms[0];
+  const playerStartX = 110 + player.width / 2;
+  const playerStartY = platformSurfaceY(startingRoad, playerStartX);
+  const farthestGate = farthestBossGatePlacement(playerStartX, playerStartY);
+  goalPlatform = farthestGate?.platform ?? goalPath.endPlatform;
+  goalX = farthestGate?.centerX ?? (
+    goalPlatform.start + goalPlatform.end
+  ) / 2;
+  bossDoor = {
+    centerX: goalX,
+    width: BOSS_GATE_WIDTH,
+    height: BOSS_GATE_HEIGHT,
+    direction: farthestGate?.direction ?? goalPlatform.direction,
+    platform: goalPlatform,
+  };
   finalizePlatformVariety();
   minWorldX = Math.min(...platforms.map((platform) => platform.start)) - 120;
   maxWorldX = Math.max(...platforms.map((platform) => platform.end)) + 120;
@@ -1726,16 +1785,45 @@ function buildStars() {
   }
 }
 
+function enemyRectOverlapsEnemy(
+  x,
+  y,
+  width,
+  height,
+  ignoredEnemy = null,
+  separation = ENEMY_BODY_SEPARATION,
+) {
+  return enemies.some((enemy) => (
+    enemy !== ignoredEnemy &&
+    enemy.alive &&
+    x < enemy.x + enemy.width + separation &&
+    x + width + separation > enemy.x &&
+    y < enemy.y + enemy.height + separation &&
+    y + height + separation > enemy.y
+  ));
+}
+
 function addEnemy(platform, x, kind = "monster1") {
   const definition = MONSTER_TYPES[kind] ?? MONSTER_TYPES.monster1;
-  enemies.push({
+  const y = (
+    platformSurfaceY(platform, x + definition.width / 2) - definition.height
+  );
+  if (enemyRectOverlapsEnemy(
     x,
-    y: platform.y - definition.height,
+    y,
+    definition.width,
+    definition.height,
+  )) return null;
+
+  const enemy = {
+    x,
+    y,
     width: definition.width,
     height: definition.height,
     spriteWidth: definition.spriteWidth,
     spriteHeight: definition.spriteHeight,
     spriteBottomOffset: definition.spriteBottomOffset,
+    spriteFacing: definition.spriteFacing ?? 1,
     kind,
     platform,
     hp: definition.hp,
@@ -1760,6 +1848,7 @@ function addEnemy(platform, x, kind = "monster1") {
     jumpGapMaxRise: definition.jumpGapMaxRise,
     jumpGapMaxDrop: definition.jumpGapMaxDrop,
     jumpGapMinHorizontalSpeed: definition.jumpGapMinHorizontalSpeed,
+    climbJumpLaunchSpeed: definition.climbJumpLaunchSpeed,
     jumpLaunchSpeed: definition.jumpLaunchSpeed,
     jumpGravity: definition.jumpGravity,
     jumpMinHorizontalSpeed: definition.jumpMinHorizontalSpeed,
@@ -1773,6 +1862,7 @@ function addEnemy(platform, x, kind = "monster1") {
     jumpHit: false,
     jumpMode: "attack",
     jumpOriginSurfaceY: null,
+    jumpTargetSurfaceY: null,
     dropEdgeDirection: 0,
     state: "chase",
     stateTimer: 0,
@@ -1781,6 +1871,19 @@ function addEnemy(platform, x, kind = "monster1") {
     moving: false,
     attackCooldown: definition.attackCooldown,
     attackTimer: 0,
+    attackRange: definition.attackRange,
+    attackVerticalRange: definition.attackVerticalRange,
+    inhaleDuration: definition.inhaleDuration,
+    flameDuration: definition.flameDuration,
+    flameLength: definition.flameLength,
+    flameRampDuration: definition.flameRampDuration,
+    flameRise: definition.flameRise,
+    flameNearHalfHeight: definition.flameNearHalfHeight,
+    flameFarHalfHeight: definition.flameFarHalfHeight,
+    flameMouthForwardOffset: definition.flameMouthForwardOffset,
+    flameMouthHeight: definition.flameMouthHeight,
+    flameParticleTimer: 0,
+    attackDirection: -1,
     hitDuration: definition.hitDuration,
     hitTimer: 0,
     hitDirection: 0,
@@ -1792,7 +1895,9 @@ function addEnemy(platform, x, kind = "monster1") {
     score: definition.score,
     alive: true,
     facing: -1,
-  });
+  };
+  enemies.push(enemy);
+  return enemy;
 }
 
 function addTurret(platform, x) {
@@ -1910,6 +2015,29 @@ function buildStage() {
       const slotLength = spawnLength / enemySlots;
       const slotStart = visibleStart + slotLength * slot;
       const slotEnd = Math.min(visibleEnd, slotStart + slotLength);
+      const monster2 = MONSTER_TYPES.monster2;
+      const canSpawnMonster2 = (
+        platform.routeRole === "main" &&
+        !platform.startingRoad &&
+        platformLength >= monster2.spawnMinPlatformLength &&
+        slotEnd - slotStart >= monster2.width + 28 &&
+        mapRandom() < monster2.spawnChance
+      );
+      if (canSpawnMonster2) {
+        const monster2X = (
+          slotStart +
+          mapRandom() * Math.max(0, slotEnd - slotStart - monster2.width)
+        );
+        const overlapsTurret = (
+          turretX !== null &&
+          monster2X < turretX + TURRET.width + 34 &&
+          monster2X + monster2.width + 34 > turretX
+        );
+        if (
+          !overlapsTurret &&
+          addEnemy(platform, monster2X, "monster2")
+        ) continue;
+      }
       const availableWidth = Math.max(
         0,
         slotEnd - slotStart - MONSTER_TYPES.monster1.width,
@@ -1921,8 +2049,12 @@ function buildStage() {
           Math.floor(availableWidth / ENEMY_GROUP_MIN_SPACING) + 1,
         ),
       );
-      const groupSize = ENEMY_GROUP_MIN_SIZE + Math.floor(
+      const requestedGroupSize = ENEMY_GROUP_MIN_SIZE + Math.floor(
         mapRandom() * (fittingGroupSize - ENEMY_GROUP_MIN_SIZE + 1),
+      );
+      const groupSize = Math.max(
+        1,
+        Math.round(requestedGroupSize * MONSTER1_SPAWN_COUNT_RATIO),
       );
       const desiredSpacing = ENEMY_GROUP_MIN_SPACING + mapRandom() * (
         ENEMY_GROUP_MAX_SPACING - ENEMY_GROUP_MIN_SPACING
@@ -1974,6 +2106,105 @@ function resetPlayerPosition() {
   player.deepFalling = false;
   player.fallAnimationTime = 0;
   jumpQueued = false;
+}
+
+function spawnTestMonster(kind) {
+  if (!TEST_MODE || !MONSTER_TYPES[kind]) return null;
+
+  const definition = MONSTER_TYPES[kind];
+  const playerCenterX = player.x + player.width / 2;
+  const playerFeetY = player.y + player.height;
+  const facing = player.facing || 1;
+  const desiredCenterX = (
+    playerCenterX + facing * Math.min(240, WIDTH * 0.22)
+  );
+  const candidates = platforms
+    .filter((platform) => (
+      platform.kind === "flat" &&
+      platform.end - platform.start >= definition.width + 40
+    ))
+    .flatMap((platform) => {
+      const minimumX = platform.start + 16;
+      const maximumX = platform.end - definition.width - 16;
+      const preferredX = Math.max(
+        minimumX,
+        Math.min(maximumX, desiredCenterX - definition.width / 2),
+      );
+      const step = definition.width + 56;
+      const testPositions = [
+        preferredX,
+        preferredX + facing * step,
+        preferredX - facing * step,
+        preferredX + facing * step * 2,
+        preferredX - facing * step * 2,
+      ];
+      return [...new Set(testPositions.map((x) => (
+        Math.max(minimumX, Math.min(maximumX, x))
+      )))].map((x) => {
+        const centerX = x + definition.width / 2;
+        const surfaceY = platformSurfaceY(platform, centerX);
+        const isCurrentPlatform = platform === player.platform;
+        const onScreen = (
+          centerX >= cameraX &&
+          centerX <= cameraX + WIDTH &&
+          surfaceY >= cameraY &&
+          surfaceY <= cameraY + HEIGHT
+        );
+        const separation = Math.abs(centerX - playerCenterX);
+        const minimumSeparation = (definition.width + player.width) / 2 + 34;
+        const occupiedByEnemy = enemies.some((enemy) => (
+          enemy.alive &&
+          enemy.platform === platform &&
+          x < enemy.x + enemy.width + 26 &&
+          x + definition.width + 26 > enemy.x
+        ));
+        const occupiedByTurret = turrets.some((turret) => (
+          turret.alive &&
+          turret.platform === platform &&
+          x < turret.x + turret.width + 30 &&
+          x + definition.width + 30 > turret.x
+        ));
+        const occupiedByGate = (
+          bossDoor?.platform === platform &&
+          x < bossDoor.centerX + bossDoor.width / 2 + 34 &&
+          x + definition.width + 34 > bossDoor.centerX - bossDoor.width / 2
+        );
+        return {
+          platform,
+          x,
+          centerX,
+          valid: (
+            separation >= minimumSeparation &&
+            !occupiedByEnemy &&
+            !occupiedByTurret &&
+            !occupiedByGate
+          ),
+          score: (
+            (isCurrentPlatform ? -100000 : 0) +
+            (onScreen ? -10000 : 0) +
+            Math.abs(centerX - desiredCenterX) +
+            Math.abs(surfaceY - playerFeetY) * 1.5
+          ),
+        };
+      });
+    })
+    .filter((candidate) => candidate.valid)
+    .sort((first, second) => first.score - second.score);
+  const spawn = candidates[0];
+  if (!spawn) return null;
+
+  const enemy = addEnemy(spawn.platform, spawn.x, kind);
+  if (!enemy) return null;
+  enemy.facing = Math.sign(playerCenterX - spawn.centerX) || -facing;
+  enemy.attackDirection = enemy.facing;
+  burst(
+    spawn.centerX,
+    platformSurfaceY(spawn.platform, spawn.centerX) - enemy.height / 2,
+    kind === "monster2" ? "#dc55e9" : "#7cff48",
+    15,
+    145,
+  );
+  return enemy;
 }
 
 function horizontalJumpTestRoutes() {

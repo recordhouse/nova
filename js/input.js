@@ -207,6 +207,16 @@ testOrientationButton?.addEventListener("click", (event) => {
   toggleTestOrientation();
 });
 
+testSpawnMonster1Button?.addEventListener("click", (event) => {
+  event.preventDefault();
+  spawnTestMonster("monster1");
+});
+
+testSpawnMonster2Button?.addEventListener("click", (event) => {
+  event.preventDefault();
+  spawnTestMonster("monster2");
+});
+
 function updateTestAreaButton(button, enabled, subject) {
   if (!button || !TEST_MODE) return;
   button.setAttribute("aria-pressed", String(enabled));
