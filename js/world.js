@@ -168,6 +168,155 @@ function platformBoundsConflict(
   );
 }
 
+function platformBodySpanAt(platform, x, verticalShift = 0) {
+  const top = platformSurfaceY(platform, x) + verticalShift;
+  let depth = PLATFORM_DECK_THICKNESS;
+  if (isInvertedTrianglePlatform(platform)) {
+    const halfWidth = (platform.end - platform.start) / 2;
+    const centerX = (platform.start + platform.end) / 2;
+    depth = invertedTrianglePlatformDepth(platform) * Math.max(
+      0,
+      1 - Math.abs(x - centerX) / Math.max(1, halfWidth),
+    );
+  }
+  return { top, bottom: top + depth };
+}
+
+function platformBodiesConflict(
+  first,
+  second,
+  firstShift = 0,
+  verticalClearance = MAIN_PATH_ROAD_CLEARANCE_Y,
+) {
+  const left = Math.max(first.start, second.start);
+  const right = Math.min(first.end, second.end);
+  // Roads joined at a single endpoint are not overlapping road bodies.
+  if (right - left <= 0.01) return false;
+  const firstBounds = platformVisualBounds(first, firstShift);
+  const secondBounds = platformVisualBounds(second);
+  if (
+    firstBounds.top >= secondBounds.bottom + verticalClearance ||
+    firstBounds.bottom + verticalClearance <= secondBounds.top
+  ) return false;
+
+  const knots = [left, right];
+  for (const platform of [first, second]) {
+    if (!isInvertedTrianglePlatform(platform)) continue;
+    const centerX = (platform.start + platform.end) / 2;
+    if (centerX > left && centerX < right) knots.push(centerX);
+  }
+  knots.sort((a, b) => a - b);
+
+  for (let interval = 0; interval < knots.length - 1; interval += 1) {
+    const startX = knots[interval];
+    const endX = knots[interval + 1];
+    const firstStart = platformBodySpanAt(first, startX, firstShift);
+    const firstEnd = platformBodySpanAt(first, endX, firstShift);
+    const secondStart = platformBodySpanAt(second, startX);
+    const secondEnd = platformBodySpanAt(second, endX);
+    let minimum = 0;
+    let maximum = 1;
+    const gaps = [
+      [firstStart.bottom + verticalClearance - secondStart.top,
+        firstEnd.bottom + verticalClearance - secondEnd.top],
+      [secondStart.bottom + verticalClearance - firstStart.top,
+        secondEnd.bottom + verticalClearance - firstEnd.top],
+    ];
+    for (const [startGap, endGap] of gaps) {
+      const change = endGap - startGap;
+      if (Math.abs(change) < 0.000001) {
+        if (startGap <= 0.01) maximum = -1;
+      } else {
+        const crossing = (0.01 - startGap) / change;
+        if (change > 0) minimum = Math.max(minimum, crossing);
+        else maximum = Math.min(maximum, crossing);
+      }
+    }
+    if (maximum > minimum + 0.000001) return true;
+  }
+  return false;
+}
+
+function shiftPlatformVertically(platform, shift) {
+  platform.y += shift;
+  platform.level += shift / LEVEL_GAP;
+  if (platform.kind === "ramp") {
+    platform.entryY += shift;
+    platform.exitY += shift;
+  }
+}
+
+function resolveMainPathClearance() {
+  const groups = new Map();
+  for (const platform of platforms) {
+    if (!groups.has(platform.group)) groups.set(platform.group, []);
+    groups.get(platform.group).push(platform);
+  }
+
+  const acceptedRoads = [];
+  const groupShifts = new Map();
+  let previousShift = 0;
+  let previousExitY = null;
+  for (const [group, groupPlatforms] of groups) {
+    const roads = groupPlatforms.filter((platform) => platform.routeRole !== "sub");
+    if (roads.length === 0) continue;
+    for (let first = 0; first < roads.length; first += 1) {
+      for (let second = first + 1; second < roads.length; second += 1) {
+        if (platformBodiesConflict(roads[first], roads[second], 0, 0)) return false;
+      }
+    }
+    const firstRoad = roads[0];
+    const entryY = platformSurfaceY(firstRoad, firstRoad.entryX);
+    const minimumShift = previousExitY === null ? 0 : (
+      previousExitY - entryY - MAIN_PATH_MAX_CONNECTION_HEIGHT
+    );
+    const maximumShift = previousExitY === null ? 0 : (
+      previousExitY - entryY + MAIN_PATH_MAX_CONNECTION_HEIGHT
+    );
+    const preferredShift = Math.max(minimumShift, Math.min(maximumShift, previousShift));
+    const shifts = [preferredShift, minimumShift, maximumShift];
+    for (let step = 24; step <= MAIN_PATH_MAX_CONNECTION_HEIGHT * 2; step += 24) {
+      for (const shift of [preferredShift - step, preferredShift + step]) {
+        if (shift >= minimumShift && shift <= maximumShift) shifts.push(shift);
+      }
+    }
+    shifts.sort((a, b) => Math.abs(a - preferredShift) - Math.abs(b - preferredShift));
+    const selectedShift = shifts.find((shift) => roads.every((road) => (
+      acceptedRoads.every((other) => !platformBodiesConflict(road, other, shift))
+    )));
+    if (selectedShift === undefined) return false;
+
+    for (const platform of groupPlatforms) {
+      shiftPlatformVertically(platform, selectedShift);
+      platform.roadClearanceShift = selectedShift;
+    }
+    acceptedRoads.push(...roads);
+    groupShifts.set(group, selectedShift);
+    previousShift = selectedShift;
+    const lastRoad = roads[roads.length - 1];
+    previousExitY = platformSurfaceY(lastRoad, lastRoad.exitX);
+  }
+
+  for (const branch of branches) {
+    const shift = groupShifts.get(branch.group) ?? 0;
+    for (const route of branch.routes) {
+      if (typeof route.level === "number") route.level += shift / LEVEL_GAP;
+      if (typeof route.endLevel === "number") route.endLevel += shift / LEVEL_GAP;
+    }
+    const nextShift = groupShifts.get(branch.group + 1) ?? shift;
+    const connectionAdjustment = (nextShift - shift) / LEVEL_GAP;
+    branch.exitLevelOffset = (branch.exitLevelOffset ?? 0) + connectionAdjustment;
+    if (branch.flowTransition) {
+      const transition = branch.flowTransition;
+      transition.levelOffset += connectionAdjustment;
+      transition.verticalTrend = -Math.sign(transition.levelOffset);
+      transition.vertical = transition.verticalTrend > 0
+        ? "up" : transition.verticalTrend < 0 ? "down" : "level";
+    }
+  }
+  return true;
+}
+
 function resolveFloatingPathClearance() {
   const fixedRoads = platforms.filter((platform) => platform.routeRole !== "sub");
   const floatingRoads = platforms.filter((platform) => platform.routeRole === "sub");
@@ -187,7 +336,6 @@ function resolveFloatingPathClearance() {
       if (touchesRoad) continue;
 
       const touchesFloatingRoad = acceptedFloatingRoads.some((other) => (
-        other.group !== floating.group &&
         platformBoundsConflict(
           candidateBounds,
           platformVisualBounds(other),
@@ -1445,6 +1593,14 @@ function finalizePlatformVariety() {
 }
 
 function generateMap() {
+  for (let attempt = 0; attempt < MAP_LAYOUT_MAX_ATTEMPTS; attempt += 1) {
+    if (generateMapCandidate()) return;
+  }
+  // A bounded, monotonic fallback always has room for the primary route.
+  if (!generateMapCandidate(true)) throw new Error("Unable to generate a clear main route");
+}
+
+function generateMapCandidate(safeForwardFlow = false) {
   platforms.length = 0;
   branches.length = 0;
   midBosses.length = 0;
@@ -1686,6 +1842,10 @@ function generateMap() {
         verticalFlowTrend,
         verticalFlowStreak,
       );
+      if (safeForwardFlow && transition.horizontal === "reverse") {
+        transition.direction = direction;
+        transition.horizontal = "forward";
+      }
       if (
         transition.horizontal === "reverse" &&
         MID_BOSS_ENABLED
@@ -1740,6 +1900,7 @@ function generateMap() {
     "main",
     group,
   );
+  if (!resolveMainPathClearance()) return false;
   resolveFloatingPathClearance();
   const startingRoad = platforms.find((platform) => platform.startingRoad) ?? platforms[0];
   const playerStartX = 110 + player.width / 2;
@@ -1760,6 +1921,7 @@ function generateMap() {
   minWorldX = Math.min(...platforms.map((platform) => platform.start)) - 120;
   maxWorldX = Math.max(...platforms.map((platform) => platform.end)) + 120;
   lowestPlatformY = Math.max(...platforms.map(platformLowestSurfaceY));
+  return true;
 }
 
 function platformsAt(x) {
@@ -2052,9 +2214,13 @@ function buildStage() {
       const requestedGroupSize = ENEMY_GROUP_MIN_SIZE + Math.floor(
         mapRandom() * (fittingGroupSize - ENEMY_GROUP_MIN_SIZE + 1),
       );
-      const groupSize = Math.max(
+      const baseGroupSize = Math.max(
         1,
         Math.round(requestedGroupSize * MONSTER1_SPAWN_COUNT_RATIO),
+      );
+      const groupSize = Math.min(
+        fittingGroupSize,
+        baseGroupSize + (mapRandom() < ENEMY_GROUP_EXTRA_MEMBER_CHANCE ? 1 : 0),
       );
       const desiredSpacing = ENEMY_GROUP_MIN_SPACING + mapRandom() * (
         ENEMY_GROUP_MAX_SPACING - ENEMY_GROUP_MIN_SPACING

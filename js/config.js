@@ -63,6 +63,9 @@ const FLOATING_PATH_ROAD_CLEARANCE_Y = 58;
 const FLOATING_PATH_MUTUAL_CLEARANCE_X = 68;
 const FLOATING_PATH_MUTUAL_CLEARANCE_Y = 58;
 const FLOATING_PATH_CLEARANCE_SHIFTS = [0, -42, 42, -72, 72];
+const MAIN_PATH_ROAD_CLEARANCE_Y = 32;
+const MAIN_PATH_MAX_CONNECTION_HEIGHT = 380;
+const MAP_LAYOUT_MAX_ATTEMPTS = 12;
 const MAIN_PATH_MAX_GAP = 112;
 const ROAD_BREAK_CHANCE = 0.94;
 const ROAD_BREAK_MIN_GAP = 48;
@@ -139,22 +142,25 @@ const PLAYER_CROUCH_MUZZLE_LOWER_RATIO = 0.2;
 const PLAYER_MUZZLE_BARREL_OFFSET = 7;
 const PLAYER_FIRE_STAGGER_DELAY = 0.065;
 const PLAYER_FIRE_PAIR_DELAY = 0.14;
+const PLAYER_BULLET_SPEED = 1520;
 const PROJECTILE_SURFACE_HIT_SHAKE = 4;
 const PLAYER_HITBOX_WIDTH = 70;
 const PLAYER_HITBOX_HEIGHT = 144;
 const PLAYER_CROUCH_HITBOX_WIDTH = 72;
 const PLAYER_CROUCH_HITBOX_HEIGHT = 123;
-const PROJECTILE_MAX_RICOCHETS = 3;
+const PROJECTILE_MAX_RICOCHETS = 5;
+const COMBAT_DEBRIS_LIMIT = 180;
 const ENEMY_SPAWN_EDGE_MARGIN = 64;
 const ENEMY_SPAWN_MIN_PLATFORM_LENGTH = 132;
 const ENEMY_SPAWN_MIN_LENGTH = 92;
 const ENEMY_SPAWN_SLOT_LENGTH = 420;
 const ENEMY_SPAWN_MAX_SLOTS = 5;
-const ENEMY_SPAWN_DENSITY = 0.5;
+const ENEMY_SPAWN_DENSITY = 1;
 const MONSTER1_SPAWN_COUNT_RATIO = 2 / 3;
 const ENEMY_BODY_SEPARATION = 8;
 const ENEMY_GROUP_MIN_SIZE = 2;
 const ENEMY_GROUP_MAX_SIZE = 5;
+const ENEMY_GROUP_EXTRA_MEMBER_CHANCE = 0.4;
 const ENEMY_GROUP_MIN_SPACING = 76;
 const ENEMY_GROUP_MAX_SPACING = 94;
 const TURRET = {
@@ -163,12 +169,12 @@ const TURRET = {
   spriteWidth: 132,
   spriteHeight: 174,
   spriteBottomOffset: 3,
-  hp: 18,
+  hp: 15,
   activationRangeX: 980,
   activationRangeY: 660,
-  fireInterval: 7,
-  chargeDuration: 1.35,
-  laserSpeed: 350,
+  fireInterval: 6.6,
+  chargeDuration: 0.95,
+  laserSpeed: 420,
   laserRadius: 10,
   laserRicochets: 5,
   spawnMinPlatformLength: 320,
@@ -242,7 +248,7 @@ const MONSTER_TYPES = {
     spriteHeight: 234,
     spriteBottomOffset: 12,
     spriteFacing: -1,
-    hp: 8,
+    hp: 10,
     speed: 76,
     chaseRange: 760,
     chaseVerticalRange: 100,
@@ -264,7 +270,7 @@ const MONSTER_TYPES = {
     hitKnockbackMaxSpeed: 360,
     hitKnockbackDamping: 11,
     hitAirImpulse: 0,
-    spawnChance: 0.24,
+    spawnChance: 0.3,
     spawnMinPlatformLength: 420,
     score: 300,
   },

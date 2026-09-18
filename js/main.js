@@ -2,6 +2,21 @@
 
 // Frame update, draw orchestration, and game startup.
 
+function particleGroundCollision(particle, previousX, previousY) {
+  const bottomOffset = particle.debris ? particle.debrisHeight / 2 : 0;
+  return platformsAt(particle.x)
+    .map((platform) => ({
+      platform,
+      surfaceY: platformSurfaceY(platform, particle.x),
+      previousSurfaceY: platformSurfaceY(platform, previousX),
+    }))
+    .filter((candidate) => (
+      previousY + bottomOffset <= candidate.previousSurfaceY + 2 &&
+      particle.y + bottomOffset >= candidate.surfaceY - 2
+    ))
+    .sort((first, second) => first.surfaceY - second.surfaceY)[0];
+}
+
 function updateParticles(dt) {
   for (let i = particles.length - 1; i >= 0; i -= 1) {
     const particle = particles[i];
@@ -12,22 +27,43 @@ function updateParticles(dt) {
       continue;
     }
 
+    if (particle.groundDebris) {
+      particle.life -= dt;
+      if (particle.life <= 0) particles.splice(i, 1);
+      continue;
+    }
+
+    const previousX = particle.x;
     const previousY = particle.y;
     particle.x += particle.vx * dt;
     particle.y += particle.vy * dt;
     particle.vy += (particle.gravity ?? 600) * dt;
     particle.life -= dt;
+    if (particle.debris) {
+      particle.angle += particle.angularVelocity * dt;
+      if (particle.vy > 0) {
+        const landing = particleGroundCollision(particle, previousX, previousY);
+        if (landing) {
+          if (particle.debrisBounces < 1 && particle.vy > 120) {
+            particle.y = landing.surfaceY - particle.debrisHeight / 2 - 0.01;
+            particle.vy *= -0.2;
+            particle.vx *= 0.48;
+            particle.angularVelocity *= 0.35;
+            particle.debrisBounces += 1;
+          } else {
+            particle.y = landing.surfaceY;
+            particle.vx = 0;
+            particle.vy = 0;
+            particle.angle = 0;
+            particle.groundDebris = true;
+            particle.life = particle.groundLife;
+            particle.maxLife = particle.groundLife;
+          }
+        }
+      }
+    }
     if (particle.flameDroplet && particle.vy > 0) {
-      const landing = platformsAt(particle.x)
-        .map((platform) => ({
-          platform,
-          surfaceY: platformSurfaceY(platform, particle.x),
-        }))
-        .filter((candidate) => (
-          previousY <= candidate.surfaceY + 2 &&
-          particle.y >= candidate.surfaceY - 2
-        ))
-        .sort((first, second) => first.surfaceY - second.surfaceY)[0];
+      const landing = particleGroundCollision(particle, previousX, previousY);
       if (landing) {
         const burnLife = 0.62 + Math.random() * 0.58;
         particle.y = landing.surfaceY;

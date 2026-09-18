@@ -1544,11 +1544,83 @@ function drawProjectiles() {
   }
 }
 
+function drawCombatExplosionFlash(particle) {
+  const progress = 1 - Math.max(0, particle.life / particle.maxLife);
+  const radius = particle.size * (0.22 + progress * 0.92);
+  const coreSize = Math.max(2, particle.size * (1 - progress) * 0.55);
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = Math.pow(1 - progress, 1.25);
+  ctx.fillStyle = particle.color;
+  const ringSize = Math.max(2, pixelSnap(8 * (1 - progress), 1));
+  for (let segment = 0; segment < 24; segment += 1) {
+    const angle = segment * Math.PI / 12;
+    ctx.fillRect(
+      pixelSnap(particle.x + Math.cos(angle) * radius - ringSize / 2),
+      pixelSnap(particle.y + Math.sin(angle) * radius - ringSize / 2),
+      ringSize,
+      ringSize,
+    );
+  }
+  ctx.fillStyle = "#ff973b";
+  ctx.fillRect(
+    pixelSnap(particle.x - coreSize * 0.7),
+    pixelSnap(particle.y - coreSize * 0.35),
+    pixelSnap(coreSize * 1.4),
+    pixelSnap(coreSize * 0.7),
+  );
+  ctx.fillRect(
+    pixelSnap(particle.x - coreSize * 0.35),
+    pixelSnap(particle.y - coreSize * 0.7),
+    pixelSnap(coreSize * 0.7),
+    pixelSnap(coreSize * 1.4),
+  );
+  ctx.fillStyle = "#fff3bf";
+  ctx.fillRect(
+    pixelSnap(particle.x - coreSize * 0.3),
+    pixelSnap(particle.y - coreSize * 0.3),
+    Math.max(2, pixelSnap(coreSize * 0.6)),
+    Math.max(2, pixelSnap(coreSize * 0.6)),
+  );
+  ctx.restore();
+}
+
+function drawCombatDebris(particle) {
+  const width = Math.max(3, pixelSnap(particle.debrisWidth, 1));
+  const height = Math.max(2, pixelSnap(particle.debrisHeight, 1));
+  ctx.save();
+  ctx.globalAlpha = particle.groundDebris
+    ? Math.max(0, particle.life / particle.maxLife)
+    : Math.min(1, particle.life / 0.25);
+  ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
+  if (particle.groundDebris) {
+    ctx.fillStyle = "#11131c";
+    ctx.fillRect(-width / 2 - 2, -2, width + 4, 3);
+  } else ctx.rotate(particle.angle);
+  const top = particle.groundDebris ? -height : -height / 2;
+  ctx.fillStyle = particle.color;
+  ctx.fillRect(-width / 2, top, width, height);
+  ctx.globalAlpha *= 0.5;
+  ctx.fillStyle = particle.highlightColor;
+  ctx.fillRect(-width / 2 + 1, top, Math.max(2, width - 2), 2);
+  ctx.restore();
+}
+
 function drawParticles() {
   for (const particle of particles) {
     ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife);
     ctx.fillStyle = particle.color;
-    if (particle.groundFlame) {
+    if (particle.debris) {
+      drawCombatDebris(particle);
+    } else if (particle.explosionFlash) {
+      drawCombatExplosionFlash(particle);
+    } else if (particle.explosionSmoke) {
+      const progress = 1 - particle.life / particle.maxLife;
+      const size = pixelSnap(particle.size * (0.7 + progress * 0.9));
+      ctx.globalAlpha *= 0.38;
+      ctx.fillRect(pixelSnap(particle.x - size / 2), pixelSnap(particle.y - size / 2), size, size);
+      ctx.fillRect(pixelSnap(particle.x - size * 0.7), pixelSnap(particle.y - size * 0.25), size, size * 0.5);
+    } else if (particle.groundFlame) {
       const lifeRatio = Math.max(0, particle.life / particle.maxLife);
       const flicker = Math.sin(particle.flamePhase) * 2;
       const height = particle.size * (1.25 + lifeRatio * 1.45) + flicker;
@@ -1599,7 +1671,7 @@ function drawParticles() {
         Math.max(2, pixelSnap(particle.size * 1.1, 1)),
       );
       ctx.globalAlpha *= 0.88;
-      ctx.fillStyle = "#ffe77b";
+      ctx.fillStyle = particle.coreColor ?? "#ffe77b";
       ctx.fillRect(
         -pixelSnap(particle.size * 0.7, 1),
         -1,

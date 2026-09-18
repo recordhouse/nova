@@ -22,7 +22,9 @@ function burst(x, y, color, count = 10, force = 220) {
 function burstMonsterFragments(bullet, enemy, lethal = false) {
   const bulletSpeed = Math.max(1, Math.hypot(bullet.vx, bullet.vy));
   const baseAngle = Math.atan2(bullet.vy, bullet.vx);
-  const colors = ["#70ff37", "#c9ff55", "#34ba32", "#713aa0", "#2b1647"];
+  const colors = enemy.kind === "monster2"
+    ? ["#f094ed", "#cd4dc7", "#823980", "#5d2466", "#33223e"]
+    : ["#70ff37", "#c9ff55", "#34ba32", "#713aa0", "#2b1647"];
   const count = lethal ? 30 : 16;
   const spread = lethal ? Math.PI * 0.9 : Math.PI * 0.58;
 
@@ -42,6 +44,136 @@ function burstMonsterFragments(bullet, enemy, lethal = false) {
       shard: true,
     });
   }
+}
+
+function burstTurretFragments(bullet) {
+  const angle = Math.atan2(-bullet.vy, -bullet.vx);
+  const colors = ["#e3e8ef", "#9aa7bd", "#dc7aeb", "#794189", "#ffcb67"];
+  for (let shard = 0; shard < 22; shard += 1) {
+    const shardAngle = angle + (Math.random() - 0.5) * Math.PI * 1.1;
+    const speed = 140 + Math.random() * 310;
+    const life = 0.24 + Math.random() * 0.34;
+    particles.push({
+      x: bullet.x,
+      y: bullet.y,
+      vx: Math.cos(shardAngle) * speed,
+      vy: Math.sin(shardAngle) * speed - 65,
+      gravity: 820,
+      life,
+      maxLife: life,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: 2.5 + Math.random() * 5,
+      shard: true,
+    });
+  }
+  particles.push({
+    x: bullet.x,
+    y: bullet.y,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life: 0.12,
+    maxLife: 0.12,
+    color: "#e89cff",
+    size: 16,
+    explosionFlash: true,
+  });
+}
+
+function burstCombatantExplosion(target, kind) {
+  const isTurret = kind === "turret";
+  const isLarge = isTurret || kind === "monster2";
+  const centerX = target.x + target.width / 2;
+  const centerY = target.y + target.height * 0.52;
+  const color = kind === "monster1" ? "#99ff52" : "#ed81fa";
+  const debrisColors = kind === "monster1"
+    ? ["#358329", "#5bac35", "#6b396f", "#34233b"]
+    : isTurret
+      ? ["#687388", "#8f9bae", "#673677", "#3c2947", "#35414d"]
+      : ["#af4aaa", "#77327a", "#58305e", "#3c2646"];
+  const flashLife = isLarge ? 0.38 : 0.3;
+  particles.push({
+    x: centerX,
+    y: centerY,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life: flashLife,
+    maxLife: flashLife,
+    color,
+    size: isLarge ? 82 : 54,
+    explosionFlash: true,
+  });
+
+  const sparkCount = isLarge ? 34 : 24;
+  for (let spark = 0; spark < sparkCount; spark += 1) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 110 + Math.random() * (isLarge ? 410 : 310);
+    const life = 0.3 + Math.random() * 0.46;
+    particles.push({
+      x: centerX + (Math.random() - 0.5) * target.width * 0.35,
+      y: centerY + (Math.random() - 0.5) * target.height * 0.25,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 75,
+      gravity: 560,
+      life,
+      maxLife: life,
+      color: spark % 3 === 0 ? color : "#ff9f39",
+      coreColor: "#fff4c6",
+      size: 2.5 + Math.random() * 5,
+      flameSpark: true,
+    });
+  }
+
+  for (let smoke = 0; smoke < (isLarge ? 10 : 6); smoke += 1) {
+    const life = 0.65 + Math.random() * 0.55;
+    particles.push({
+      x: centerX + (Math.random() - 0.5) * target.width * 0.7,
+      y: centerY + (Math.random() - 0.5) * target.height * 0.5,
+      vx: (Math.random() - 0.5) * 65,
+      vy: -35 - Math.random() * 60,
+      gravity: -20,
+      life,
+      maxLife: life,
+      color: smoke % 2 === 0 ? "#4e4855" : "#77707c",
+      size: 12 + Math.random() * 13,
+      explosionSmoke: true,
+    });
+  }
+
+  const debrisCount = isTurret ? 24 : isLarge ? 20 : 12;
+  let excess = particles.filter((particle) => particle.debris).length +
+    debrisCount - COMBAT_DEBRIS_LIMIT;
+  for (let i = 0; i < particles.length && excess > 0;) {
+    if (particles[i].debris) {
+      particles.splice(i, 1);
+      excess -= 1;
+    } else i += 1;
+  }
+
+  for (let chunk = 0; chunk < debrisCount; chunk += 1) {
+    const size = ((isLarge ? 5 : 3.5) + Math.random() * (isLarge ? 7 : 5)) * 1.5;
+    particles.push({
+      x: target.x + target.width * (0.12 + Math.random() * 0.76),
+      y: target.y + target.height * (0.35 + Math.random() * 0.5),
+      vx: (Math.random() - 0.5) * (chunk < 4 ? 70 : isLarge ? 380 : 280),
+      vy: -(chunk < 4 ? 60 + Math.random() * 90 : 120 + Math.random() * 300),
+      gravity: 1000,
+      life: 3,
+      maxLife: 3,
+      groundLife: 2.8 + Math.random() * 1.4,
+      color: debrisColors[Math.floor(Math.random() * debrisColors.length)],
+      highlightColor: isTurret ? "#bbc4d2" : color,
+      size,
+      debrisWidth: size * (1.2 + Math.random() * 0.7),
+      debrisHeight: size * (0.45 + Math.random() * 0.4),
+      angle: Math.random() * Math.PI * 2,
+      angularVelocity: (Math.random() - 0.5) * 14,
+      debrisBounces: 0,
+      debris: true,
+    });
+  }
+  shake = Math.max(shake, isLarge ? 13 : 8);
 }
 
 function applyEnemyBulletImpact(enemy, bullet) {
@@ -105,10 +237,11 @@ function shootPlayer() {
   bullets.push({
     x: muzzleX,
     y: muzzleY,
-    vx: direction.x * 760,
-    vy: direction.y * 760,
+    vx: direction.x * PLAYER_BULLET_SPEED,
+    vy: direction.y * PLAYER_BULLET_SPEED,
     radius: 5,
     ricochets: 0,
+    ricochetScreenEdges: true,
   });
   burst(muzzleX, muzzleY, "#c9a7ff", 4, 90);
   player.fireBarrel = firedUpperBarrel ? 1 : 0;
@@ -332,9 +465,45 @@ function burstTurretLaserImpact(bullet, collision, finalImpact = false) {
   shake = Math.max(shake, finalImpact ? 8 : 5.5);
 }
 
+function projectileScreenBounds(bullet) {
+  return {
+    left: cameraX + bullet.radius,
+    right: cameraX + WIDTH - bullet.radius,
+    top: cameraY + bullet.radius,
+    bottom: cameraY + HEIGHT - bullet.radius,
+  };
+}
+
+function projectileScreenCollision(bullet) {
+  if (!bullet.ricochetScreenEdges) return null;
+
+  const bounds = projectileScreenBounds(bullet);
+  const hitLeft = bullet.vx < 0 && bullet.x <= bounds.left;
+  const hitRight = bullet.vx > 0 && bullet.x >= bounds.right;
+  const hitTop = bullet.vy < 0 && bullet.y <= bounds.top;
+  const hitBottom = bullet.vy > 0 && bullet.y >= bounds.bottom;
+  if (!hitLeft && !hitRight && !hitTop && !hitBottom) return null;
+
+  return {
+    screenBoundary: true,
+    reflectX: hitLeft || hitRight,
+    reflectY: hitTop || hitBottom,
+    normalX: hitLeft ? 1 : hitRight ? -1 : 0,
+    normalY: hitTop ? 1 : hitBottom ? -1 : 0,
+    resolveX: hitLeft ? bounds.left + 0.01 : hitRight ? bounds.right - 0.01 : bullet.x,
+    resolveY: hitTop ? bounds.top + 0.01 : hitBottom ? bounds.bottom - 0.01 : bullet.y,
+  };
+}
+
 function moveRicochetingBullet(bullet, dt, ricochetColor) {
   bullet.ricochets ??= 0;
   const maxRicochets = bullet.maxRicochets ?? PROJECTILE_MAX_RICOCHETS;
+  if (bullet.ricochetScreenEdges) {
+    const bounds = projectileScreenBounds(bullet);
+    // Keep moving/resized camera edges from stranding a projectile offscreen.
+    bullet.x = Math.max(bounds.left, Math.min(bounds.right, bullet.x));
+    bullet.y = Math.max(bounds.top, Math.min(bounds.bottom, bullet.y));
+  }
   const travelDistance = Math.hypot(bullet.vx, bullet.vy) * dt;
   const steps = Math.max(1, Math.ceil(travelDistance / Math.max(3, bullet.radius * 0.8)));
   const stepTime = dt / steps;
@@ -344,7 +513,8 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
     const previousY = bullet.y;
     bullet.x += bullet.vx * stepTime;
     bullet.y += bullet.vy * stepTime;
-    const collision = projectileSurfaceCollision(bullet, previousX, previousY);
+    const collision = projectileScreenCollision(bullet) ??
+      projectileSurfaceCollision(bullet, previousX, previousY);
     if (!collision) continue;
 
     shake = Math.max(shake, PROJECTILE_SURFACE_HIT_SHAKE);
@@ -370,11 +540,17 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
       bullet.y = collision.rect.y + collision.rect.height + bullet.radius + 0.01;
     }
 
-    const velocityAlongNormal = (
-      bullet.vx * collision.normalX + bullet.vy * collision.normalY
-    );
-    bullet.vx -= 2 * velocityAlongNormal * collision.normalX;
-    bullet.vy -= 2 * velocityAlongNormal * collision.normalY;
+    if (collision.screenBoundary) {
+      // A simultaneous corner contact reverses both axes but counts once.
+      if (collision.reflectX) bullet.vx *= -1;
+      if (collision.reflectY) bullet.vy *= -1;
+    } else {
+      const velocityAlongNormal = (
+        bullet.vx * collision.normalX + bullet.vy * collision.normalY
+      );
+      bullet.vx -= 2 * velocityAlongNormal * collision.normalX;
+      bullet.vy -= 2 * velocityAlongNormal * collision.normalY;
+    }
     bullet.ricochets += 1;
   }
   return true;
@@ -402,9 +578,7 @@ function updateBullets(dt) {
       if (enemy.hp <= 0) {
         enemy.alive = false;
         player.score += enemy.score;
-        burst(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, "#62ed38", 16, 330);
-        burst(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, "#5d2f82", 12, 290);
-        shake = 9;
+        burstCombatantExplosion(enemy, enemy.kind);
       }
       break;
     }
@@ -415,25 +589,12 @@ function updateBullets(dt) {
         turret.hp -= 1;
         turret.hitTimer = 0.18;
         hit = true;
-        burst(bullet.x, bullet.y, "#d75cff", 11, 205);
+        burstTurretFragments(bullet);
         shake = Math.max(shake, turret.hp <= 0 ? 11 : 5);
         if (turret.hp <= 0) {
           turret.alive = false;
           player.score += TURRET.score;
-          burst(
-            turret.x + turret.width / 2,
-            turret.y + turret.height * 0.48,
-            "#8d25d0",
-            28,
-            350,
-          );
-          burst(
-            turret.x + turret.width / 2,
-            turret.y + turret.height * 0.48,
-            "#ff76f1",
-            16,
-            280,
-          );
+          burstCombatantExplosion(turret, "turret");
         }
         break;
       }
