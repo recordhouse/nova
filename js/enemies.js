@@ -394,7 +394,7 @@ function monster2FlameOrigin(enemy) {
 function monster2CurrentFlameLength(enemy) {
   if (enemy.state !== "flame") return 0;
   const elapsed = enemy.flameDuration - enemy.stateTimer;
-  const rampDuration = enemy.flameRampDuration ?? 0.78;
+  const rampDuration = enemy.flameRampDuration ?? 0.45;
   const ramp = Math.max(0, Math.min(1, elapsed / rampDuration));
   const acceleratedRamp = ramp * ramp;
   const fade = Math.max(0, Math.min(1, enemy.stateTimer / 0.28));
@@ -404,7 +404,7 @@ function monster2CurrentFlameLength(enemy) {
 function monster2FlamePower(enemy) {
   if (enemy.state !== "flame") return 0;
   const elapsed = enemy.flameDuration - enemy.stateTimer;
-  const rampDuration = enemy.flameRampDuration ?? 0.78;
+  const rampDuration = enemy.flameRampDuration ?? 0.45;
   const ramp = Math.max(0, Math.min(1, elapsed / rampDuration));
   const fade = Math.max(0, Math.min(1, enemy.stateTimer / 0.28));
   return ramp * ramp * fade;
@@ -474,7 +474,7 @@ function spawnMonster2FlameParticles(enemy) {
     particles.push({
       x: origin.x + direction * distance,
       y: centerY + (Math.random() - 0.5) * spread * 1.5,
-      vx: direction * (35 + Math.random() * (105 + flamePower * 80)),
+      vx: direction * (55 + Math.random() * (145 + flamePower * 100)),
       vy: -135 + Math.random() * 250,
       gravity: 680,
       life,

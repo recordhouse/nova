@@ -171,6 +171,12 @@ function burstCombatantExplosion(target, kind) {
       angularVelocity: (Math.random() - 0.5) * 14,
       debrisBounces: 0,
       debris: true,
+      ...(!isTurret ? {
+        organicDebris: true,
+        splatProgress: 0,
+        organicVariant: chunk % 3,
+        shadowColor: kind === "monster1" ? "#203b24" : "#42203e",
+      } : {}),
     });
   }
   shake = Math.max(shake, isLarge ? 13 : 8);

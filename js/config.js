@@ -78,6 +78,11 @@ const PLATFORM_FEATURE_WIDTH_MIN = 92;
 const PLATFORM_FEATURE_WIDTH_MAX = 156;
 const PLATFORM_FEATURE_LARGE_WIDTH_MIN = 150;
 const PLATFORM_FEATURE_LARGE_WIDTH_MAX = 240;
+const ELECTRIC_WIRE_SEGMENTS = 14;
+const ELECTRIC_WIRE_RADIUS = 3;
+const ELECTRIC_WIRE_MAX_DROP = PLATFORM_FEATURE_WIDTH_MAX + PLATFORM_DECK_THICKNESS;
+const ELECTRIC_WIRE_DAMAGE = 0.5;
+const ELECTRIC_WIRE_INVINCIBILITY = 1.3;
 const MAP_FLOW_DISTANCE_MIN = 1200;
 const MAP_FLOW_DISTANCE_MAX = 3000;
 const MAP_FLOW_REVERSE_CHANCE = 0.34;
@@ -253,12 +258,12 @@ const MONSTER_TYPES = {
     chaseRange: 760,
     chaseVerticalRange: 100,
     walkableStepHeight: 18,
-    attackRange: 370,
+    attackRange: 500,
     attackVerticalRange: 105,
-    inhaleDuration: 1.15,
+    inhaleDuration: 0.9,
     flameDuration: 2,
-    flameLength: 350,
-    flameRampDuration: 0.78,
+    flameLength: 490,
+    flameRampDuration: 0.45,
     flameRise: 42,
     flameNearHalfHeight: 18,
     flameFarHalfHeight: 52,
@@ -270,7 +275,7 @@ const MONSTER_TYPES = {
     hitKnockbackMaxSpeed: 360,
     hitKnockbackDamping: 11,
     hitAirImpulse: 0,
-    spawnChance: 0.3,
+    spawnChance: 0.45,
     spawnMinPlatformLength: 420,
     score: 300,
   },

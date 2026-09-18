@@ -1473,6 +1473,65 @@ function addSubPath(entryX, exitX, mainLevel, group) {
   return routePlatforms;
 }
 
+// Shared cable centerline: rendering and contact damage use the same moving shape.
+function electricWirePoints(platform, feature, time = gameTime) {
+  const direction = feature.seed % 2 === 0 ? 1 : -1;
+  const length = feature.width * 0.95;
+  const angle = direction * (
+    0.32 + Math.sin(time * 1.8 + feature.phase) * 0.25 +
+    Math.sin(time * 2.65 + feature.phase * 0.6) * 0.045
+  );
+  const anchorX = feature.centerX - direction * feature.width * 0.42;
+  const anchorY = platformSurfaceY(platform, anchorX) + PLATFORM_DECK_THICKNESS - 3;
+  const endX = anchorX + Math.sin(angle) * length;
+  const endY = anchorY + Math.cos(angle) * length;
+  const control1X = anchorX + direction * length * 0.15;
+  const control1Y = anchorY + length * 0.28;
+  const control2X = endX - Math.sin(angle) * length * 0.22;
+  const control2Y = endY - length * 0.2;
+  const points = [];
+  for (let step = 0; step <= ELECTRIC_WIRE_SEGMENTS; step += 1) {
+    const t = step / ELECTRIC_WIRE_SEGMENTS;
+    const u = 1 - t;
+    const ripple = Math.sin(t * Math.PI) * Math.sin(time * 3 - feature.phase + t * 4) * 2.5 * t;
+    points.push({
+      x: u ** 3 * anchorX + 3 * u * u * t * control1X +
+        3 * u * t * t * control2X + t ** 3 * endX + ripple,
+      y: u ** 3 * anchorY + 3 * u * u * t * control1Y +
+        3 * u * t * t * control2Y + t ** 3 * endY,
+    });
+  }
+  return points;
+}
+
+function electricWireHitsRect(points, rect) {
+  const limits = [
+    [rect.x - ELECTRIC_WIRE_RADIUS, rect.x + rect.width + ELECTRIC_WIRE_RADIUS],
+    [rect.y - ELECTRIC_WIRE_RADIUS, rect.y + rect.height + ELECTRIC_WIRE_RADIUS],
+  ];
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1];
+    const end = points[index];
+    let enter = 0;
+    let exit = 1;
+    for (const [axis, key] of ["x", "y"].entries()) {
+      const delta = end[key] - start[key];
+      const [minimum, maximum] = limits[axis];
+      if (Math.abs(delta) < 0.000001) {
+        if (start[key] < minimum || start[key] > maximum) exit = -1;
+      } else {
+        const first = (minimum - start[key]) / delta;
+        const second = (maximum - start[key]) / delta;
+        enter = Math.max(enter, Math.min(first, second));
+        exit = Math.min(exit, Math.max(first, second));
+      }
+      if (enter > exit) break;
+    }
+    if (enter <= exit) return true;
+  }
+  return false;
+}
+
 function finalizePlatformVariety() {
   for (const platform of platforms) {
     if (platform.kind !== "flat") continue;

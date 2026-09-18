@@ -33,6 +33,32 @@ function updateCameraLookDirection(dt) {
   cameraDirectionHoldTime = 0;
 }
 
+function updateElectricWires() {
+  if (gameOver || player.hp <= 0 || player.invincible > 0) return;
+  const hitbox = getPlayerHitbox();
+  for (const platform of platforms) {
+    if (
+      !platform.features?.length ||
+      platform.y + PLATFORM_DECK_THICKNESS - 3 > hitbox.y + hitbox.height + ELECTRIC_WIRE_RADIUS ||
+      platform.y + ELECTRIC_WIRE_MAX_DROP < hitbox.y - ELECTRIC_WIRE_RADIUS
+    ) continue;
+    for (const feature of platform.features) {
+      if (
+        feature.type !== "electric-hose" ||
+        feature.centerX + feature.width < hitbox.x - ELECTRIC_WIRE_RADIUS ||
+        feature.centerX - feature.width > hitbox.x + hitbox.width + ELECTRIC_WIRE_RADIUS
+      ) continue;
+      if (!electricWireHitsRect(electricWirePoints(platform, feature), hitbox)) continue;
+      player.hp = Math.max(0, player.hp - ELECTRIC_WIRE_DAMAGE);
+      player.invincible = ELECTRIC_WIRE_INVINCIBILITY;
+      shake = Math.max(shake, 8);
+      burst(hitbox.x + hitbox.width / 2, hitbox.y + hitbox.height / 2, "#e7fdff", 14, 170);
+      if (player.hp <= 0) gameOver = true;
+      return;
+    }
+  }
+}
+
 function updatePlayer(dt) {
   const jumpInputActive = controls.jump || controls.up;
   const jumpPressed = jumpQueued || (jumpInputActive && !player.jumpLatch);

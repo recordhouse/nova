@@ -28,6 +28,9 @@ function updateParticles(dt) {
     }
 
     if (particle.groundDebris) {
+      if (particle.organicDebris) {
+        particle.splatProgress = Math.min(1, particle.splatProgress + dt / 0.24);
+      }
       particle.life -= dt;
       if (particle.life <= 0) particles.splice(i, 1);
       continue;
@@ -44,7 +47,7 @@ function updateParticles(dt) {
       if (particle.vy > 0) {
         const landing = particleGroundCollision(particle, previousX, previousY);
         if (landing) {
-          if (particle.debrisBounces < 1 && particle.vy > 120) {
+          if (!particle.organicDebris && particle.debrisBounces < 1 && particle.vy > 120) {
             particle.y = landing.surfaceY - particle.debrisHeight / 2 - 0.01;
             particle.vy *= -0.2;
             particle.vx *= 0.48;
@@ -58,6 +61,14 @@ function updateParticles(dt) {
             particle.groundDebris = true;
             particle.life = particle.groundLife;
             particle.maxLife = particle.groundLife;
+            if (particle.organicDebris) {
+              particle.splatProgress = 0;
+              const platform = landing.platform;
+              particle.splatAngle = Math.atan2(
+                platformSurfaceY(platform, platform.end) - platformSurfaceY(platform, platform.start),
+                platform.end - platform.start,
+              );
+            }
           }
         }
       }
@@ -91,6 +102,7 @@ function update(dt) {
   updateMidBosses(dt);
   updateBullets(dt);
   updateEnemies(dt);
+  updateElectricWires();
   updateParticles(dt);
 }
 
