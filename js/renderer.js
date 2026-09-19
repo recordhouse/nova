@@ -212,17 +212,18 @@ function drawPlatformLights(platform) {
     const lightX = pixelSnap(x);
     const lightY = pixelSnap(platform.y);
     ctx.save();
+    const baseAlpha = ctx.globalAlpha;
     ctx.fillStyle = "#05090e";
     ctx.fillRect(lightX - 8, lightY + 4, 16, 8);
     ctx.strokeStyle = "rgba(117, 139, 153, 0.82)";
     ctx.lineWidth = 1;
     ctx.strokeRect(lightX - 7.5, lightY + 4.5, 15, 7);
-    ctx.globalAlpha = pulse * 0.2;
+    ctx.globalAlpha = baseAlpha * pulse * 0.2;
     ctx.fillStyle = platform.lightColor;
     ctx.fillRect(lightX - 9, lightY + 5, 18, 6);
-    ctx.globalAlpha = pulse * 0.46;
+    ctx.globalAlpha = baseAlpha * pulse * 0.46;
     ctx.fillRect(lightX - 7, lightY + 6, 14, 4);
-    ctx.globalAlpha = pulse;
+    ctx.globalAlpha = baseAlpha * pulse;
     ctx.fillRect(lightX - 5, lightY + 7, 10, 2);
     ctx.fillRect(lightX - 2, lightY - 4, 4, 2);
     ctx.restore();
@@ -268,6 +269,7 @@ function drawRampLights(platform) {
       : 0.08;
 
     ctx.save();
+    const baseAlpha = ctx.globalAlpha;
     ctx.translate(pixelSnap(x), pixelSnap(y));
     ctx.rotate(angle);
     ctx.fillStyle = "#05090e";
@@ -275,10 +277,10 @@ function drawRampLights(platform) {
     ctx.strokeStyle = "rgba(117, 139, 153, 0.82)";
     ctx.lineWidth = 1;
     ctx.strokeRect(-7.5, 4.5, 15, 6);
-    ctx.globalAlpha = pulse * 0.22;
+    ctx.globalAlpha = baseAlpha * pulse * 0.22;
     ctx.fillStyle = platform.lightColor;
     ctx.fillRect(-9, 5, 18, 5);
-    ctx.globalAlpha = pulse;
+    ctx.globalAlpha = baseAlpha * pulse;
     ctx.fillRect(-5, 6.5, 10, 2);
     ctx.restore();
 
@@ -397,6 +399,7 @@ function drawBrokenNeonFeature(platform, feature) {
   const flicker = platformFeatureNoise(platform, feature.seed + frame + 190);
 
   ctx.save();
+  const baseAlpha = ctx.globalAlpha;
   ctx.fillStyle = "#05080c";
   ctx.fillRect(startX - 5, y - 3, width + 10, 11);
   ctx.fillStyle = "#303942";
@@ -410,6 +413,7 @@ function drawBrokenNeonFeature(platform, feature) {
     );
     const nearDamage = Math.abs(segment - brokenIndex) <= 1;
     const isLit = !permanentlyBroken && (!nearDamage || flicker > 0.46);
+    ctx.globalAlpha = baseAlpha;
     ctx.fillStyle = "#11181e";
     ctx.fillRect(segmentX, y + 1, segmentWidth, 4);
     if (!isLit) continue;
@@ -417,7 +421,7 @@ function drawBrokenNeonFeature(platform, feature) {
     const pulse = nearDamage
       ? 0.28 + flicker * 0.72
       : 0.76 + Math.sin(gameTime * 3.4 + feature.phase + segment) * 0.16;
-    ctx.globalAlpha = pulse;
+    ctx.globalAlpha = baseAlpha * pulse;
     ctx.shadowColor = segment % 3 === 0 ? "#d79cff" : "#6df5ff";
     ctx.shadowBlur = 10;
     ctx.fillStyle = segment % 3 === 0 ? "#e7b6ff" : "#9cfcff";
@@ -790,6 +794,7 @@ function drawInvertedTrianglePlatform(platform, palette, railColor) {
   ctx.fill();
 
   ctx.save();
+  const baseAlpha = ctx.globalAlpha;
   ctx.beginPath();
   ctx.moveTo(platform.start, platform.y);
   ctx.lineTo(platform.end, platform.y);
@@ -799,10 +804,10 @@ function drawInvertedTrianglePlatform(platform, palette, railColor) {
   for (let bandY = pixelSnap(platform.y + 8); bandY < apexY; bandY += 10) {
     const band = Math.floor((bandY - platform.y) / 10);
     ctx.fillStyle = band % 2 === 0 ? palette[0] : palette[2];
-    ctx.globalAlpha = 0.32;
+    ctx.globalAlpha = baseAlpha * 0.32;
     ctx.fillRect(platform.start, bandY, platform.end - platform.start, 4);
   }
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = baseAlpha;
   drawRoadPixelTexture(platform, palette, platform.routeRole === "sub");
   ctx.restore();
 
@@ -825,7 +830,7 @@ function drawInvertedTrianglePlatform(platform, palette, railColor) {
     ? 0.72 + Math.sin(gameTime * 2.4 + platform.lightPhase) * 0.18
     : 0.08;
   ctx.save();
-  ctx.globalAlpha = pulse;
+  ctx.globalAlpha *= pulse;
   ctx.shadowColor = platform.lightColor;
   ctx.shadowBlur = lit ? 9 : 2;
   ctx.fillStyle = platform.lightColor;
@@ -846,6 +851,88 @@ function drawInvertedTrianglePlatform(platform, palette, railColor) {
   }
 }
 
+function drawTerrainPlatform(platform, palette, railColor, isSubPath) {
+  if (platform.kind === "ramp") {
+    drawRamp(platform, palette, railColor);
+    return;
+  }
+  if (isInvertedTrianglePlatform(platform)) {
+    drawInvertedTrianglePlatform(platform, palette, railColor);
+    return;
+  }
+  const joinedAtStart = platformHasJoinedEndpoint(platform, platform.start, platform.y);
+  const joinedAtEnd = platformHasJoinedEndpoint(platform, platform.end, platform.y);
+  ctx.fillStyle = palette[1];
+  traceFlatPlatformBody(platform, joinedAtStart, joinedAtEnd);
+  ctx.fill();
+
+  ctx.save();
+  traceFlatPlatformBody(platform, joinedAtStart, joinedAtEnd);
+  ctx.clip();
+  ctx.fillStyle = palette[0];
+  ctx.fillRect(
+    platform.start,
+    pixelSnap(platform.y + 2),
+    platform.end - platform.start,
+    4,
+  );
+  ctx.fillStyle = palette[2];
+  ctx.fillRect(
+    platform.start,
+    pixelSnap(platform.y + PLATFORM_DECK_THICKNESS - 4),
+    platform.end - platform.start,
+    4,
+  );
+  drawStationPanels(platform);
+  drawRoadPixelTexture(platform, palette, isSubPath);
+  ctx.fillStyle = "#0a1118";
+  ctx.fillRect(
+    platform.start,
+    platform.y + PLATFORM_DECK_THICKNESS - 2,
+    platform.end - platform.start,
+    2,
+  );
+  drawPlatformArchitecture(platform);
+  ctx.restore();
+
+  drawPlatformLights(platform);
+  drawPixelRoadRail(platform, isSubPath ? "#8873ad" : railColor, isSubPath);
+  drawPlatformFeature(platform);
+
+  ctx.strokeStyle = "#0a1017";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  if (!joinedAtStart) {
+    ctx.moveTo(platform.start, platform.y);
+    ctx.lineTo(
+      platform.start + platform.edgeInsetStart,
+      platform.y + PLATFORM_DECK_THICKNESS,
+    );
+  }
+  if (!joinedAtEnd) {
+    ctx.moveTo(platform.end, platform.y);
+    ctx.lineTo(
+      platform.end - platform.edgeInsetEnd,
+      platform.y + PLATFORM_DECK_THICKNESS,
+    );
+  }
+  ctx.stroke();
+}
+
+const PLAYER_ROAD_FADE_ALPHA = 0.22;
+
+function playerRoadVisibilityArea() {
+  const centerX = player.x + player.width / 2;
+  const feetY = player.y + player.height;
+  const halfWidth = 100;
+  return {
+    left: centerX - halfWidth,
+    right: centerX + halfWidth,
+    top: feetY - PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_BLAST_HIGH_SPRITE_SCALE - 16,
+    bottom: feetY - 12,
+  };
+}
+
 function drawTerrain() {
   const deckPalettes = [
     ["#253541", "#17232d", "#0d151c"],
@@ -853,18 +940,11 @@ function drawTerrain() {
     ["#214049", "#172c32", "#0c181c"],
   ];
   const railColors = ["#718391", "#8b8378", "#668f96"];
+  const visibilityArea = playerRoadVisibilityArea();
 
   for (const platform of platforms) {
-    const platformTopY = platform.kind === "flat"
-      ? platform.y
-      : Math.min(platform.entryY, platform.exitY);
-    let platformBottomY = platform.kind === "flat"
-      ? platform.y + (
-        isInvertedTrianglePlatform(platform)
-          ? invertedTrianglePlatformDepth(platform)
-          : PLATFORM_DECK_THICKNESS
-      )
-      : Math.max(platform.entryY, platform.exitY) + PLATFORM_DECK_THICKNESS;
+    const bounds = platformVisualBounds(platform);
+    let platformBottomY = bounds.bottom;
     if (platform.features?.some((feature) => feature.type === "electric-hose")) {
       platformBottomY = Math.max(platformBottomY, platform.y + ELECTRIC_WIRE_MAX_DROP);
     }
@@ -872,78 +952,47 @@ function drawTerrain() {
       platform.end < cameraX - 120 ||
       platform.start > cameraX + WIDTH + 120 ||
       platformBottomY < cameraY - 100 ||
-      platformTopY > cameraY + HEIGHT + 120
+      bounds.top > cameraY + HEIGHT + 120
     ) continue;
 
     const isSubPath = platform.routeRole === "sub";
     const palette = isSubPath
       ? ["#332a48", "#211c32", "#120f1e"]
       : deckPalettes[platform.style];
-    if (platform.kind === "ramp") {
-      drawRamp(platform, palette, railColors[platform.style]);
+    const railColor = railColors[platform.style];
+    const overlapsPlayer = platform !== player.platform &&
+      platformBoundsConflict(bounds, visibilityArea, 0, 0);
+    if (!overlapsPlayer) {
+      drawTerrainPlatform(platform, palette, railColor, isSubPath);
       continue;
     }
-    if (isInvertedTrianglePlatform(platform)) {
-      drawInvertedTrianglePlatform(platform, palette, railColors[platform.style]);
-      continue;
-    }
-    const joinedAtStart = platformHasJoinedEndpoint(platform, platform.start, platform.y);
-    const joinedAtEnd = platformHasJoinedEndpoint(platform, platform.end, platform.y);
-    ctx.fillStyle = palette[1];
-    traceFlatPlatformBody(platform, joinedAtStart, joinedAtEnd);
-    ctx.fill();
 
+    // Keep the road intact away from the hero, but fade only the intersecting window.
     ctx.save();
-    traceFlatPlatformBody(platform, joinedAtStart, joinedAtEnd);
-    ctx.clip();
-    ctx.fillStyle = palette[0];
-    ctx.fillRect(
-      platform.start,
-      pixelSnap(platform.y + 2),
-      platform.end - platform.start,
-      4,
+    ctx.beginPath();
+    ctx.rect(cameraX - 120, cameraY - 120, WIDTH + 240, HEIGHT + 240);
+    ctx.rect(
+      visibilityArea.left,
+      visibilityArea.top,
+      visibilityArea.right - visibilityArea.left,
+      visibilityArea.bottom - visibilityArea.top,
     );
-    ctx.fillStyle = palette[2];
-    ctx.fillRect(
-      platform.start,
-      pixelSnap(platform.y + PLATFORM_DECK_THICKNESS - 4),
-      platform.end - platform.start,
-      4,
-    );
-    drawStationPanels(platform);
-    drawRoadPixelTexture(platform, palette, isSubPath);
-    ctx.fillStyle = "#0a1118";
-    ctx.fillRect(
-      platform.start,
-      platform.y + PLATFORM_DECK_THICKNESS - 2,
-      platform.end - platform.start,
-      2,
-    );
-    drawPlatformArchitecture(platform);
+    ctx.clip("evenodd");
+    drawTerrainPlatform(platform, palette, railColor, isSubPath);
     ctx.restore();
 
-    drawPlatformLights(platform);
-    drawPixelRoadRail(platform, isSubPath ? "#8873ad" : railColors[platform.style], isSubPath);
-    drawPlatformFeature(platform);
-
-    ctx.strokeStyle = "#0a1017";
-    ctx.lineWidth = 3;
+    ctx.save();
     ctx.beginPath();
-    if (!joinedAtStart) {
-      ctx.moveTo(platform.start, platform.y);
-      ctx.lineTo(
-        platform.start + platform.edgeInsetStart,
-        platform.y + PLATFORM_DECK_THICKNESS,
-      );
-    }
-    if (!joinedAtEnd) {
-      ctx.moveTo(platform.end, platform.y);
-      ctx.lineTo(
-        platform.end - platform.edgeInsetEnd,
-        platform.y + PLATFORM_DECK_THICKNESS,
-      );
-    }
-    ctx.stroke();
+    ctx.rect(
+      visibilityArea.left,
+      visibilityArea.top,
+      visibilityArea.right - visibilityArea.left,
+      visibilityArea.bottom - visibilityArea.top,
+    );
+    ctx.clip();
+    ctx.globalAlpha *= PLAYER_ROAD_FADE_ALPHA;
+    drawTerrainPlatform(platform, palette, railColor, isSubPath);
+    ctx.restore();
   }
 }
 
@@ -959,28 +1008,65 @@ function drawPlayer() {
   drawPlayerFireEnergyGauge(spriteTopY);
 }
 
-function drawPlayerFireEnergyGauge(spriteTopY) {
-  const width = 56;
+const PLAYER_GAUGE_STYLE = {
+  outer: "rgba(14, 6, 27, 0.9)",
+  border: "#7145a2",
+  track: "#241331",
+  fill: "#a653f5",
+  highlight: "#e6b5ff",
+};
+const MONSTER_GAUGE_STYLES = [0, 60, 120].map((hue) => ({
+  outer: "rgba(4, 7, 10, 0.88)",
+  border: "rgba(220, 231, 239, 0.6)",
+  track: "rgba(33, 38, 43, 0.94)",
+  fill: `hsl(${hue}, 92%, 52%)`,
+  highlight: `hsl(${hue}, 92%, 76%)`,
+}));
+
+function drawPixelGauge(centerX, topY, width, ratio, style) {
   const height = 8;
-  const left = pixelSnap(player.x + player.width / 2 - width / 2, 1);
-  const top = pixelSnap(spriteTopY - 18, 1);
-  const ratio = Math.max(0, Math.min(1, player.fireEnergy / PLAYER_FIRE_ENERGY_MAX));
-  const filledWidth = Math.round((width - 4) * ratio);
+  const left = pixelSnap(centerX - width / 2, 1);
+  const top = pixelSnap(topY, 1);
+  const filledWidth = Math.round((width - 4) * Math.max(0, Math.min(1, ratio)));
 
   ctx.save();
-  ctx.fillStyle = "rgba(14, 6, 27, 0.9)";
+  ctx.fillStyle = style.outer;
   ctx.fillRect(left - 3, top - 3, width + 6, height + 6);
-  ctx.fillStyle = "#7145a2";
+  ctx.fillStyle = style.border;
   ctx.fillRect(left - 1, top - 1, width + 2, height + 2);
-  ctx.fillStyle = "#241331";
+  ctx.fillStyle = style.track;
   ctx.fillRect(left, top, width, height);
   if (filledWidth > 0) {
-    ctx.fillStyle = "#a653f5";
+    ctx.fillStyle = style.fill;
     ctx.fillRect(left + 2, top + 2, filledWidth, 4);
-    ctx.fillStyle = "#e6b5ff";
+    ctx.fillStyle = style.highlight;
     ctx.fillRect(left + 2, top + 2, filledWidth, 2);
   }
   ctx.restore();
+}
+
+function drawPlayerFireEnergyGauge(spriteTopY) {
+  drawPixelGauge(
+    player.x + player.width / 2,
+    spriteTopY - 18,
+    56,
+    player.fireEnergy / PLAYER_FIRE_ENERGY_MAX,
+    PLAYER_GAUGE_STYLE,
+  );
+}
+
+function drawMonsterHealthGauge(enemy, pose) {
+  const ratio = Math.max(0, Math.min(1, enemy.hp / Math.max(1, enemy.maxHp)));
+  const colorStage = ratio > 0.6 ? 2 : ratio > 0.3 ? 1 : 0;
+  const spriteTopY = pose.feetY +
+    (-enemy.spriteHeight + enemy.spriteBottomOffset) * pose.scaleY;
+  drawPixelGauge(
+    pose.centerX + pose.hitOffsetX,
+    spriteTopY - 13,
+    pixelSnap(Math.max(48, Math.min(64, enemy.spriteWidth * 0.54))),
+    ratio,
+    MONSTER_GAUGE_STYLES[colorStage],
+  );
 }
 
 function drawPlayerPhysicsDebug() {
@@ -1024,8 +1110,16 @@ function drawPlayerSprite(centerX) {
               : isRunning
                 ? playerSprites.run
                 : playerSprites.stand;
+  const spriteYOffset = isDownPose
+    ? PLAYER_DOWN_SPRITE_Y_OFFSET
+    : isFiring
+      ? PLAYER_FIRE_SPRITE_Y_OFFSET
+      : sprite === playerSprites.stand
+        ? PLAYER_STAND_SPRITE_Y_OFFSET
+        : 0;
+  const spriteFeetY = player.y + player.height + spriteYOffset;
   if (!sprite?.loaded || !sprite.image.naturalWidth || !sprite.image.naturalHeight) {
-    return player.y + player.height - PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_STAND_SPRITE_SCALE;
+    return spriteFeetY - PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_STAND_SPRITE_SCALE;
   }
 
   const jumpProgress = Math.min(1, player.jumpAnimationTime / JUMP_ANIMATION_DURATION);
@@ -1060,7 +1154,7 @@ function drawPlayerSprite(centerX) {
                     : 1;
   const drawHeight = PLAYER_SPRITE_DRAW_HEIGHT * spriteScale;
   const drawWidth = source.width * (drawHeight / source.height);
-  const feetY = player.y + player.height;
+  const feetY = spriteFeetY;
 
   ctx.save();
   ctx.translate(centerX, feetY);
@@ -1286,7 +1380,6 @@ function drawMonster2Attack(enemy) {
 
 function drawEnemy(enemy) {
   const sprite = enemySprites[enemy.kind];
-  const bottomY = enemy.y + enemy.height;
   const isMonster2 = enemy.kind === "monster2";
   const pose = enemySpritePose(enemy);
 
@@ -1323,13 +1416,52 @@ function drawEnemy(enemy) {
   }
   ctx.restore();
   if (isMonster2) drawMonster2Attack(enemy);
-  drawCombatantHealthBar(
-    enemy.x + enemy.width / 2,
-    bottomY - enemy.spriteHeight + enemy.spriteBottomOffset - 13,
-    Math.max(48, Math.min(64, enemy.spriteWidth * 0.54)),
-    enemy.hp,
-    enemy.maxHp,
-  );
+  drawMonsterHealthGauge(enemy, pose);
+}
+
+// Local sprite coordinates: base, armor plates, then the gun housing.
+const TURRET_DAMAGE_CRACKS = [
+  [[-44, -31], [-36, -29], [-32, -23], [-25, -21]],
+  [[14, -31], [8, -26], [12, -20], [6, -15]],
+  [[-18, -73], [-14, -66], [-19, -59], [-15, -52]],
+  [[28, -32], [35, -28], [33, -22], [40, -17]],
+  [[-29, -99], [-24, -92], [-26, -83], [-20, -78]],
+  [[3, -88], [9, -82], [5, -75], [10, -68]],
+  [[8, -119], [14, -115], [17, -110], [23, -105]],
+  [[-5, -40], [1, -36], [-2, -29], [4, -24]],
+  [[-39, -70], [-33, -66], [-30, -59], [-25, -55]],
+  [[20, -66], [25, -61], [23, -54], [29, -49]],
+  [[26, -124], [31, -120], [33, -113], [40, -110]],
+  [[-10, -122], [-6, -116], [-9, -110], [-4, -102]],
+  [[0, -61], [6, -56], [3, -48], [9, -43]],
+  [[41, -29], [47, -23], [44, -16], [50, -12]],
+];
+
+function drawTurretDamageCracks(turret) {
+  const damage = Math.max(0, Math.min(
+    TURRET_DAMAGE_CRACKS.length,
+    Math.ceil((turret.maxHp ?? TURRET.hp) - turret.hp),
+  ));
+  if (damage === 0) return;
+
+  ctx.save();
+  ctx.lineJoin = "miter";
+  ctx.lineCap = "square";
+  for (let crack = 0; crack < damage; crack += 1) {
+    const points = TURRET_DAMAGE_CRACKS[crack];
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    for (let point = 1; point < points.length; point += 1) {
+      ctx.lineTo(points[point][0], points[point][1]);
+    }
+    ctx.strokeStyle = "#100a19";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.strokeStyle = damage >= 9 ? "#c477e0" : "#8650a2";
+    ctx.lineWidth = 1.25;
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawTurret(turret) {
@@ -1368,6 +1500,7 @@ function drawTurret(turret) {
     ctx.fillStyle = "#b735e8";
     ctx.fillRect(0, -turret.height * 0.82, turret.width * 0.62, 13);
   }
+  drawTurretDamageCracks(turret);
   ctx.restore();
 
   drawCombatantHealthBar(
@@ -1796,6 +1929,21 @@ function drawParticles() {
       ctx.globalAlpha *= 0.75;
       ctx.fillStyle = particle.coreColor;
       ctx.fillRect(-length * 0.32, -0.5, length * 0.48, 1);
+      ctx.restore();
+    } else if (particle.reversalSpark) {
+      const sparkSize = Math.max(2, pixelSnap(particle.size, 1));
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.shadowColor = particle.color;
+      ctx.shadowBlur = 5;
+      ctx.translate(pixelSnap(particle.x, 1), pixelSnap(particle.y, 1));
+      ctx.fillStyle = particle.color;
+      ctx.fillRect(-sparkSize * 2, 0, sparkSize * 2, 2);
+      ctx.fillRect(0, -sparkSize, 2, sparkSize + 2);
+      ctx.fillRect(2, -sparkSize, sparkSize * 2, 2);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#fff0ff";
+      ctx.fillRect(0, -sparkSize, 2, 2);
       ctx.restore();
     } else if (particle.flameSpark) {
       ctx.save();

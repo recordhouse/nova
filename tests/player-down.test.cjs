@@ -83,6 +83,70 @@ test("down.png is loaded as five correctly bounded 400x500 frames", () => {
   assert.ok(sprite.frames.every((frame) => frame.x + frame.width <= 2008 && frame.height === 500));
 });
 
+test("the down artwork sits below standing while its collision box stays put", () => {
+  const { scope, calls } = createGame();
+  const centerX = read(scope, "player.x + player.width / 2");
+  const hitboxBefore = read(scope, "getPlayerHitbox()");
+  scope.drawPlayerSprite(centerX);
+  const standingAnchor = calls.find((call) => call.operation === "translate").args;
+  const physicalFeetY = read(scope, "player.y + player.height");
+  assert.equal(standingAnchor[1], physicalFeetY + read(scope, "PLAYER_STAND_SPRITE_Y_OFFSET"));
+  calls.length = 0;
+
+  scope.takePlayerDamage(1);
+  for (const downTime of [0, 0.25, downDuration(scope)]) {
+    read(scope, `player.downTime=${downTime}`);
+    calls.length = 0;
+    scope.drawPlayerSprite(centerX);
+    const downAnchor = calls.find((call) => call.operation === "translate").args;
+    assert.equal(downAnchor[0], standingAnchor[0]);
+    assert.equal(downAnchor[1], physicalFeetY + read(scope, "PLAYER_DOWN_SPRITE_Y_OFFSET"));
+    assert.equal(downAnchor[1] - standingAnchor[1], 8);
+  }
+  assert.deepEqual(read(scope, "getPlayerHitbox()"), hitboxBefore);
+
+  read(scope, "resetPlayerDownState()");
+  calls.length = 0;
+  scope.drawPlayerSprite(centerX);
+  assert.equal(calls.find((call) => call.operation === "translate").args[1], standingAnchor[1]);
+});
+
+test("standing and firing sprites sit lower while running and jumping keep their anchors", () => {
+  const { scope, calls } = createGame();
+  const centerX = read(scope, "player.x + player.width / 2");
+  const physicalFeetY = read(scope, "player.y + player.height");
+  const cases = [
+    { setup: "player.vx=245", sprite: "/run.png?", offset: 0 },
+    { setup: "player.vx=0", sprite: "/stand.png?", offset: 8 },
+    { setup: "controls.fire=true", sprite: "/blast.png?", offset: 8 },
+    { setup: "controls.up=true", sprite: "/blast-high.png?", offset: 8 },
+    { setup: "controls.up=false; player.crouching=true", sprite: "/blast-sit.png?", offset: 8 },
+    { setup: "player.crouching=false; player.grounded=false", sprite: "/blast-jump.png?", offset: 8 },
+    { setup: "controls.fire=false", sprite: "/jump.png?", offset: 0 },
+  ];
+  for (const { setup, sprite, offset } of cases) {
+    read(scope, setup);
+    calls.length = 0;
+    scope.drawPlayerSprite(centerX);
+    assert.ok(body(calls).args[0].source.includes(sprite));
+    assert.equal(calls.find((call) => call.operation === "translate").args[1], physicalFeetY + offset);
+  }
+});
+
+test("the projectile origin follows the lowered firing artwork", () => {
+  const { scope } = createGame();
+  read(scope, "controls.fire=true; player.fireBarrel=0");
+  const oldMuzzleY = read(scope, `
+    const drawHeight=PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_BLAST_SPRITE_SCALE;
+    player.y + player.height - drawHeight +
+      drawHeight * PLAYER_MUZZLE_HEIGHT_RATIO + PLAYER_MUZZLE_VERTICAL_OFFSET -
+      PLAYER_MUZZLE_BARREL_OFFSET * PLAYER_BLAST_SPRITE_SCALE
+  `);
+  assert.equal(scope.shootPlayer(), true);
+  const muzzleY = read(scope, "bullets[0].y");
+  assert.equal(muzzleY - oldMuzzleY, read(scope, "PLAYER_FIRE_SPRITE_Y_OFFSET"));
+});
+
 test("damage starts a protected down animation and cancels crouching, movement and queued fire", () => {
   const { scope } = createGame();
   read(scope, "player.vx=245; player.vy=-400; player.crouching=true; jumpQueued=true; player.fireWasActive=true");

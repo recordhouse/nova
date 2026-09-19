@@ -31,25 +31,42 @@ function createGame() {
 
 function read(scope, source) { return vm.runInContext(source, scope); }
 
-test("turrets fire a timed five-shot burst without a nearby player, then repeat", () => {
+test("turrets independently choose one, two or three shots for each timed burst", () => {
   const scope = createGame();
   const turret = scope.fixtureTurret;
+  vm.runInContext(`
+    cameraX=10000;
+    globalThis.burstDraws=[0,0.5,0.999];
+    Math.random=()=>burstDraws.shift();
+  `, scope);
   turret.fireTimer = 0.05;
   scope.updateTurrets(0.1);
   assert.equal(read(scope, "enemyBullets.length"), 1);
   assert.equal(read(scope, "enemyBullets[0].kind"), "turret-laser");
   assert.ok(read(scope, "enemyBullets[0].vx") < 0, "distant shots follow the turret's facing");
   assert.equal(turret.active, true);
-  assert.equal(turret.burstShotsRemaining, 4);
-  for (let shot = 2; shot <= 5; shot += 1) {
+  assert.equal(turret.burstShotsRemaining, 0);
+  assert.equal(turret.fireTimer, read(scope, "TURRET.fireInterval"));
+
+  scope.updateTurrets(read(scope, "TURRET.fireInterval"));
+  assert.equal(read(scope, "enemyBullets.length"), 2);
+  assert.equal(turret.burstShotsRemaining, 1);
+  assert.equal(turret.fireTimer, read(scope, "TURRET.burstShotInterval"));
+  scope.updateTurrets(read(scope, "TURRET.burstShotInterval"));
+  assert.equal(read(scope, "enemyBullets.length"), 3);
+  assert.equal(turret.burstShotsRemaining, 0);
+  assert.equal(turret.fireTimer, read(scope, "TURRET.fireInterval"));
+
+  scope.updateTurrets(read(scope, "TURRET.fireInterval"));
+  assert.equal(read(scope, "enemyBullets.length"), 4);
+  assert.equal(turret.burstShotsRemaining, 2);
+  for (let shot = 5; shot <= 6; shot += 1) {
     scope.updateTurrets(read(scope, "TURRET.burstShotInterval"));
     assert.equal(read(scope, "enemyBullets.length"), shot);
   }
   assert.equal(turret.burstShotsRemaining, 0);
   assert.equal(turret.fireTimer, read(scope, "TURRET.fireInterval"));
-  scope.updateTurrets(read(scope, "TURRET.fireInterval"));
-  assert.equal(read(scope, "enemyBullets.length"), 6);
-  assert.equal(turret.burstShotsRemaining, 4);
+  assert.equal(read(scope, "burstDraws.length"), 0);
 });
 
 test("turrets still aim at a nearby player and skip distant firing particles", () => {

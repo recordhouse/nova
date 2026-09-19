@@ -2326,6 +2326,8 @@ function resetPlayerPosition() {
   ) - player.height;
   player.vx = 0;
   player.vy = 0;
+  player.reversalDirection = 0;
+  player.reversalSparkTimer = 0;
   player.fireTimer = 0;
   player.fireAnimationTime = 0;
   player.fireBarrel = 0;
@@ -2503,6 +2505,8 @@ function movePlayerToHorizontalJumpPath() {
   player.y = platformSurfaceY(firstPlatform, player.x + player.width / 2) - player.height;
   player.vx = 0;
   player.vy = 0;
+  player.reversalDirection = 0;
+  player.reversalSparkTimer = 0;
   player.facing = direction;
   player.platform = firstPlatform;
   player.grounded = true;

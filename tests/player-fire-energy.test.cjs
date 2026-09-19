@@ -50,25 +50,28 @@ function createGame() {
 
 function read(scope, source) { return vm.runInContext(source, scope); }
 
-test("continuous fire spends one charge per bullet and stops when empty", () => {
+test("continuous fire drains about three times slower and still stops when empty", () => {
   const { scope } = createGame();
   assert.equal(read(scope, "player.fireEnergy"), 100);
+  assert.equal(read(scope, "PLAYER_FIRE_ENERGY_PER_SHOT"), 3);
   read(scope, "controls.fire=true");
   scope.updatePlayer(1 / 60);
   assert.equal(read(scope, "bullets.length"), 1);
-  assert.ok(read(scope, "player.fireEnergy") < 100);
-  let reachedEmpty = false;
-  for (let frame = 0; frame < 180; frame += 1) {
+  assert.equal(read(scope, "player.fireEnergy"), 97);
+  let exhaustedAt = null;
+  for (let frame = 1; frame < 8 * 60; frame += 1) {
     scope.updatePlayer(1 / 60);
     if (read(scope, "player.fireEnergy") < read(scope, "PLAYER_FIRE_ENERGY_PER_SHOT")) {
-      reachedEmpty = true;
+      exhaustedAt = (frame + 1) / 60;
+      break;
     }
   }
-  assert.equal(reachedEmpty, true);
-  assert.ok(read(scope, "bullets.length") > 15);
+  assert.ok(exhaustedAt >= 5.5 && exhaustedAt <= 6.8,
+    `continuous firing should last about three times longer, got ${exhaustedAt}s`);
+  assert.ok(read(scope, "bullets.length") > 45);
 
   read(scope, "player.fireEnergy=0; player.fireTimer=0; bullets.length=0");
-  for (let frame = 0; frame < 29; frame += 1) scope.updatePlayer(1 / 60);
+  for (let frame = 0; frame < 14; frame += 1) scope.updatePlayer(1 / 60);
   assert.equal(read(scope, "bullets.length"), 0);
   scope.updatePlayer(1 / 60);
   assert.equal(read(scope, "bullets.length"), 1, "holding fire resumes only after enough energy regenerates");

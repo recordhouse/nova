@@ -79,6 +79,36 @@ function updatePlayerDown(dt) {
   emitPlayerRevival();
 }
 
+function approachPlayerSpeed(value, target, maximumChange) {
+  if (value < target) return Math.min(target, value + maximumChange);
+  return Math.max(target, value - maximumChange);
+}
+
+function emitPlayerReversalSparks(dt, brakingDirection) {
+  if (!brakingDirection || !player.grounded) return;
+  player.reversalSparkTimer -= dt;
+  if (player.reversalSparkTimer > 0) return;
+  player.reversalSparkTimer = PLAYER_REVERSAL_SPARK_INTERVAL;
+
+  const footX = player.x + player.width / 2;
+  const footY = player.y + player.height - 4;
+  for (let spark = 0; spark < 2; spark += 1) {
+    const life = 0.1 + Math.random() * 0.11;
+    particles.push({
+      x: footX + (Math.random() - 0.5) * player.width * 0.75,
+      y: footY - Math.random() * 4,
+      vx: -brakingDirection * (65 + Math.random() * 80),
+      vy: -35 - Math.random() * 65,
+      gravity: 420,
+      life,
+      maxLife: life,
+      size: 2 + Math.random() * 2,
+      color: spark === 0 ? "#b45cff" : "#e7cbff",
+      reversalSpark: true,
+    });
+  }
+}
+
 function updatePlayer(dt) {
   const downForThisFrame = playerIsDown();
   player.invincible = Math.max(0, player.invincible - dt);
@@ -103,8 +133,31 @@ function updatePlayer(dt) {
   const move = player.crouching || controls.fire
     ? 0
     : horizontalInput;
+  const canReverseOnGround = player.grounded && !canStartJump && move !== 0;
+  if (!canReverseOnGround ||
+      (player.reversalDirection !== 0 && player.reversalDirection !== move)) {
+    player.reversalDirection = 0;
+    player.reversalSparkTimer = 0;
+  }
+  if (canReverseOnGround && player.reversalDirection === 0 &&
+      Math.sign(player.vx) === -move && Math.abs(player.vx) >= PLAYER_REVERSAL_MIN_SPEED) {
+    player.reversalDirection = move;
+    player.reversalSparkTimer = 0;
+  }
+  let brakingDirection = 0;
   if (!preserveAirMomentum) {
-    player.vx = move * player.speed;
+    if (player.reversalDirection === move && canReverseOnGround) {
+      const previousVx = player.vx;
+      const braking = Math.sign(previousVx) === -move;
+      const acceleration = braking ? PLAYER_REVERSAL_BRAKE : PLAYER_REVERSAL_ACCELERATION;
+      player.vx = approachPlayerSpeed(previousVx, move * player.speed, acceleration * dt);
+      if (braking) brakingDirection = Math.sign(previousVx);
+      if (player.vx === move * player.speed) {
+        player.reversalDirection = 0;
+      }
+    } else {
+      player.vx = move * player.speed;
+    }
   }
 
   const stationaryTurn = player.crouching || controls.fire
@@ -221,6 +274,8 @@ function updatePlayer(dt) {
       }
     }
   }
+
+  emitPlayerReversalSparks(dt, brakingDirection);
 
   const firing = !downForThisFrame && controls.fire;
   const startedFiring = firing && !player.fireWasActive;

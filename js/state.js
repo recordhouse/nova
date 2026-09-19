@@ -33,6 +33,8 @@ const player = {
   vx: 0,
   vy: 0,
   speed: 245,
+  reversalDirection: 0,
+  reversalSparkTimer: 0,
   facing: 1,
   grounded: true,
   fireTimer: 0,

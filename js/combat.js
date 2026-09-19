@@ -11,6 +11,8 @@ function takePlayerDamage(amount) {
   player.invincible = PLAYER_DOWN_ANIMATION_DURATION + PLAYER_DOWN_HOLD_DURATION;
   player.vx = 0;
   player.vy = Math.max(0, player.vy);
+  player.reversalDirection = 0;
+  player.reversalSparkTimer = 0;
   player.crouching = false;
   player.fireAnimationTime = 0;
   player.fireWasActive = false;
@@ -288,7 +290,7 @@ function shootPlayer() {
     : PLAYER_MUZZLE_BARREL_OFFSET * firingSpriteScale;
   const originX = player.x + player.width / 2;
   const blastDrawHeight = PLAYER_SPRITE_DRAW_HEIGHT * firingSpriteScale;
-  const spriteTopY = player.y + player.height - blastDrawHeight;
+  const spriteTopY = player.y + player.height + PLAYER_FIRE_SPRITE_Y_OFFSET - blastDrawHeight;
   const originY = (
     spriteTopY +
     blastDrawHeight * PLAYER_MUZZLE_HEIGHT_RATIO +

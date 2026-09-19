@@ -805,8 +805,14 @@ function updateTurrets(dt) {
 
     if (turret.fireTimer > 0) continue;
     fireTurretLaser(turret, playerInRange);
-    turret.burstShotsRemaining = turret.burstShotsRemaining > 0
-      ? turret.burstShotsRemaining - 1 : TURRET.burstShots - 1;
+    if (turret.burstShotsRemaining > 0) {
+      turret.burstShotsRemaining -= 1;
+    } else {
+      const burstShots = TURRET.burstMinShots + Math.floor(
+        Math.random() * (TURRET.burstMaxShots - TURRET.burstMinShots + 1),
+      );
+      turret.burstShotsRemaining = burstShots - 1;
+    }
     turret.fireTimer = turret.burstShotsRemaining > 0
       ? TURRET.burstShotInterval : TURRET.fireInterval;
     turret.chargeParticleTimer = 0;
