@@ -2,6 +2,70 @@
 
 // Player fire, projectile collision, ricochets, and bullet updates.
 
+function takePlayerDamage(amount) {
+  if (gameOver || player.hp <= 0 || player.invincible > 0 || playerIsDown() ||
+      (TEST_MODE && testInvincibility)) return false;
+  player.hp = Math.max(0, player.hp - amount);
+  player.downPhase = "fall";
+  player.downTime = 0;
+  player.invincible = PLAYER_DOWN_ANIMATION_DURATION + PLAYER_DOWN_HOLD_DURATION;
+  player.vx = 0;
+  player.vy = Math.max(0, player.vy);
+  player.crouching = false;
+  player.fireAnimationTime = 0;
+  player.fireWasActive = false;
+  jumpQueued = false;
+  if (player.hp <= 0) gameOver = true;
+  return true;
+}
+
+function emitPlayerRevival() {
+  const hitbox = getPlayerHitbox();
+  const centerX = player.x + player.width / 2;
+  const centerY = hitbox.y + hitbox.height / 2;
+  const colors = ["#ae65ff", "#cb8aff", "#e0a9ff"];
+  for (let flame = 0; flame < PLAYER_REVIVAL_LIGHT_COUNT; flame += 1) {
+    const angle = flame * Math.PI * 2 / PLAYER_REVIVAL_LIGHT_COUNT +
+      (Math.random() - 0.5) * 0.045;
+    const speed = 420 + Math.random() * 120;
+    const life = 0.85 + Math.random() * 0.25;
+    particles.push({
+      x: centerX + Math.cos(angle) * 16,
+      y: centerY + Math.sin(angle) * 16,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      gravity: 0,
+      life,
+      maxLife: life,
+      size: 2 + Math.random() * 1.2,
+      color: colors[flame % colors.length],
+      coreColor: "#fff1ff",
+      revivalFlame: true,
+    });
+  }
+  const knockbackArea = { x: centerX, y: centerY, radius: PLAYER_REVIVAL_RADIUS };
+  for (const enemy of enemies) {
+    if (
+      !enemy.alive || (enemy.kind !== "monster1" && enemy.kind !== "monster2") ||
+      !overlapsCircleRect(knockbackArea, getEnemyHitbox(enemy))
+    ) continue;
+    const direction = Math.sign(enemy.x + enemy.width / 2 - centerX) || enemy.facing || 1;
+    enemy.hitDirection = direction;
+    enemy.hitTimer = PLAYER_REVIVAL_KNOCKBACK_DURATION;
+    enemy.hitKnockbackVelocity = direction * PLAYER_REVIVAL_KNOCKBACK_SPEED;
+    enemy.revivalKnockback = true;
+    if (enemy.state === "jump") {
+      enemy.jumpVx = direction * PLAYER_REVIVAL_KNOCKBACK_SPEED;
+      enemy.jumpHit = true;
+    } else {
+      enemy.state = "chase";
+      enemy.stateTimer = 0;
+    }
+    enemy.attackTimer = Math.max(enemy.attackTimer, 0.6);
+  }
+  shake = Math.max(shake, 10);
+}
+
 function burst(x, y, color, count = 10, force = 220) {
   for (let i = 0; i < count; i += 1) {
     const angle = Math.random() * Math.PI * 2;
@@ -183,6 +247,9 @@ function burstCombatantExplosion(target, kind) {
 }
 
 function applyEnemyBulletImpact(enemy, bullet) {
+  // A normal bullet must not truncate the stronger, longer recovery-wave push.
+  if (enemy.revivalKnockback && enemy.hitTimer > 0) return;
+  enemy.revivalKnockback = false;
   const direction = Math.sign(bullet.vx) || enemy.facing;
   enemy.hitDirection = direction;
   enemy.hitTimer = enemy.hitDuration;
@@ -205,6 +272,7 @@ function applyEnemyBulletImpact(enemy, bullet) {
 }
 
 function shootPlayer() {
+  if (playerIsDown() || gameOver || player.fireEnergy < PLAYER_FIRE_ENERGY_PER_SHOT) return false;
   const direction = playerFireDirection();
   const isHighAim = playerIsAimingHigh();
   const isCrouchFiring = player.crouching && player.grounded;
@@ -249,12 +317,14 @@ function shootPlayer() {
     ricochets: 0,
     ricochetScreenEdges: true,
   });
+  player.fireEnergy = Math.max(0, player.fireEnergy - PLAYER_FIRE_ENERGY_PER_SHOT);
   burst(muzzleX, muzzleY, "#c9a7ff", 4, 90);
   player.fireBarrel = firedUpperBarrel ? 1 : 0;
   player.fireTimer = firedUpperBarrel
     ? PLAYER_FIRE_STAGGER_DELAY
     : PLAYER_FIRE_PAIR_DELAY;
   shake = Math.max(shake, 2.5);
+  return true;
 }
 
 function playerFireDirection() {
@@ -563,6 +633,60 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
 }
 
 
+function burstMonster2FireballImpact(bullet) {
+  if (
+    bullet.x < cameraX - 80 || bullet.x > cameraX + WIDTH + 80 ||
+    bullet.y < cameraY - 80 || bullet.y > cameraY + HEIGHT + 80
+  ) return;
+  burst(bullet.x, bullet.y, "#ffb739", 10, 165);
+  for (let ember = 0; ember < 4; ember += 1) {
+    const life = 0.65 + Math.random() * 0.35;
+    particles.push({
+      x: bullet.x,
+      y: bullet.y,
+      vx: (Math.random() - 0.5) * 130,
+      vy: -75 - Math.random() * 115,
+      gravity: 880,
+      life,
+      maxLife: life,
+      color: ember % 2 === 0 ? "#ff6824" : "#ffc13a",
+      size: 3 + Math.random() * 3,
+      flameDroplet: true,
+      flameSpark: true,
+    });
+  }
+}
+
+function moveMonster2Fireball(bullet, dt) {
+  const horizontalSpeed = Math.abs(bullet.vx);
+  const travelDistance = Math.min(bullet.remainingRange, horizontalSpeed * dt);
+  const steps = Math.max(1, Math.ceil(travelDistance / Math.max(4, bullet.radius * 0.5)));
+  const stepDistance = travelDistance / steps;
+  const stepTime = horizontalSpeed > 0 ? stepDistance / horizontalSpeed : 0;
+  const riseAcceleration = bullet.riseAcceleration ?? 0;
+  const playerHitbox = getPlayerHitbox();
+  for (let step = 0; step < steps; step += 1) {
+    const previousX = bullet.x;
+    const previousY = bullet.y;
+    bullet.x += bullet.vx * stepTime;
+    bullet.y += bullet.vy * stepTime - riseAcceleration * stepTime * stepTime / 2;
+    bullet.vy -= riseAcceleration * stepTime;
+    if (projectileSurfaceCollision(bullet, previousX, previousY)) {
+      burstMonster2FireballImpact(bullet);
+      return false;
+    }
+    if (overlapsCircleRect(bullet, playerHitbox)) {
+      if (takePlayerDamage(1)) {
+        shake = Math.max(shake, 12);
+      }
+      burstMonster2FireballImpact(bullet);
+      return false;
+    }
+  }
+  bullet.remainingRange -= travelDistance;
+  return bullet.remainingRange > 1e-9;
+}
+
 function updateBullets(dt) {
   for (let i = bullets.length - 1; i >= 0; i -= 1) {
     const bullet = bullets[i];
@@ -573,7 +697,7 @@ function updateBullets(dt) {
     let hit = false;
 
     for (const enemy of enemies) {
-      if (!enemy.alive || !overlapsCircleRect(bullet, enemy)) continue;
+      if (!enemy.alive || !overlapsCircleRect(bullet, getEnemyHitbox(enemy))) continue;
       enemy.hp -= 1;
       hit = true;
       applyEnemyBulletImpact(enemy, bullet);
@@ -641,18 +765,23 @@ function updateBullets(dt) {
 
   for (let i = enemyBullets.length - 1; i >= 0; i -= 1) {
     const bullet = enemyBullets[i];
+    if (bullet.kind === "monster2-fireball") {
+      // Range, not camera edges, controls lifetime so offscreen shots can fly into view.
+      if (!moveMonster2Fireball(bullet, dt)) enemyBullets.splice(i, 1);
+      continue;
+    }
     if (!moveRicochetingBullet(bullet, dt, bullet.ricochetColor ?? "#ff6b42")) {
       enemyBullets.splice(i, 1);
       continue;
     }
 
-    if (player.invincible <= 0 && overlapsCircleRect(bullet, getPlayerHitbox())) {
-      player.hp -= 1;
-      player.invincible = 1.3;
+    if (
+      player.invincible <= 0 && overlapsCircleRect(bullet, getPlayerHitbox()) &&
+      takePlayerDamage(1)
+    ) {
       shake = 12;
       burst(player.x + player.width / 2, player.y + 35, "#ffdf75", 18, 280);
       enemyBullets.splice(i, 1);
-      if (player.hp <= 0) gameOver = true;
       continue;
     }
 

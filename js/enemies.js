@@ -2,6 +2,77 @@
 
 // Regular enemy and mid-boss behavior.
 
+function enemySpritePose(enemy, x = enemy.x, y = enemy.y) {
+  const animationTime = enemy.animationTime ?? 0;
+  const animationPhase = enemy.animationPhase ?? 0;
+  const movementRate = enemy.moving ? 9 : 5.5;
+  const wobble = Math.sin(animationTime * movementRate + animationPhase);
+  let scaleX = 1 + wobble * (enemy.moving ? 0.085 : 0.045);
+  let scaleY = 1 - wobble * (enemy.moving ? 0.065 : 0.035);
+  const hitDuration = enemy.revivalKnockback
+    ? PLAYER_REVIVAL_KNOCKBACK_DURATION : enemy.hitDuration;
+  const hitPulse = hitDuration > 0
+    ? Math.pow(Math.min(1, Math.max(0, (enemy.hitTimer ?? 0) / hitDuration)), 0.55)
+    : 0;
+  if (hitPulse > 0) {
+    scaleX *= 1 - hitPulse * 0.22;
+    scaleY *= 1 + hitPulse * 0.11;
+  }
+  if (enemy.state === "windup") {
+    const progress = 1 - Math.max(0, enemy.stateTimer / enemy.jumpWindupDuration);
+    scaleX *= 1.12 + progress * 0.12;
+    scaleY *= 0.86 - progress * 0.08;
+  } else if (enemy.state === "jump") {
+    scaleX *= 0.86;
+    scaleY *= 1.17;
+  } else if (enemy.state === "recover") {
+    const progress = Math.max(0, enemy.stateTimer / enemy.jumpRecoveryDuration);
+    scaleX *= 1.12 + progress * 0.1;
+    scaleY *= 0.88 - progress * 0.06;
+  }
+  let bob = 0;
+  if (enemy.kind === "monster2") {
+    const walkStep = enemy.moving
+      ? Math.round(Math.sin(animationTime * 10 + animationPhase)) : 0;
+    bob = Math.abs(walkStep) * 2;
+    if (enemy.moving) {
+      scaleX *= 1.1 + Math.abs(walkStep) * 0.025;
+      scaleY = Math.max(0.97, scaleY * (1 - Math.abs(walkStep) * 0.01));
+    }
+    if (enemy.state === "inhale") {
+      const progress = 1 - Math.max(0, enemy.stateTimer / enemy.inhaleDuration);
+      scaleX *= 1 + progress * 0.2;
+      scaleY *= 1 + progress * 0.14;
+    } else if (enemy.state === "shoot") {
+      const recoil = enemy.fireRecoilTimer / 0.12;
+      scaleX *= 1 - recoil * 0.1;
+      scaleY *= 1 + recoil * 0.07;
+    }
+  }
+  return {
+    centerX: Math.round((x + enemy.width / 2) / 2) * 2,
+    feetY: Math.round((y + enemy.height - bob) / 2) * 2,
+    hitOffsetX: Math.round((enemy.hitDirection ?? 0) * hitPulse * 4 / 2) * 2,
+    scaleX: Math.round(scaleX * 16) / 16,
+    scaleY: Math.round(scaleY * 16) / 16,
+    hitPulse,
+  };
+}
+
+function getEnemyHitbox(enemy, x = enemy.x, y = enemy.y) {
+  const definition = MONSTER_TYPES[enemy.kind];
+  if (!definition) return { x, y, width: enemy.width, height: enemy.height };
+  const pose = enemySpritePose(enemy, x, y);
+  const spriteHeight = enemy.spriteHeight ?? definition.spriteHeight;
+  const bottomOffset = enemy.spriteBottomOffset ?? definition.spriteBottomOffset;
+  // Alpha >= 16 body bounds exclude the PNG's transparent/faint outer padding.
+  const topInset = enemy.spriteTopInset ?? definition.spriteTopInset;
+  const spriteTop = -spriteHeight + bottomOffset + spriteHeight * topInset;
+  const top = pose.feetY + spriteTop * pose.scaleY;
+  // Keep the original feet and horizontal footprint for walking and platform support.
+  return { x, y: top, width: enemy.width, height: y + enemy.height - top };
+}
+
 function enemySurfaceY(enemy) {
   return platformSurfaceY(enemy.platform, enemy.x + enemy.width / 2);
 }
@@ -108,15 +179,19 @@ function moveEnemyAlongGround(enemy, direction, dt, speed = enemy.speed) {
 
 function resolveJumpingEnemyBodyCollisions(enemy) {
   for (let pass = 0; pass < 4; pass += 1) {
-    const blocker = enemies.find((other) => (
-      other !== enemy &&
-      other.alive &&
-      enemy.x < other.x + other.width + ENEMY_BODY_SEPARATION &&
-      enemy.x + enemy.width + ENEMY_BODY_SEPARATION > other.x &&
-      enemy.y < other.y + other.height + ENEMY_BODY_SEPARATION &&
-      enemy.y + enemy.height + ENEMY_BODY_SEPARATION > other.y
-    ));
+    const hitbox = getEnemyHitbox(enemy);
+    const blocker = enemies.find((other) => {
+      if (
+        other === enemy || !other.alive ||
+        enemy.x >= other.x + other.width + ENEMY_BODY_SEPARATION ||
+        enemy.x + enemy.width + ENEMY_BODY_SEPARATION <= other.x
+      ) return false;
+      const otherHitbox = getEnemyHitbox(other);
+      return hitbox.y < otherHitbox.y + otherHitbox.height + ENEMY_BODY_SEPARATION &&
+        hitbox.y + hitbox.height + ENEMY_BODY_SEPARATION > otherHitbox.y;
+    });
     if (!blocker) return;
+    const blockerHitbox = getEnemyHitbox(blocker);
 
     const pushLeft = (
       enemy.x + enemy.width + ENEMY_BODY_SEPARATION - blocker.x
@@ -125,10 +200,10 @@ function resolveJumpingEnemyBodyCollisions(enemy) {
       blocker.x + blocker.width + ENEMY_BODY_SEPARATION - enemy.x
     );
     const pushUp = (
-      enemy.y + enemy.height + ENEMY_BODY_SEPARATION - blocker.y
+      hitbox.y + hitbox.height + ENEMY_BODY_SEPARATION - blockerHitbox.y
     );
     const pushDown = (
-      blocker.y + blocker.height + ENEMY_BODY_SEPARATION - enemy.y
+      blockerHitbox.y + blockerHitbox.height + ENEMY_BODY_SEPARATION - hitbox.y
     );
     const horizontalPush = Math.min(pushLeft, pushRight);
     const verticalPush = Math.min(pushUp, pushDown);
@@ -215,11 +290,17 @@ function updateEnemyHitReaction(enemy, dt) {
   }
 
   const direction = Math.sign(enemy.hitKnockbackVelocity);
+  const damping = enemy.revivalKnockback
+    ? PLAYER_REVIVAL_KNOCKBACK_DAMPING : enemy.hitKnockbackDamping;
   if (!moveEnemyAlongGround(enemy, direction, dt, speed)) {
-    enemy.hitKnockbackVelocity = 0;
+    // A recovery wave pushes a group: blocked rear monsters get another chance
+    // as the front monsters move, without ever overlapping their bodies.
+    enemy.hitKnockbackVelocity = enemy.revivalKnockback
+      ? enemy.hitKnockbackVelocity * Math.exp(-damping * dt)
+      : 0;
     return;
   }
-  enemy.hitKnockbackVelocity *= Math.exp(-enemy.hitKnockbackDamping * dt);
+  enemy.hitKnockbackVelocity *= Math.exp(-damping * dt);
 }
 
 function enemyGapLanding(enemy, direction) {
@@ -376,200 +457,110 @@ function updateJumpingEnemy(enemy, dt) {
   );
 }
 
-function monster2FlameOrigin(enemy) {
+function monster2AttackOrigin(enemy) {
   const direction = (
-    enemy.state === "inhale" || enemy.state === "flame"
+    enemy.state === "inhale" || enemy.state === "shoot"
       ? enemy.attackDirection
       : enemy.facing
   ) || -1;
   return {
     x: (
       enemy.x + enemy.width / 2 +
-      direction * enemy.flameMouthForwardOffset
+      direction * enemy.mouthForwardOffset
     ),
-    y: enemy.y + enemy.height - enemy.flameMouthHeight,
+    y: enemy.y + enemy.height - enemy.mouthHeight,
   };
 }
 
-function monster2CurrentFlameLength(enemy) {
-  if (enemy.state !== "flame") return 0;
-  const elapsed = enemy.flameDuration - enemy.stateTimer;
-  const rampDuration = enemy.flameRampDuration ?? 0.45;
-  const ramp = Math.max(0, Math.min(1, elapsed / rampDuration));
-  const acceleratedRamp = ramp * ramp;
-  const fade = Math.max(0, Math.min(1, enemy.stateTimer / 0.28));
-  return enemy.flameLength * acceleratedRamp * fade;
-}
-
-function monster2FlamePower(enemy) {
-  if (enemy.state !== "flame") return 0;
-  const elapsed = enemy.flameDuration - enemy.stateTimer;
-  const rampDuration = enemy.flameRampDuration ?? 0.45;
-  const ramp = Math.max(0, Math.min(1, elapsed / rampDuration));
-  const fade = Math.max(0, Math.min(1, enemy.stateTimer / 0.28));
-  return ramp * ramp * fade;
-}
-
-function monster2FlameCenterOffset(enemy, distance) {
-  const progress = Math.max(
-    0,
-    Math.min(1, distance / Math.max(1, enemy.flameLength)),
-  );
-  return -(enemy.flameRise ?? 42) * Math.pow(progress, 1.65);
-}
-
-function monster2FlameHalfHeight(enemy, distance) {
-  const progress = Math.max(
-    0,
-    Math.min(1, distance / Math.max(1, enemy.flameLength)),
-  );
+function monster2MouthIsVisible(enemy) {
+  const origin = monster2AttackOrigin(enemy);
+  const margin = 100;
   return (
-    enemy.flameNearHalfHeight +
-    (enemy.flameFarHalfHeight - enemy.flameNearHalfHeight) * progress
+    origin.x >= cameraX - margin && origin.x <= cameraX + WIDTH + margin &&
+    origin.y >= cameraY - margin && origin.y <= cameraY + HEIGHT + margin
   );
 }
 
-function monster2FlameHitsRect(enemy, rect) {
-  const flameLength = monster2CurrentFlameLength(enemy);
-  if (flameLength <= 0) return false;
-
-  const origin = monster2FlameOrigin(enemy);
+function fireMonster2Fireball(enemy) {
+  const origin = monster2AttackOrigin(enemy);
   const direction = enemy.attackDirection || enemy.facing || -1;
-  const firstEdge = direction * (rect.x - origin.x);
-  const secondEdge = direction * (rect.x + rect.width - origin.x);
-  const forwardNear = Math.min(firstEdge, secondEdge);
-  const forwardFar = Math.max(firstEdge, secondEdge);
-  if (forwardFar < 0 || forwardNear > flameLength) return false;
-
-  const overlapStart = Math.max(0, forwardNear);
-  const overlapEnd = Math.min(flameLength, forwardFar);
-  const sampleCount = 5;
-  for (let sample = 0; sample < sampleCount; sample += 1) {
-    const ratio = sample / (sampleCount - 1);
-    const sampleDistance = overlapStart + (overlapEnd - overlapStart) * ratio;
-    const centerY = origin.y + monster2FlameCenterOffset(enemy, sampleDistance);
-    const halfHeight = monster2FlameHalfHeight(enemy, sampleDistance);
-    if (
-      rect.y < centerY + halfHeight &&
-      rect.y + rect.height > centerY - halfHeight
-    ) return true;
-  }
-  return false;
+  // Spread the five shots slightly without losing the forward-first arc.
+  const angle = (((enemy.fireballsFired * 2) % enemy.fireballCount) -
+    (enemy.fireballCount - 1) / 2) * 0.025 +
+    (Math.random() - 0.5) * 0.012;
+  enemyBullets.push({
+    kind: "monster2-fireball",
+    x: origin.x,
+    y: origin.y,
+    vx: direction * enemy.fireballSpeed * Math.cos(angle),
+    vy: enemy.fireballSpeed * Math.sin(angle),
+    radius: enemy.fireballRadius,
+    remainingRange: enemy.fireballRange,
+    riseAcceleration: enemy.fireballRiseAcceleration,
+    phase: enemy.animationPhase + enemy.fireballsFired * 1.7,
+  });
+  enemy.fireballsFired += 1;
+  enemy.fireRecoilTimer = Math.max(0, Math.min(0.12, 0.12 + enemy.fireballTimer));
 }
 
-function spawnMonster2FlameParticles(enemy) {
-  const flameLength = monster2CurrentFlameLength(enemy);
-  const flamePower = monster2FlamePower(enemy);
-  if (flameLength < 8 || flamePower <= 0) return;
-
-  const origin = monster2FlameOrigin(enemy);
-  const direction = enemy.attackDirection || enemy.facing || -1;
-  const distance = flameLength * (0.08 + Math.random() * 0.88);
-  const centerY = origin.y + monster2FlameCenterOffset(enemy, distance);
-  const spread = monster2FlameHalfHeight(enemy, distance);
-  const colors = ["#ff3f20", "#ff7226", "#ffb62f", "#ffe873"];
-
-  for (let spark = 0; spark < 2; spark += 1) {
-    const life = 0.28 + Math.random() * 0.38;
-    particles.push({
-      x: origin.x + direction * distance,
-      y: centerY + (Math.random() - 0.5) * spread * 1.5,
-      vx: direction * (55 + Math.random() * (145 + flamePower * 100)),
-      vy: -135 + Math.random() * 250,
-      gravity: 680,
-      life,
-      maxLife: life,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      size: 2 + Math.random() * 3.5,
-      flameSpark: true,
-    });
+function updateMonster2Volley(enemy, dt) {
+  enemy.stateTimer -= dt;
+  enemy.fireballTimer -= dt;
+  // Catch up scheduled shots without exceeding the five-shot volley.
+  while (enemy.fireballsFired < enemy.fireballCount && enemy.fireballTimer <= 1e-9) {
+    fireMonster2Fireball(enemy);
+    enemy.fireballTimer += enemy.fireballInterval;
   }
-
-  enemy.flameParticleSequence = (enemy.flameParticleSequence ?? 0) + 1;
-  if (enemy.flameParticleSequence % 2 !== 0) return;
-
-  const dropLife = 1.25 + Math.random() * 0.65;
-  particles.push({
-    x: origin.x + direction * distance,
-    y: centerY + Math.random() * spread * 0.75,
-    vx: direction * (12 + Math.random() * 58),
-    vy: 45 + Math.random() * 115,
-    gravity: 880,
-    life: dropLife,
-    maxLife: dropLife,
-    color: Math.random() < 0.5 ? "#ff6824" : "#ffc13a",
-    size: 3 + Math.random() * 3,
-    flameDroplet: true,
-    flameSpark: true,
-  });
+  if (enemy.stateTimer > 0) return;
+  enemy.state = "chase";
+  enemy.stateTimer = 0;
+  enemy.attackTimer = enemy.attackCooldown * (0.85 + Math.random() * 0.3);
+  enemy.ambientFireTimer = enemy.ambientFireDelayMin +
+    Math.random() * (enemy.ambientFireDelayMax - enemy.ambientFireDelayMin);
 }
 
 function updateMonster2(enemy, dt, playerHitbox, playerCenterX, playerFeetY) {
   const enemyCenterX = enemy.x + enemy.width / 2;
   const distance = playerCenterX - enemyCenterX;
   const verticalDistance = playerFeetY - enemySurfaceY(enemy);
-  const sameAttackHeight = Math.abs(verticalDistance) <= enemy.attackVerticalRange;
+  const inAttackRange = (
+    Math.abs(verticalDistance) <= enemy.attackVerticalRange &&
+    Math.abs(distance) <= enemy.attackRange
+  );
   const sameChaseHeight = Math.abs(verticalDistance) <= enemy.chaseVerticalRange;
   const knockedBack = enemy.hitTimer > 0;
 
   if (knockedBack) updateEnemyHitReaction(enemy, dt);
+  enemy.fireRecoilTimer = Math.max(0, enemy.fireRecoilTimer - dt);
 
   if (enemy.state === "inhale") {
     enemy.stateTimer -= dt;
     if (enemy.stateTimer > 0) return;
-    enemy.state = "flame";
-    enemy.stateTimer = enemy.flameDuration;
-    enemy.flameParticleTimer = 0;
-    enemy.flameParticleSequence = 0;
-    const origin = monster2FlameOrigin(enemy);
-    burst(origin.x, origin.y, "#ff8a3d", 13, 135);
+    const remainingDt = Math.max(0, -enemy.stateTimer);
+    enemy.state = "shoot";
+    enemy.stateTimer = (enemy.fireballCount - 1) * enemy.fireballInterval + enemy.fireballRecovery;
+    enemy.fireballsFired = 0;
+    enemy.fireballTimer = 0;
+    updateMonster2Volley(enemy, remainingDt);
     return;
   }
 
-  if (enemy.state === "flame") {
-    enemy.stateTimer -= dt;
-    enemy.flameParticleTimer -= dt;
-    const flamePower = monster2FlamePower(enemy);
-    if (enemy.flameParticleTimer <= 0 && flamePower > 0.015) {
-      spawnMonster2FlameParticles(enemy);
-      enemy.flameParticleTimer += 0.075 - flamePower * 0.035;
-    }
-    if (
-      player.invincible <= 0 &&
-      monster2FlameHitsRect(enemy, playerHitbox)
-    ) {
-      player.hp -= 1;
-      player.invincible = 1.3;
-      shake = Math.max(shake, 13);
-      burst(
-        playerHitbox.x + playerHitbox.width / 2,
-        playerHitbox.y + playerHitbox.height / 2,
-        "#ff7a32",
-        18,
-        270,
-      );
-      if (player.hp <= 0) gameOver = true;
-    }
-    if (enemy.stateTimer > 0) return;
-    enemy.state = "chase";
-    enemy.stateTimer = 0;
-    enemy.attackTimer = enemy.attackCooldown;
+  if (enemy.state === "shoot") {
+    updateMonster2Volley(enemy, dt);
     return;
   }
 
   if (knockedBack) return;
 
+  enemy.ambientFireTimer = Math.max(0, enemy.ambientFireTimer - dt);
   if (Math.abs(distance) > 1) enemy.facing = Math.sign(distance);
-  if (
-    enemy.attackTimer <= 0 &&
-    sameAttackHeight &&
-    Math.abs(distance) <= enemy.attackRange
-  ) {
+  // Nearby targets take priority; otherwise each monster follows its own random delay.
+  if (enemy.attackTimer <= 0 && (inAttackRange || enemy.ambientFireTimer <= 0)) {
     enemy.state = "inhale";
     enemy.stateTimer = enemy.inhaleDuration;
     enemy.attackDirection = enemy.facing;
-    const origin = monster2FlameOrigin(enemy);
-    burst(origin.x, origin.y, "#b348db", 7, 65);
+    const origin = monster2AttackOrigin(enemy);
+    if (monster2MouthIsVisible(enemy)) burst(origin.x, origin.y, "#b348db", 7, 65);
     return;
   }
 
@@ -592,6 +583,10 @@ function updateEnemies(dt) {
     enemy.attackTimer = Math.max(0, enemy.attackTimer - dt);
     enemy.jumpCooldown = Math.max(0, enemy.jumpCooldown - dt);
     enemy.hitTimer = Math.max(0, enemy.hitTimer - dt);
+    if (enemy.hitTimer <= 0) {
+      if (enemy.revivalKnockback) enemy.hitKnockbackVelocity = 0;
+      enemy.revivalKnockback = false;
+    }
     enemy.moving = false;
 
     if (enemy.state !== "jump") {
@@ -695,10 +690,9 @@ function updateEnemies(dt) {
       !enemy.jumpHit &&
       player.invincible <= 0 &&
       enemy.attackTimer <= 0 &&
-      overlapsRects(enemy, playerHitbox)
+      overlapsRects(getEnemyHitbox(enemy), playerHitbox) &&
+      takePlayerDamage(1)
     ) {
-      player.hp -= 1;
-      player.invincible = 1.3;
       enemy.attackTimer = enemy.attackCooldown;
       enemy.jumpHit = true;
       shake = 12;
@@ -709,7 +703,6 @@ function updateEnemies(dt) {
         16,
         250,
       );
-      if (player.hp <= 0) gameOver = true;
     }
   }
 }
@@ -727,14 +720,18 @@ function turretMuzzlePosition(turret) {
   };
 }
 
-function fireTurretLaser(turret) {
+function fireTurretLaser(turret, aimedAtPlayer) {
   const muzzle = turretMuzzlePosition(turret);
-  const playerHitbox = getPlayerHitbox();
-  const targetX = playerHitbox.x + playerHitbox.width / 2;
-  const targetY = playerHitbox.y + playerHitbox.height / 2;
-  const distance = Math.max(1, Math.hypot(targetX - muzzle.x, targetY - muzzle.y));
-  const directionX = (targetX - muzzle.x) / distance;
-  const directionY = (targetY - muzzle.y) / distance;
+  let directionX = turret.facing / Math.hypot(1, 0.08);
+  let directionY = -0.08 / Math.hypot(1, 0.08);
+  if (aimedAtPlayer) {
+    const playerHitbox = getPlayerHitbox();
+    const targetX = playerHitbox.x + playerHitbox.width / 2;
+    const targetY = playerHitbox.y + playerHitbox.height / 2;
+    const distance = Math.max(1, Math.hypot(targetX - muzzle.x, targetY - muzzle.y));
+    directionX = (targetX - muzzle.x) / distance;
+    directionY = (targetY - muzzle.y) / distance;
+  }
 
   enemyBullets.push({
     kind: "turret-laser",
@@ -748,9 +745,14 @@ function fireTurretLaser(turret) {
     ricochetColor: "#8a24d6",
   });
   turret.recoilTimer = 0.2;
-  burst(muzzle.x, muzzle.y, "#bd4fff", 16, 185);
-  burst(muzzle.x, muzzle.y, "#421063", 9, 115);
-  shake = Math.max(shake, 7);
+  if (
+    muzzle.x >= cameraX - 80 && muzzle.x <= cameraX + WIDTH + 80 &&
+    muzzle.y >= cameraY - 80 && muzzle.y <= cameraY + HEIGHT + 80
+  ) {
+    burst(muzzle.x, muzzle.y, "#bd4fff", 16, 185);
+    burst(muzzle.x, muzzle.y, "#421063", 9, 115);
+    shake = Math.max(shake, 7);
+  }
 }
 
 function updateTurrets(dt) {
@@ -767,18 +769,17 @@ function updateTurrets(dt) {
     );
     turret.hitTimer = Math.max(0, turret.hitTimer - dt);
     turret.recoilTimer = Math.max(0, turret.recoilTimer - dt);
-    if (Math.abs(playerCenterX - turretCenterX) > 1) {
-      turret.facing = Math.sign(playerCenterX - turretCenterX);
-    }
-
-    turret.active = (
+    const playerInRange = (
       Math.abs(playerCenterX - turretCenterX) <= TURRET.activationRangeX &&
       Math.abs(playerCenterY - turretCenterY) <= TURRET.activationRangeY
     );
-    if (!turret.active) continue;
+    if (playerInRange && Math.abs(playerCenterX - turretCenterX) > 1) {
+      turret.facing = Math.sign(playerCenterX - turretCenterX);
+    }
+    turret.active = true;
 
     turret.fireTimer -= dt;
-    if (turret.fireTimer <= TURRET.chargeDuration) {
+    if (turret.burstShotsRemaining === 0 && turret.fireTimer <= TURRET.chargeDuration) {
       turret.chargeParticleTimer -= dt;
       if (turret.chargeParticleTimer <= 0) {
         const muzzle = turretMuzzlePosition(turret);
@@ -786,20 +787,28 @@ function updateTurrets(dt) {
           0,
           1 - turret.fireTimer / TURRET.chargeDuration,
         );
-        burst(
-          muzzle.x,
-          muzzle.y,
-          chargeProgress > 0.68 ? "#d45cff" : "#7117aa",
-          1,
-          35 + chargeProgress * 35,
-        );
+        if (
+          muzzle.x >= cameraX - 80 && muzzle.x <= cameraX + WIDTH + 80 &&
+          muzzle.y >= cameraY - 80 && muzzle.y <= cameraY + HEIGHT + 80
+        ) {
+          burst(
+            muzzle.x,
+            muzzle.y,
+            chargeProgress > 0.68 ? "#d45cff" : "#7117aa",
+            1,
+            35 + chargeProgress * 35,
+          );
+        }
         turret.chargeParticleTimer = 0.12 - chargeProgress * 0.065;
       }
     }
 
     if (turret.fireTimer > 0) continue;
-    fireTurretLaser(turret);
-    turret.fireTimer = TURRET.fireInterval;
+    fireTurretLaser(turret, playerInRange);
+    turret.burstShotsRemaining = turret.burstShotsRemaining > 0
+      ? turret.burstShotsRemaining - 1 : TURRET.burstShots - 1;
+    turret.fireTimer = turret.burstShotsRemaining > 0
+      ? TURRET.burstShotInterval : TURRET.fireInterval;
     turret.chargeParticleTimer = 0;
   }
 }
@@ -875,13 +884,11 @@ function updateMidBosses(dt) {
 
     if (
       player.invincible <= 0 &&
-      overlapsRects(boss, playerHitbox)
+      overlapsRects(boss, playerHitbox) &&
+      takePlayerDamage(1)
     ) {
-      player.hp -= 1;
-      player.invincible = 1.3;
       shake = 14;
       burst(playerCenterX, playerCenterY, "#ff65d9", 18, 275);
-      if (player.hp <= 0) gameOver = true;
     }
   }
 }

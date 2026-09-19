@@ -7,6 +7,8 @@ const testControlsElement = document.querySelector("[data-test-controls]");
 const testJumpPathButton = document.querySelector("[data-test-jump-path]");
 const testResolutionButton = document.querySelector("[data-test-resolution]");
 const testOrientationButton = document.querySelector("[data-test-orientation]");
+const testMapButton = document.querySelector("[data-test-map]");
+const testInvincibilityButton = document.querySelector("[data-test-invincibility]");
 const testPlayerAreaButton = document.querySelector("[data-test-player-area]");
 const testMonsterAreaButton = document.querySelector("[data-test-monster-area]");
 const testSpawnMonster1Button = document.querySelector("[data-test-spawn-monster1]");
@@ -82,7 +84,6 @@ const ELECTRIC_WIRE_SEGMENTS = 14;
 const ELECTRIC_WIRE_RADIUS = 3;
 const ELECTRIC_WIRE_MAX_DROP = PLATFORM_FEATURE_WIDTH_MAX + PLATFORM_DECK_THICKNESS;
 const ELECTRIC_WIRE_DAMAGE = 0.5;
-const ELECTRIC_WIRE_INVINCIBILITY = 1.3;
 const MAP_FLOW_DISTANCE_MIN = 1200;
 const MAP_FLOW_DISTANCE_MAX = 3000;
 const MAP_FLOW_REVERSE_CHANCE = 0.34;
@@ -136,6 +137,15 @@ const PLAYER_SIT_SPRITE_SCALE = 1;
 const PLAYER_BLAST_SIT_SPRITE_SCALE = 0.972;
 const PLAYER_JUMP_SPRITE_SCALE = 1.12;
 const PLAYER_GET_OFF_SPRITE_SCALE = PLAYER_JUMP_SPRITE_SCALE;
+const PLAYER_DOWN_SPRITE_SCALE = PLAYER_STAND_SPRITE_SCALE;
+const PLAYER_DOWN_FPS = 8;
+const PLAYER_DOWN_HOLD_DURATION = 2;
+const PLAYER_REVIVAL_INVINCIBILITY = 3;
+const PLAYER_REVIVAL_RADIUS = 240;
+const PLAYER_REVIVAL_LIGHT_COUNT = 72;
+const PLAYER_REVIVAL_KNOCKBACK_SPEED = 1500;
+const PLAYER_REVIVAL_KNOCKBACK_DURATION = 0.72;
+const PLAYER_REVIVAL_KNOCKBACK_DAMPING = 3;
 const PLAYER_DEEP_FALL_THRESHOLD = 28;
 const PLAYER_MUZZLE_HEIGHT_RATIO = 1 / 3;
 const PLAYER_MUZZLE_FORWARD_OFFSET = 44;
@@ -147,6 +157,9 @@ const PLAYER_CROUCH_MUZZLE_LOWER_RATIO = 0.2;
 const PLAYER_MUZZLE_BARREL_OFFSET = 7;
 const PLAYER_FIRE_STAGGER_DELAY = 0.065;
 const PLAYER_FIRE_PAIR_DELAY = 0.14;
+const PLAYER_FIRE_ENERGY_MAX = 100;
+const PLAYER_FIRE_ENERGY_PER_SHOT = 6;
+const PLAYER_FIRE_ENERGY_REGEN_PER_SECOND = 12;
 const PLAYER_BULLET_SPEED = 1520;
 const PROJECTILE_SURFACE_HIT_SHAKE = 4;
 const PLAYER_HITBOX_WIDTH = 70;
@@ -177,7 +190,9 @@ const TURRET = {
   hp: 15,
   activationRangeX: 980,
   activationRangeY: 660,
-  fireInterval: 6.6,
+  fireInterval: 4.2,
+  burstShots: 5,
+  burstShotInterval: 0.45,
   chargeDuration: 0.95,
   laserSpeed: 420,
   laserRadius: 10,
@@ -205,9 +220,10 @@ const MONSTER_TYPES = {
     displayName: "몹1",
     width: 64,
     height: 72,
-    spriteWidth: 104,
-    spriteHeight: 112,
-    spriteBottomOffset: 14,
+    spriteWidth: 90,
+    spriteHeight: 94,
+    spriteBottomOffset: 5,
+    spriteTopInset: 19 / 316,
     hp: 2,
     speed: 128,
     chaseRange: 900,
@@ -252,6 +268,7 @@ const MONSTER_TYPES = {
     spriteWidth: 174,
     spriteHeight: 234,
     spriteBottomOffset: 12,
+    spriteTopInset: 6 / 338,
     spriteFacing: -1,
     hp: 10,
     speed: 76,
@@ -261,15 +278,18 @@ const MONSTER_TYPES = {
     attackRange: 500,
     attackVerticalRange: 105,
     inhaleDuration: 0.9,
-    flameDuration: 2,
-    flameLength: 490,
-    flameRampDuration: 0.45,
-    flameRise: 42,
-    flameNearHalfHeight: 18,
-    flameFarHalfHeight: 52,
-    flameMouthForwardOffset: 51,
-    flameMouthHeight: 87,
+    fireballCount: 5,
+    fireballInterval: 0.2,
+    fireballRecovery: 0.18,
+    fireballSpeed: 520,
+    fireballRadius: 22,
+    fireballRange: 490,
+    fireballRiseAcceleration: 170,
+    mouthForwardOffset: 51,
+    mouthHeight: 87,
     attackCooldown: 2.4,
+    ambientFireDelayMin: 2.8,
+    ambientFireDelayMax: 6.5,
     hitDuration: 0.24,
     hitKnockbackSpeed: 230,
     hitKnockbackMaxSpeed: 360,
@@ -325,6 +345,13 @@ const PLAYER_SIT_FRAMES = Array.from({ length: 5 }, (_, frame) => ({
   width: SIT_FRAME_WIDTH,
   height: SIT_FRAME_HEIGHT,
 }));
+const PLAYER_DOWN_FRAMES = Array.from({ length: 5 }, (_, frame) => ({
+  x: frame * (400 + 2),
+  y: 0,
+  width: 400,
+  height: 500,
+}));
+const PLAYER_DOWN_ANIMATION_DURATION = PLAYER_DOWN_FRAMES.length / PLAYER_DOWN_FPS;
 
 function configureCanvasResolution(width, height) {
   WIDTH = width;

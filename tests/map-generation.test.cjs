@@ -26,7 +26,7 @@ function createGame(landscape = false) {
     },
   };
   vm.createContext(scope);
-  for (const name of ["config", "state", "world", "player"]) {
+  for (const name of ["config", "state", "world", "player", "enemies"]) {
     const source = fs.readFileSync(path.join(__dirname, "..", "js", `${name}.js`), "utf8");
     vm.runInContext(source, scope, { filename: `${name}.js` });
   }

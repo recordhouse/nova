@@ -80,39 +80,111 @@ function drawStationPanels(platform, thickness = PLATFORM_DECK_THICKNESS - 4) {
   ];
   const panelWidth = panelWidths[platform.style];
   const palette = panelPalettes[platform.style];
-  const firstPanel = platform.start + panelWidth / 2;
+  const first = Math.max(0, Math.floor((cameraX - 48 - platform.start) / panelWidth));
+  const last = Math.min(
+    Math.ceil((platform.end - platform.start) / panelWidth) - 1,
+    Math.floor((cameraX + WIDTH + 48 - platform.start) / panelWidth),
+  );
+  const y = pixelSnap(platform.y + 3);
 
-  for (let x = firstPanel; x <= platform.end - panelWidth / 2; x += panelWidth) {
-    ctx.save();
-    ctx.translate(x, platform.y);
+  for (let panel = first; panel <= last; panel += 1) {
+    const start = platform.start + panel * panelWidth;
+    const width = Math.min(panelWidth, platform.end - start);
+    if (width < 16) continue;
+    const x = pixelSnap(start);
+    ctx.fillStyle = palette[panel % 2];
+    ctx.fillRect(x + 2, y, width - 4, thickness);
+    ctx.fillStyle = "#0a131b";
+    ctx.fillRect(x, y + 2, 2, thickness - 2);
+    ctx.fillRect(x + width - 2, y + 2, 2, thickness - 2);
+    ctx.fillStyle = "#526878";
+    ctx.fillRect(x + 6, y + 2, 10, 2);
+    ctx.fillRect(x + width - 16, y + 2, 10, 2);
+    ctx.fillStyle = "#080e15";
+    ctx.fillRect(x + 10, y + 7, 4, 2);
+    ctx.fillRect(x + width - 14, y + 7, 4, 2);
 
-    ctx.fillStyle = Math.floor((x - platform.start) / panelWidth) % 2 === 0
-      ? palette[0]
-      : palette[1];
-    ctx.fillRect(-panelWidth / 2 - 1, 3, panelWidth + 2, thickness);
-    ctx.strokeStyle = "rgba(89, 112, 128, 0.62)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(-panelWidth / 2, 4, panelWidth, thickness - 2);
-
-    ctx.strokeStyle = "rgba(111, 151, 170, 0.28)";
-    ctx.beginPath();
     if (platform.style === 0) {
-      ctx.moveTo(0, 5);
-      ctx.lineTo(0, thickness + 1);
+      ctx.fillStyle = "#324856";
+      if (width >= 64) ctx.fillRect(x + 24, y + 5, width - 48, 2);
+      ctx.fillStyle = "#101a23";
+      ctx.fillRect(x + Math.floor(width / 2) - 2, y + 3, 4, 8);
     } else if (platform.style === 1) {
-      ctx.moveTo(-panelWidth * 0.32, thickness + 1);
-      ctx.lineTo(panelWidth * 0.32, 5);
+      ctx.fillStyle = "#46515c";
+      for (let mark = 20; mark < width - 16; mark += 20) {
+        ctx.fillRect(x + mark, y + (mark % 40 === 0 ? 6 : 4), 8, 2);
+      }
     } else {
-      ctx.moveTo(-panelWidth * 0.2, 5);
-      ctx.lineTo(-panelWidth * 0.2, thickness + 1);
-      ctx.moveTo(panelWidth * 0.2, 5);
-      ctx.lineTo(panelWidth * 0.2, thickness + 1);
+      ctx.fillStyle = "#315765";
+      if (width >= 56) {
+        ctx.fillRect(x + 24, y + 4, 4, 6);
+        ctx.fillRect(x + width - 28, y + 4, 4, 6);
+      }
+      if (width >= 72) ctx.fillRect(x + 32, y + 8, width - 64, 2);
     }
-    ctx.stroke();
+  }
+}
 
-    ctx.fillStyle = "rgba(104, 211, 225, 0.28)";
-    ctx.fillRect(-panelWidth * 0.28, 6, panelWidth * 0.56, 1.5);
-    ctx.restore();
+function drawRoadPixelTexture(platform, palette, isSubPath = false) {
+  const tileWidth = 32;
+  const first = Math.max(0, Math.floor((cameraX - 40 - platform.start) / tileWidth));
+  const last = Math.min(
+    Math.ceil((platform.end - platform.start) / tileWidth) - 1,
+    Math.floor((cameraX + WIDTH + 40 - platform.start) / tileWidth),
+  );
+  for (let tile = first; tile <= last; tile += 1) {
+    const start = platform.start + tile * tileWidth;
+    const x = pixelSnap(start);
+    const y = pixelSnap(platformSurfaceY(platform, start + 16));
+    const wear = platformFeatureNoise(platform, tile * 37 + 19);
+    ctx.fillStyle = palette[2];
+    ctx.fillRect(x + 4, y + 8, 6, 2);
+    ctx.fillRect(x + 24, y + 5, 4, 2);
+    ctx.fillStyle = palette[0];
+    ctx.fillRect(x + 12, y + 4, wear > 0.58 ? 8 : 4, 2);
+    if (wear > 0.68) {
+      ctx.fillStyle = isSubPath ? "#a286d0" : "#6eafbd";
+      ctx.fillRect(x + 20, y + 6, 4, 2);
+    }
+  }
+}
+
+function drawPixelRoadRail(platform, railColor, isSubPath = false) {
+  const highlight = isSubPath ? "#c9aeff" : "#69e2ee";
+  const visibleStart = Math.max(platform.start, cameraX - 16);
+  const visibleEnd = Math.min(platform.end, cameraX + WIDTH + 16);
+  if (visibleEnd <= visibleStart) return;
+  if (platform.kind === "flat") {
+    const y = pixelSnap(platform.y);
+    ctx.fillStyle = railColor;
+    ctx.fillRect(visibleStart, y - 4, visibleEnd - visibleStart, 4);
+    ctx.fillStyle = highlight;
+    ctx.fillRect(visibleStart, y - 2, visibleEnd - visibleStart, 2);
+    ctx.fillStyle = "#0c161e";
+    const firstNotch = Math.max(0, Math.floor((visibleStart - platform.start) / 48));
+    for (let notch = firstNotch; platform.start + notch * 48 < visibleEnd; notch += 1) {
+      const x = pixelSnap(platform.start + notch * 48 + 36);
+      if (x + 4 <= platform.end) ctx.fillRect(x, y - 2, 4, 2);
+    }
+    return;
+  }
+
+  const blockWidth = 8;
+  const first = Math.max(0, Math.floor((visibleStart - platform.start) / blockWidth));
+  const last = Math.min(
+    Math.ceil((platform.end - platform.start) / blockWidth) - 1,
+    Math.floor((visibleEnd - platform.start) / blockWidth),
+  );
+  for (let block = first; block <= last; block += 1) {
+    const x = platform.start + block * blockWidth;
+    const width = Math.min(blockWidth, platform.end - x);
+    const y = pixelSnap(platformSurfaceY(platform, x + width / 2));
+    ctx.fillStyle = railColor;
+    ctx.fillRect(x, y - 4, width, 4);
+    if (block % 6 !== 5) {
+      ctx.fillStyle = highlight;
+      ctx.fillRect(x, y - 2, width, 2);
+    }
   }
 }
 
@@ -657,6 +729,10 @@ function drawRamp(platform, palette, railColor) {
   ctx.lineTo(bottomEntryX, platform.entryY + PLATFORM_DECK_THICKNESS);
   ctx.closePath();
   ctx.fill();
+  ctx.save();
+  ctx.clip();
+  drawRoadPixelTexture(platform, palette, platform.routeRole === "sub");
+  ctx.restore();
 
   ctx.strokeStyle = palette[0];
   ctx.lineWidth = 4;
@@ -684,15 +760,7 @@ function drawRamp(platform, palette, railColor) {
     ctx.stroke();
   }
 
-  ctx.strokeStyle = railColor;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(platform.entryX, platform.entryY);
-  ctx.lineTo(platform.exitX, platform.exitY);
-  ctx.stroke();
-  ctx.strokeStyle = "rgba(105, 226, 238, 0.9)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  drawPixelRoadRail(platform, railColor, platform.routeRole === "sub");
 
   ctx.strokeStyle = "#0a1017";
   ctx.lineWidth = 3;
@@ -734,6 +802,8 @@ function drawInvertedTrianglePlatform(platform, palette, railColor) {
     ctx.globalAlpha = 0.32;
     ctx.fillRect(platform.start, bandY, platform.end - platform.start, 4);
   }
+  ctx.globalAlpha = 1;
+  drawRoadPixelTexture(platform, palette, platform.routeRole === "sub");
   ctx.restore();
 
   ctx.strokeStyle = "rgba(102, 139, 157, 0.72)";
@@ -744,10 +814,7 @@ function drawInvertedTrianglePlatform(platform, palette, railColor) {
   ctx.lineTo(platform.end, platform.y);
   ctx.stroke();
 
-  ctx.fillStyle = railColor;
-  ctx.fillRect(platform.start, platform.y - 3, platform.end - platform.start, 3);
-  ctx.fillStyle = "rgba(105, 226, 238, 0.94)";
-  ctx.fillRect(platform.start, platform.y - 1.5, platform.end - platform.start, 1);
+  drawPixelRoadRail(platform, railColor, platform.routeRole === "sub");
 
   const fixtureSeed = 910 + platform.id * 3;
   const frame = Math.floor(gameTime * 22);
@@ -844,6 +911,7 @@ function drawTerrain() {
       4,
     );
     drawStationPanels(platform);
+    drawRoadPixelTexture(platform, palette, isSubPath);
     ctx.fillStyle = "#0a1118";
     ctx.fillRect(
       platform.start,
@@ -855,12 +923,7 @@ function drawTerrain() {
     ctx.restore();
 
     drawPlatformLights(platform);
-    ctx.fillStyle = isSubPath ? "#8873ad" : railColors[platform.style];
-    ctx.fillRect(platform.start, platform.y - 3, platform.end - platform.start, 3);
-    ctx.fillStyle = isSubPath
-      ? "rgba(201, 174, 255, 0.94)"
-      : "rgba(105, 226, 238, 0.9)";
-    ctx.fillRect(platform.start, platform.y - 1.5, platform.end - platform.start, 1);
+    drawPixelRoadRail(platform, isSubPath ? "#8873ad" : railColors[platform.style], isSubPath);
     drawPlatformFeature(platform);
 
     ctx.strokeStyle = "#0a1017";
@@ -885,8 +948,39 @@ function drawTerrain() {
 }
 
 function drawPlayer() {
-  if (player.invincible > 0 && Math.floor(gameTime * 16) % 2 === 0) return;
-  drawPlayerSprite(player.x + player.width / 2);
+  const blinking = player.downPhase === "hold" || (!player.downPhase && player.invincible > 0);
+  const blinkTime = player.downPhase === "hold"
+    ? player.downTime - PLAYER_DOWN_ANIMATION_DURATION : gameTime;
+  ctx.save();
+  // Dim rather than disappear completely, keeping the character easy to locate.
+  if (blinking && Math.floor(blinkTime * 10) % 2 !== 0) ctx.globalAlpha *= 0.28;
+  const spriteTopY = drawPlayerSprite(player.x + player.width / 2);
+  ctx.restore();
+  drawPlayerFireEnergyGauge(spriteTopY);
+}
+
+function drawPlayerFireEnergyGauge(spriteTopY) {
+  const width = 56;
+  const height = 8;
+  const left = pixelSnap(player.x + player.width / 2 - width / 2, 1);
+  const top = pixelSnap(spriteTopY - 18, 1);
+  const ratio = Math.max(0, Math.min(1, player.fireEnergy / PLAYER_FIRE_ENERGY_MAX));
+  const filledWidth = Math.round((width - 4) * ratio);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(14, 6, 27, 0.9)";
+  ctx.fillRect(left - 3, top - 3, width + 6, height + 6);
+  ctx.fillStyle = "#7145a2";
+  ctx.fillRect(left - 1, top - 1, width + 2, height + 2);
+  ctx.fillStyle = "#241331";
+  ctx.fillRect(left, top, width, height);
+  if (filledWidth > 0) {
+    ctx.fillStyle = "#a653f5";
+    ctx.fillRect(left + 2, top + 2, filledWidth, 4);
+    ctx.fillStyle = "#e6b5ff";
+    ctx.fillRect(left + 2, top + 2, filledWidth, 2);
+  }
+  ctx.restore();
 }
 
 function drawPlayerPhysicsDebug() {
@@ -902,57 +996,68 @@ function drawPlayerPhysicsDebug() {
 }
 
 function drawPlayerSprite(centerX) {
+  const isDownPose = Boolean(player.downPhase);
   const isRunning = Math.abs(player.vx) > 1;
   const isJumping = !player.grounded;
   const isDeepFalling = isJumping && player.deepFalling;
-  const isFiring = controls.fire;
+  const isFiring = controls.fire && (
+    player.fireEnergy >= PLAYER_FIRE_ENERGY_PER_SHOT || player.fireTimer > 0
+  );
   const isCrouching = player.crouching && player.grounded;
   const isAimingHigh = playerIsAimingHigh();
-  const sprite = isCrouching && isFiring
-    ? playerSprites.blastSit
-    : isCrouching
-      ? playerSprites.sit
-      : isFiring
-        ? isJumping
-          ? playerSprites.blastJump
-          : isAimingHigh
-            ? playerSprites.blastHigh
-            : playerSprites.blast
-        : isDeepFalling
-          ? playerSprites.getOff
-          : isJumping
-            ? playerSprites.jump
-            : isRunning
-              ? playerSprites.run
-              : playerSprites.stand;
-  if (!sprite.loaded || !sprite.image.naturalWidth || !sprite.image.naturalHeight) return;
+  const sprite = isDownPose
+    ? playerSprites.down
+    : isCrouching && isFiring
+      ? playerSprites.blastSit
+      : isCrouching
+        ? playerSprites.sit
+        : isFiring
+          ? isJumping
+            ? playerSprites.blastJump
+            : isAimingHigh
+              ? playerSprites.blastHigh
+              : playerSprites.blast
+          : isDeepFalling
+            ? playerSprites.getOff
+            : isJumping
+              ? playerSprites.jump
+              : isRunning
+                ? playerSprites.run
+                : playerSprites.stand;
+  if (!sprite?.loaded || !sprite.image.naturalWidth || !sprite.image.naturalHeight) {
+    return player.y + player.height - PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_STAND_SPRITE_SCALE;
+  }
 
   const jumpProgress = Math.min(1, player.jumpAnimationTime / JUMP_ANIMATION_DURATION);
-  const frame = isFiring
-    ? Math.floor(player.fireAnimationTime * sprite.fps) % sprite.frames.length
-    : isDeepFalling
-      ? Math.floor(player.fallAnimationTime * sprite.fps) % sprite.frames.length
-      : isJumping
-        ? Math.min(sprite.frames.length - 1, Math.floor(jumpProgress * sprite.frames.length))
-        : Math.floor(gameTime * sprite.fps) % sprite.frames.length;
+  const frame = isDownPose
+    ? Math.min(sprite.frames.length - 1, Math.floor(player.downTime * sprite.fps))
+    : isFiring
+      ? Math.floor(player.fireAnimationTime * sprite.fps) % sprite.frames.length
+      : isDeepFalling
+        ? Math.floor(player.fallAnimationTime * sprite.fps) % sprite.frames.length
+        : isJumping
+          ? Math.min(sprite.frames.length - 1, Math.floor(jumpProgress * sprite.frames.length))
+          : Math.floor(gameTime * sprite.fps) % sprite.frames.length;
   const source = sprite.frames[frame];
-  const spriteScale = sprite === playerSprites.stand
-    ? PLAYER_STAND_SPRITE_SCALE
-    : sprite === playerSprites.blastHigh
-      ? PLAYER_BLAST_HIGH_SPRITE_SCALE
-      : sprite === playerSprites.blastJump
-        ? PLAYER_JUMP_SPRITE_SCALE
-        : sprite === playerSprites.blast
-          ? PLAYER_BLAST_SPRITE_SCALE
-          : sprite === playerSprites.sit
-            ? PLAYER_SIT_SPRITE_SCALE
-            : sprite === playerSprites.blastSit
-              ? PLAYER_BLAST_SIT_SPRITE_SCALE
-              : sprite === playerSprites.getOff
-                ? PLAYER_GET_OFF_SPRITE_SCALE
-                : sprite === playerSprites.jump
-                  ? PLAYER_JUMP_SPRITE_SCALE
-                  : 1;
+  const spriteScale = sprite === playerSprites.down
+    ? PLAYER_DOWN_SPRITE_SCALE
+    : sprite === playerSprites.stand
+      ? PLAYER_STAND_SPRITE_SCALE
+      : sprite === playerSprites.blastHigh
+        ? PLAYER_BLAST_HIGH_SPRITE_SCALE
+        : sprite === playerSprites.blastJump
+          ? PLAYER_JUMP_SPRITE_SCALE
+          : sprite === playerSprites.blast
+            ? PLAYER_BLAST_SPRITE_SCALE
+            : sprite === playerSprites.sit
+              ? PLAYER_SIT_SPRITE_SCALE
+              : sprite === playerSprites.blastSit
+                ? PLAYER_BLAST_SIT_SPRITE_SCALE
+                : sprite === playerSprites.getOff
+                  ? PLAYER_GET_OFF_SPRITE_SCALE
+                  : sprite === playerSprites.jump
+                    ? PLAYER_JUMP_SPRITE_SCALE
+                    : 1;
   const drawHeight = PLAYER_SPRITE_DRAW_HEIGHT * spriteScale;
   const drawWidth = source.width * (drawHeight / source.height);
   const feetY = player.y + player.height;
@@ -974,6 +1079,7 @@ function drawPlayerSprite(centerX) {
     drawHeight,
   );
   ctx.restore();
+  return feetY - drawHeight;
 }
 
 function drawCombatantHealthBar(centerX, topY, width, hp, maxHp) {
@@ -996,6 +1102,28 @@ function drawCombatantHealthBar(centerX, topY, width, hp, maxHp) {
   ctx.restore();
 }
 
+function drawCombatantPhysicsDebug(target, color) {
+  if (!TEST_MODE || !showMonsterArea || !target.alive) return;
+  const hitbox = target.kind === "monster1" || target.kind === "monster2"
+    ? getEnemyHitbox(target) : target;
+  if (
+    hitbox.x + hitbox.width < cameraX - 24 ||
+    hitbox.x > cameraX + WIDTH + 24 ||
+    hitbox.y + hitbox.height < cameraY - 24 ||
+    hitbox.y > cameraY + HEIGHT + 24
+  ) return;
+  ctx.save();
+  ctx.setLineDash([]);
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.11;
+  ctx.fillRect(hitbox.x, hitbox.y, hitbox.width, hitbox.height);
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(hitbox.x, hitbox.y, hitbox.width, hitbox.height);
+  ctx.restore();
+}
+
 function drawEnemyAwarenessDebug(enemy) {
   if (!TEST_MODE || !showMonsterArea || !enemy.alive) return;
   const centerX = enemy.x + enemy.width / 2;
@@ -1003,32 +1131,30 @@ function drawEnemyAwarenessDebug(enemy) {
 
   ctx.save();
   if (enemy.kind === "monster2") {
-    const direction = enemy.attackDirection || enemy.facing || -1;
-    const origin = monster2FlameOrigin(enemy);
-    const debugSegments = 12;
+    const direction = (enemy.state === "inhale" || enemy.state === "shoot"
+      ? enemy.attackDirection : enemy.facing) || -1;
+    const origin = monster2AttackOrigin(enemy);
+    const radius = enemy.fireballRadius;
     ctx.setLineDash([8, 6]);
     ctx.fillStyle = "rgba(255, 91, 43, 0.055)";
     ctx.strokeStyle = "rgba(255, 126, 64, 0.34)";
     ctx.lineWidth = 1;
-    ctx.translate(origin.x, origin.y);
-    ctx.scale(direction, 1);
     ctx.beginPath();
-    for (let segment = 0; segment <= debugSegments; segment += 1) {
-      const distance = enemy.flameLength * segment / debugSegments;
-      const y = (
-        monster2FlameCenterOffset(enemy, distance) -
-        monster2FlameHalfHeight(enemy, distance)
-      );
-      if (segment === 0) ctx.moveTo(distance, y);
-      else ctx.lineTo(distance, y);
+    for (let step = 0; step <= 12; step += 1) {
+      const distance = enemy.fireballRange * step / 12;
+      const flightTime = distance / enemy.fireballSpeed;
+      const centerY = origin.y - enemy.fireballRiseAcceleration * flightTime * flightTime / 2;
+      const spread = radius + distance * 0.06;
+      const x = origin.x + direction * distance;
+      if (step === 0) ctx.moveTo(x, centerY - spread);
+      else ctx.lineTo(x, centerY - spread);
     }
-    for (let segment = debugSegments; segment >= 0; segment -= 1) {
-      const distance = enemy.flameLength * segment / debugSegments;
-      ctx.lineTo(
-        distance,
-        monster2FlameCenterOffset(enemy, distance) +
-          monster2FlameHalfHeight(enemy, distance),
-      );
+    for (let step = 12; step >= 0; step -= 1) {
+      const distance = enemy.fireballRange * step / 12;
+      const flightTime = distance / enemy.fireballSpeed;
+      const centerY = origin.y - enemy.fireballRiseAcceleration * flightTime * flightTime / 2;
+      const spread = radius + distance * 0.06;
+      ctx.lineTo(origin.x + direction * distance, centerY + spread);
     }
     ctx.closePath();
     ctx.fill();
@@ -1088,7 +1214,7 @@ function drawEnemyAwarenessDebug(enemy) {
 }
 
 function drawMonster2Charge(enemy) {
-  const origin = monster2FlameOrigin(enemy);
+  const origin = monster2AttackOrigin(enemy);
   const direction = enemy.attackDirection || enemy.facing || -1;
   const progress = Math.max(0, Math.min(1, 1 - enemy.stateTimer / enemy.inhaleDuration));
   const pulse = 0.9 + Math.sin(gameTime * 12 + enemy.animationPhase) * 0.1;
@@ -1134,104 +1260,26 @@ function drawMonster2Charge(enemy) {
 }
 
 function drawMonster2Attack(enemy) {
-  if (enemy.state !== "inhale" && enemy.state !== "flame") return;
+  if (enemy.kind !== "monster2") return;
   if (enemy.state === "inhale") {
     drawMonster2Charge(enemy);
     return;
   }
-
-  const origin = monster2FlameOrigin(enemy);
+  if (enemy.state !== "shoot" || enemy.fireRecoilTimer <= 0) return;
+  const origin = monster2AttackOrigin(enemy);
   const direction = enemy.attackDirection || enemy.facing || -1;
   ctx.save();
-  const flameLength = monster2CurrentFlameLength(enemy);
-  if (flameLength <= 0) {
-    ctx.restore();
-    return;
-  }
   ctx.translate(pixelSnap(origin.x), pixelSnap(origin.y));
   ctx.scale(direction, 1);
   ctx.globalCompositeOperation = "lighter";
-  const flamePower = monster2FlamePower(enemy);
-  const segmentWidth = flamePower < 0.45 ? 7 : 5;
-  const flowRate = 16 + flamePower * 32;
-  for (let x = 0; x < flameLength; x += segmentWidth) {
-    const pathProgress = x / Math.max(1, enemy.flameLength);
-    const tipProgress = x / Math.max(1, flameLength);
-    const centerY = monster2FlameCenterOffset(enemy, x);
-    const baseHalfHeight = monster2FlameHalfHeight(enemy, x);
-    const tipTaper = tipProgress > 0.82
-      ? Math.max(0.16, (1 - tipProgress) / 0.18)
-      : 1;
-    const turbulence = (
-      Math.sin(gameTime * flowRate + x * 0.19) * (2.5 + pathProgress * 4.5) +
-      Math.sin(gameTime * (flowRate * 0.57) - x * 0.31) * 2.5
-    );
-    const outerHalfHeight = Math.max(3, baseHalfHeight * tipTaper);
-    const blockWidth = Math.min(segmentWidth + 2, flameLength - x + 2);
-    ctx.globalAlpha = 0.34 + flamePower * 0.28;
-    ctx.fillStyle = "#d92c20";
-    ctx.fillRect(
-      pixelSnap(x),
-      pixelSnap(centerY - outerHalfHeight + turbulence),
-      blockWidth,
-      pixelSnap(outerHalfHeight * 2),
-    );
-
-    const mainHalfHeight = Math.max(3, outerHalfHeight * 0.8);
-    ctx.globalAlpha = 0.72 + flamePower * 0.18;
-    ctx.fillStyle = Math.floor(x / segmentWidth) % 5 === 0 ? "#ff3d20" : "#ff6125";
-    ctx.fillRect(
-      pixelSnap(x),
-      pixelSnap(centerY - mainHalfHeight + turbulence * 0.55),
-      blockWidth,
-      pixelSnap(mainHalfHeight * 2),
-    );
-
-    const innerHalfHeight = Math.max(
-      2,
-      outerHalfHeight * (0.57 - pathProgress * 0.15),
-    );
-    ctx.globalAlpha = 0.86 + flamePower * 0.1;
-    ctx.fillStyle = pathProgress < 0.68 ? "#ffbd32" : "#ff8128";
-    ctx.fillRect(
-      pixelSnap(x),
-      pixelSnap(centerY - innerHalfHeight - turbulence * 0.18),
-      blockWidth,
-      pixelSnap(innerHalfHeight * 2),
-    );
-
-    if (pathProgress < 0.5) {
-      const coreHalfHeight = Math.max(2, innerHalfHeight * 0.42);
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = pathProgress < 0.24 ? "#fffbd0" : "#ffe77b";
-      ctx.fillRect(
-        pixelSnap(x),
-        pixelSnap(centerY - coreHalfHeight),
-        blockWidth,
-        Math.max(3, pixelSnap(coreHalfHeight * 2)),
-      );
-    }
-  }
-
-  const emberCount = Math.floor(10 + flamePower * 24);
-  for (let ember = 0; ember < emberCount; ember += 1) {
-    const travel = (
-      gameTime * (0.65 + flamePower * 1.55) + ember * 0.61803398875
-    ) % 1;
-    const distance = travel * flameLength;
-    const pathProgress = distance / Math.max(1, enemy.flameLength);
-    const centerY = monster2FlameCenterOffset(enemy, distance);
-    const spread = monster2FlameHalfHeight(enemy, distance);
-    const scatter = Math.sin(ember * 12.73 + gameTime * 7) * spread * 0.92;
-    const size = 2 + ((ember * 3) % 4);
-    ctx.globalAlpha = (0.32 + flamePower * 0.48) * (1 - travel * 0.35);
-    ctx.fillStyle = ember % 3 === 0 ? "#ffe16a" : "#ff5527";
-    ctx.fillRect(
-      pixelSnap(distance),
-      pixelSnap(centerY + scatter),
-      size,
-      size,
-    );
+  const recoil = enemy.fireRecoilTimer / 0.12;
+  ctx.globalAlpha = recoil;
+  drawPixelFireballDisk(7 + recoil * 5, "#ff9b3b");
+  drawPixelFireballDisk(4, "#fff4b2");
+  for (let spark = 0; spark < 6; spark += 1) {
+    const angle = spark * Math.PI / 3;
+    const distance = 12 + (1 - recoil) * 14;
+    ctx.fillRect(pixelSnap(Math.cos(angle) * distance), pixelSnap(Math.sin(angle) * distance), 3, 3);
   }
   ctx.restore();
 }
@@ -1240,81 +1288,24 @@ function drawEnemy(enemy) {
   const sprite = enemySprites[enemy.kind];
   const bottomY = enemy.y + enemy.height;
   const isMonster2 = enemy.kind === "monster2";
-  if (enemy.state !== "inhale") drawMonster2Attack(enemy);
-  const movementRate = enemy.moving ? 9 : 5.5;
-  const wobble = Math.sin(enemy.animationTime * movementRate + enemy.animationPhase);
-  const counterWobble = Math.sin(
-    enemy.animationTime * (movementRate * 0.63) + enemy.animationPhase * 1.7,
-  );
-  let scaleX = 1 + wobble * (enemy.moving ? 0.085 : 0.045);
-  let scaleY = 1 - wobble * (enemy.moving ? 0.065 : 0.035);
-  let skewX = counterWobble * (enemy.moving ? 0.055 : 0.025);
-  let rotation = counterWobble * (enemy.moving ? 0.035 : 0.018);
-  const hitPulse = enemy.hitDuration > 0
-    ? Math.pow(Math.max(0, enemy.hitTimer / enemy.hitDuration), 0.55)
-    : 0;
-
-  if (hitPulse > 0) {
-    scaleX *= 1 - hitPulse * 0.22;
-    scaleY *= 1 + hitPulse * 0.11;
-    rotation += enemy.hitDirection * hitPulse * 0.085;
-  }
-
-  if (enemy.state === "windup") {
-    const progress = 1 - Math.max(0, enemy.stateTimer / enemy.jumpWindupDuration);
-    scaleX *= 1.12 + progress * 0.12;
-    scaleY *= 0.86 - progress * 0.08;
-    skewX *= 0.35;
-  } else if (enemy.state === "jump") {
-    scaleX *= 0.86;
-    scaleY *= 1.17;
-    rotation += Math.sign(enemy.jumpVx) * 0.055;
-  } else if (enemy.state === "recover") {
-    const progress = Math.max(0, enemy.stateTimer / enemy.jumpRecoveryDuration);
-    scaleX *= 1.12 + progress * 0.1;
-    scaleY *= 0.88 - progress * 0.06;
-  }
-
-  let monster2Bob = 0;
-  if (isMonster2) {
-    const walkStep = enemy.moving
-      ? Math.round(Math.sin(enemy.animationTime * 10 + enemy.animationPhase))
-      : 0;
-    monster2Bob = Math.abs(walkStep) * 2;
-    scaleX *= 1 + Math.abs(walkStep) * 0.025;
-    scaleY *= 1 - Math.abs(walkStep) * 0.02;
-    if (enemy.state === "inhale") {
-      const inhaleProgress = 1 - Math.max(0, enemy.stateTimer / enemy.inhaleDuration);
-      scaleX *= 1 + inhaleProgress * 0.2;
-      scaleY *= 1 + inhaleProgress * 0.14;
-    } else if (enemy.state === "flame") {
-      scaleX *= 0.96;
-      scaleY *= 1.03;
-    }
-  }
-
-  scaleX = Math.round(scaleX * 16) / 16;
-  scaleY = Math.round(scaleY * 16) / 16;
-  skewX = 0;
-  rotation = 0;
+  const pose = enemySpritePose(enemy);
 
   ctx.save();
   ctx.translate(
-    pixelSnap(enemy.x + enemy.width / 2),
-    pixelSnap(bottomY - monster2Bob),
+    pose.centerX,
+    pose.feetY,
   );
-  ctx.translate(pixelSnap(enemy.hitDirection * hitPulse * 4), 0);
+  ctx.translate(pose.hitOffsetX, 0);
   ctx.fillStyle = "rgba(72, 255, 48, 0.08)";
   ctx.fillRect(-pixelSnap(enemy.width * 0.55), -6, pixelSnap(enemy.width * 1.1), 6);
   ctx.fillStyle = "rgba(72, 255, 48, 0.18)";
   ctx.fillRect(-pixelSnap(enemy.width * 0.42), -4, pixelSnap(enemy.width * 0.84), 4);
-  ctx.rotate(rotation);
   const spriteDirection = enemy.facing * (enemy.spriteFacing ?? 1);
-  ctx.transform(spriteDirection * scaleX, 0, spriteDirection * skewX, scaleY, 0, 0);
+  ctx.transform(spriteDirection * pose.scaleX, 0, 0, pose.scaleY, 0, 0);
 
   if (sprite?.loaded && sprite.image.naturalWidth && sprite.image.naturalHeight) {
     ctx.imageSmoothingEnabled = false;
-    if (hitPulse > 0) ctx.filter = "brightness(1.65) saturate(1.35)";
+    if (pose.hitPulse > 0) ctx.filter = "brightness(1.65) saturate(1.35)";
     ctx.drawImage(
       sprite.image,
       -enemy.spriteWidth / 2,
@@ -1331,7 +1322,7 @@ function drawEnemy(enemy) {
     ctx.fillRect(-8, -enemy.height * 0.68, 16, 12);
   }
   ctx.restore();
-  if (isMonster2 && enemy.state === "inhale") drawMonster2Attack(enemy);
+  if (isMonster2) drawMonster2Attack(enemy);
   drawCombatantHealthBar(
     enemy.x + enemy.width / 2,
     bottomY - enemy.spriteHeight + enemy.spriteBottomOffset - 13,
@@ -1343,7 +1334,7 @@ function drawEnemy(enemy) {
 
 function drawTurret(turret) {
   const bottomY = turret.y + turret.height;
-  const charge = turret.active && turret.fireTimer <= TURRET.chargeDuration
+  const charge = turret.active && turret.burstShotsRemaining === 0 && turret.fireTimer <= TURRET.chargeDuration
     ? Math.max(0, Math.min(1, 1 - turret.fireTimer / TURRET.chargeDuration))
     : 0;
   const recoil = Math.max(0, turret.recoilTimer / 0.2);
@@ -1472,6 +1463,56 @@ function drawMidBoss(boss) {
   );
 }
 
+function drawPixelFireballDisk(radius, color, offsetX = 0, offsetY = 0) {
+  ctx.fillStyle = color;
+  const roundedRadius = Math.max(2, Math.round(radius / 2) * 2);
+  for (let y = -roundedRadius; y < roundedRadius; y += 2) {
+    const halfWidth = Math.max(2, Math.round(Math.sqrt(
+      roundedRadius * roundedRadius - (y + 1) * (y + 1),
+    ) / 2) * 2);
+    ctx.fillRect(offsetX - halfWidth, offsetY + y, halfWidth * 2, 2);
+  }
+}
+
+function drawMonster2Fireball(bullet) {
+  if (
+    bullet.x < cameraX - 80 || bullet.x > cameraX + WIDTH + 80 ||
+    bullet.y < cameraY - 80 || bullet.y > cameraY + HEIGHT + 80
+  ) return;
+  ctx.save();
+  ctx.translate(pixelSnap(bullet.x), pixelSnap(bullet.y));
+  ctx.rotate(Math.atan2(bullet.vy, bullet.vx));
+  const pulse = 0.94 + Math.sin(gameTime * 24 + bullet.phase) * 0.06;
+  const radius = bullet.radius * pulse;
+  const fade = Math.max(0, Math.min(1, bullet.remainingRange / 165));
+  ctx.globalAlpha = fade;
+  ctx.shadowColor = "#ff7526";
+  ctx.shadowBlur = 16;
+  // Stepped, tapered flame stays attached to the hot head while the arc rises.
+  for (let segment = 0; segment < 9; segment += 1) {
+    const taper = segment / 8;
+    const x = pixelSnap(-radius * 2.7 + radius * 1.9 * taper);
+    const waviness = Math.sin(gameTime * 22 + bullet.phase + segment * 1.3) * (1 - taper) * 3;
+    const halfHeight = Math.max(2, pixelSnap(radius * (0.12 + taper * 0.56)));
+    ctx.fillStyle = segment < 3 ? "#d83b1f" : "#e64b21";
+    ctx.fillRect(x, pixelSnap(waviness - halfHeight), 8, halfHeight * 2);
+  }
+  drawPixelFireballDisk(radius, "#e64b21", 2);
+  ctx.shadowBlur = 0;
+  for (let segment = 2; segment < 9; segment += 1) {
+    const taper = segment / 8;
+    const x = pixelSnap(-radius * 2.7 + radius * 1.9 * taper + 2);
+    const waviness = Math.sin(gameTime * 22 + bullet.phase + segment * 1.3) * (1 - taper) * 3;
+    const halfHeight = Math.max(2, pixelSnap(radius * (0.04 + taper * 0.31)));
+    ctx.fillStyle = segment < 5 ? "#ff7625" : "#ff9b2e";
+    ctx.fillRect(x, pixelSnap(waviness - halfHeight), 6, halfHeight * 2);
+  }
+  drawPixelFireballDisk(radius * 0.76, "#ff882a", 3);
+  drawPixelFireballDisk(radius * 0.49, "#ffd45a", 6, -2);
+  drawPixelFireballDisk(radius * 0.24, "#fff5c6", 8, -2);
+  ctx.restore();
+}
+
 function drawProjectiles() {
   for (const bullet of bullets) {
     const shimmer = 0.9 + Math.sin(gameTime * 12 + bullet.x * 0.008 + bullet.y * 0.004) * 0.1;
@@ -1515,6 +1556,10 @@ function drawProjectiles() {
   }
 
   for (const bullet of enemyBullets) {
+    if (bullet.kind === "monster2-fireball") {
+      drawMonster2Fireball(bullet);
+      continue;
+    }
     if (bullet.kind === "turret-laser") {
       const pulse = 0.86 + Math.sin(gameTime * 28) * 0.14;
       ctx.save();
@@ -1733,6 +1778,25 @@ function drawParticles() {
         );
       }
       ctx.restore();
+    } else if (particle.revivalFlame) {
+      const remaining = Math.max(0, particle.life / particle.maxLife);
+      const progress = 1 - remaining;
+      const length = particle.size * (4.6 + progress * 1.4);
+      const thickness = Math.max(1, particle.size * 0.5);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = Math.pow(remaining, 1.3);
+      ctx.translate(pixelSnap(particle.x, 1), pixelSnap(particle.y, 1));
+      ctx.rotate(Math.atan2(particle.vy, particle.vx));
+      ctx.shadowColor = particle.color;
+      ctx.shadowBlur = 5 * remaining;
+      ctx.fillStyle = particle.color;
+      ctx.fillRect(-length * 0.65, -thickness / 2, length, thickness);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha *= 0.75;
+      ctx.fillStyle = particle.coreColor;
+      ctx.fillRect(-length * 0.32, -0.5, length * 0.48, 1);
+      ctx.restore();
     } else if (particle.flameSpark) {
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
@@ -1745,6 +1809,7 @@ function drawParticles() {
         pixelSnap(particle.size * 2.3, 1),
         Math.max(2, pixelSnap(particle.size * 1.1, 1)),
       );
+      ctx.shadowBlur = 0;
       ctx.globalAlpha *= 0.88;
       ctx.fillStyle = particle.coreColor ?? "#ffe77b";
       ctx.fillRect(
@@ -1909,12 +1974,13 @@ function drawWorld() {
   drawBossGate();
   if (TEST_MODE && showMonsterArea) {
     for (const enemy of enemies) {
+      if (!enemy.alive) continue;
+      const hitbox = getEnemyHitbox(enemy);
       if (
-        enemy.alive &&
-        enemy.x > cameraX - 100 &&
-        enemy.x < cameraX + WIDTH + 100 &&
-        enemy.y > cameraY - 100 &&
-        enemy.y < cameraY + HEIGHT + 100
+        hitbox.x + hitbox.width > cameraX - 100 &&
+        hitbox.x < cameraX + WIDTH + 100 &&
+        hitbox.y + hitbox.height > cameraY - 100 &&
+        hitbox.y < cameraY + HEIGHT + 100
       ) drawEnemyAwarenessDebug(enemy);
     }
   }
@@ -1928,15 +1994,14 @@ function drawWorld() {
     ) drawTurret(turret);
   }
   for (const enemy of enemies) {
-    const enemyDrawMargin = enemy.kind === "monster2"
-      ? enemy.flameLength + 120
-      : 100;
+    if (!enemy.alive) continue;
+    const hitbox = getEnemyHitbox(enemy);
+    const enemyDrawMargin = 100;
     if (
-      enemy.alive &&
-      enemy.x + enemy.width > cameraX - enemyDrawMargin &&
-      enemy.x < cameraX + WIDTH + enemyDrawMargin &&
-      enemy.y > cameraY - 100 &&
-      enemy.y < cameraY + HEIGHT + 100
+      hitbox.x + hitbox.width > cameraX - enemyDrawMargin &&
+      hitbox.x < cameraX + WIDTH + enemyDrawMargin &&
+      hitbox.y + hitbox.height > cameraY - enemyDrawMargin &&
+      hitbox.y < cameraY + HEIGHT + enemyDrawMargin
     ) drawEnemy(enemy);
   }
   for (const boss of midBosses) {
@@ -1952,19 +2017,33 @@ function drawWorld() {
   drawPlayerPhysicsDebug();
   drawProjectiles();
   drawParticles();
+  if (TEST_MODE && showMonsterArea) {
+    for (const enemy of enemies) {
+      drawCombatantPhysicsDebug(enemy, enemy.kind === "monster2" ? "#ff96ec" : "#8aff9c");
+    }
+    for (const turret of turrets) drawCombatantPhysicsDebug(turret, "#ffd278");
+  }
   ctx.restore();
 }
 
-function drawMinimap() {
+function drawMinimap(fullMap = false) {
   if (platforms.length === 0) return;
+  const expanded = fullMap && TEST_MODE;
 
   const portrait = HEIGHT > WIDTH;
-  const panelWidth = portrait
+  const panelWidth = expanded ? WIDTH - 44 : portrait
     ? Math.min(226, WIDTH * 0.34)
     : Math.min(282, WIDTH * 0.24);
-  const panelHeight = portrait ? 148 : 138;
+  const canvasBounds = expanded ? canvas.getBoundingClientRect?.() : null;
+  const toolsBounds = expanded ? testControlsElement?.getBoundingClientRect?.() : null;
+  const toolsBottom = canvasBounds?.height > 0 && toolsBounds
+    ? (toolsBounds.bottom - canvasBounds.top) / canvasBounds.height * HEIGHT
+    : 0;
+  const panelY = expanded
+    ? Math.min(HEIGHT * 0.5, Math.max(128, HEIGHT * 0.2, toolsBottom + 18))
+    : 110;
+  const panelHeight = expanded ? HEIGHT - panelY - HEIGHT * 0.16 - 20 : portrait ? 148 : 138;
   const panelX = WIDTH - panelWidth - 22;
-  const panelY = 110;
   const plotX = panelX + 10;
   const plotY = panelY + 10;
   const plotWidth = panelWidth - 20;
@@ -2001,30 +2080,43 @@ function drawMinimap() {
 
   const fullWorldWidth = Math.max(1, fullWorldRight - fullWorldLeft);
   const fullWorldHeight = Math.max(1, fullWorldBottom - fullWorldTop);
-  const worldWidth = Math.min(
+  const worldWidth = expanded ? fullWorldWidth : Math.min(
     fullWorldWidth,
     Math.max(WIDTH * 1.25, fullWorldWidth * 0.25),
   );
-  const worldHeight = Math.min(
+  const worldHeight = expanded ? fullWorldHeight : Math.min(
     fullWorldHeight,
     Math.max(HEIGHT * 1.1, fullWorldHeight * 0.25),
   );
   const focusX = player.x + player.width / 2;
   const focusY = player.y + player.height / 2;
-  const worldLeft = Math.max(
+  const worldLeft = expanded ? fullWorldLeft : Math.max(
     fullWorldLeft,
     Math.min(fullWorldRight - worldWidth, focusX - worldWidth / 2),
   );
   const worldRight = worldLeft + worldWidth;
-  const worldTop = Math.max(
+  const worldTop = expanded ? fullWorldTop : Math.max(
     fullWorldTop,
     Math.min(fullWorldBottom - worldHeight, focusY - worldHeight / 2),
   );
   const worldBottom = worldTop + worldHeight;
-  const mapX = (value) => plotX + (value - worldLeft) / worldWidth * plotWidth;
-  const mapY = (value) => plotY + (value - worldTop) / worldHeight * plotHeight;
+  const markerPadding = expanded ? 10 : 0;
+  const mapScale = Math.min(
+    (plotWidth - markerPadding * 2) / worldWidth,
+    (plotHeight - markerPadding * 2) / worldHeight,
+  );
+  const mapX = expanded
+    ? (value) => plotX + (plotWidth - worldWidth * mapScale) / 2 + (value - worldLeft) * mapScale
+    : (value) => plotX + (value - worldLeft) / worldWidth * plotWidth;
+  const mapY = expanded
+    ? (value) => plotY + (plotHeight - worldHeight * mapScale) / 2 + (value - worldTop) * mapScale
+    : (value) => plotY + (value - worldTop) / worldHeight * plotHeight;
 
   ctx.save();
+  if (expanded) {
+    ctx.fillStyle = "rgba(1, 4, 9, 0.86)";
+    ctx.fillRect(0, 104, WIDTH, HEIGHT - 104);
+  }
   const panelCenterX = panelX + panelWidth / 2;
   const panelCenterY = panelY + panelHeight / 2;
   const panelBackground = ctx.createRadialGradient(
@@ -2300,9 +2392,11 @@ function drawHud() {
   }
   ctx.restore();
 
-  drawMinimap();
+  drawMinimap(TEST_MODE && showFullMap);
+  if (TEST_MODE && showFullMap) return;
 
   if (
+    !gameOver && !playerIsDown() &&
     goalPlatform &&
     player.platform === goalPlatform &&
     Math.abs(player.x + player.width / 2 - goalX) < BOSS_GATE_TRIGGER_DISTANCE
@@ -2310,7 +2404,7 @@ function drawHud() {
     drawOverlay("BOSS GATE", "보스 구역 진입 준비");
   }
 
-  if (gameOver) drawOverlay("GAME OVER", "화면을 눌러 재시작");
+  if (gameOver && !playerIsDown()) drawOverlay("GAME OVER", "화면을 눌러 재시작");
 }
 
 function drawOverlay(title, subtitle) {

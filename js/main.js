@@ -94,9 +94,16 @@ function updateParticles(dt) {
 }
 
 function update(dt) {
+  if (TEST_MODE && showFullMap) return;
   gameTime += dt;
   shake = Math.max(0, shake - dt * 28);
-  if (gameOver) return;
+  if (gameOver) {
+    if (playerIsDown()) {
+      updatePlayer(dt);
+      updateParticles(dt);
+    }
+    return;
+  }
   updatePlayer(dt);
   updateTurrets(dt);
   updateMidBosses(dt);
@@ -108,7 +115,7 @@ function update(dt) {
 
 function draw() {
   drawBackground();
-  drawWorld();
+  if (!(TEST_MODE && showFullMap)) drawWorld();
   drawHud();
 }
 

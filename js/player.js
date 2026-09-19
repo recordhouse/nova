@@ -34,7 +34,8 @@ function updateCameraLookDirection(dt) {
 }
 
 function updateElectricWires() {
-  if (gameOver || player.hp <= 0 || player.invincible > 0) return;
+  if (gameOver || player.hp <= 0 || player.invincible > 0 || playerIsDown() ||
+      (TEST_MODE && testInvincibility)) return;
   const hitbox = getPlayerHitbox();
   for (const platform of platforms) {
     if (
@@ -49,30 +50,56 @@ function updateElectricWires() {
         feature.centerX - feature.width > hitbox.x + hitbox.width + ELECTRIC_WIRE_RADIUS
       ) continue;
       if (!electricWireHitsRect(electricWirePoints(platform, feature), hitbox)) continue;
-      player.hp = Math.max(0, player.hp - ELECTRIC_WIRE_DAMAGE);
-      player.invincible = ELECTRIC_WIRE_INVINCIBILITY;
+      takePlayerDamage(ELECTRIC_WIRE_DAMAGE);
       shake = Math.max(shake, 8);
       burst(hitbox.x + hitbox.width / 2, hitbox.y + hitbox.height / 2, "#e7fdff", 14, 170);
-      if (player.hp <= 0) gameOver = true;
       return;
     }
   }
 }
 
+function updatePlayerDown(dt) {
+  if (!playerIsDown()) return;
+  const totalDuration = PLAYER_DOWN_ANIMATION_DURATION + PLAYER_DOWN_HOLD_DURATION;
+  player.downTime += dt;
+  if (player.downTime < PLAYER_DOWN_ANIMATION_DURATION) return;
+  player.downPhase = "hold";
+  if (player.downTime < totalDuration - 1e-9) return;
+  const remainingDt = Math.max(0, player.downTime - totalDuration);
+  player.downTime = totalDuration;
+  if (player.hp <= 0 || gameOver) {
+    player.downPhase = "defeated";
+    return;
+  }
+  resetPlayerDownState();
+  player.invincible = Math.max(0, PLAYER_REVIVAL_INVINCIBILITY - remainingDt);
+  player.jumpAnimationTime = 0;
+  player.deepFalling = false;
+  player.fallAnimationTime = 0;
+  emitPlayerRevival();
+}
+
 function updatePlayer(dt) {
+  const downForThisFrame = playerIsDown();
+  player.invincible = Math.max(0, player.invincible - dt);
+  player.fireEnergy = Math.min(
+    PLAYER_FIRE_ENERGY_MAX,
+    player.fireEnergy + PLAYER_FIRE_ENERGY_REGEN_PER_SECOND * dt,
+  );
+  updatePlayerDown(dt);
   const jumpInputActive = controls.jump || controls.up;
-  const jumpPressed = jumpQueued || (jumpInputActive && !player.jumpLatch);
+  const jumpPressed = !downForThisFrame && (jumpQueued || (jumpInputActive && !player.jumpLatch));
   jumpQueued = false;
   player.jumpLatch = jumpInputActive;
-  player.crouching = controls.down && player.grounded;
+  player.crouching = !downForThisFrame && controls.down && player.grounded;
   const canStartJump = (
     jumpPressed &&
     !controls.fire &&
     !player.crouching &&
     (player.grounded || player.airJumpAvailable)
   );
-  const horizontalInput = Number(controls.right) - Number(controls.left);
-  const preserveAirMomentum = controls.fire && !player.grounded;
+  const horizontalInput = downForThisFrame ? 0 : Number(controls.right) - Number(controls.left);
+  const preserveAirMomentum = !downForThisFrame && controls.fire && !player.grounded;
   const move = player.crouching || controls.fire
     ? 0
     : horizontalInput;
@@ -195,16 +222,21 @@ function updatePlayer(dt) {
     }
   }
 
-  const startedFiring = controls.fire && !player.fireWasActive;
+  const firing = !downForThisFrame && controls.fire;
+  const startedFiring = firing && !player.fireWasActive;
   if (startedFiring) {
     player.fireBarrel = 0;
     player.fireTimer = 0;
   }
-  player.fireWasActive = controls.fire;
-  player.fireTimer -= dt;
-  player.fireAnimationTime = controls.fire ? player.fireAnimationTime + dt : 0;
-  player.invincible = Math.max(0, player.invincible - dt);
-  if (controls.fire && player.fireTimer <= 0) shootPlayer();
+  player.fireWasActive = firing;
+  player.fireTimer = Math.max(0, player.fireTimer - dt);
+  const firingPose = firing && (
+    player.fireEnergy >= PLAYER_FIRE_ENERGY_PER_SHOT || player.fireTimer > 0
+  );
+  player.fireAnimationTime = firingPose ? player.fireAnimationTime + dt : 0;
+  if (firing && player.fireTimer <= 0 && player.fireEnergy >= PLAYER_FIRE_ENERGY_PER_SHOT) {
+    shootPlayer();
+  }
 
   updateCameraLookDirection(dt);
   let targetCameraX = playerCenterX - cameraAnchorScreenX();

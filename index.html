@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#050505" />
     <title>NOVA — Run &amp; Gun Prototype</title>
-    <link rel="stylesheet" href="./styles.css?v=20260915-2" />
+    <link rel="stylesheet" href="./styles.css?v=20260919-2" />
   </head>
   <body>
     <main class="game-shell" aria-label="NOVA 게임 프로토타입">
@@ -38,6 +38,24 @@
         </button>
         <button
           type="button"
+          class="test-map-button"
+          data-test-map
+          aria-label="전체 지도 표시 꺼짐"
+          aria-pressed="false"
+        >
+          MAP
+        </button>
+        <button
+          type="button"
+          class="test-invincibility-button"
+          data-test-invincibility
+          aria-label="무적 모드 꺼짐"
+          aria-pressed="false"
+        >
+          GOD
+        </button>
+        <button
+          type="button"
           class="test-area-button player-area"
           data-test-player-area
           aria-label="주인공 영역 표시 꺼짐"
@@ -49,7 +67,7 @@
           type="button"
           class="test-area-button monster-area"
           data-test-monster-area
-          aria-label="몬스터 영역 표시 꺼짐"
+          aria-label="몬스터·포탑 영역 표시 꺼짐"
           aria-pressed="false"
         >
           M AREA
@@ -93,15 +111,15 @@
       </section>
     </main>
 
-    <script src="./js/config.js?v=20260918-3"></script>
-    <script src="./js/assets.js?v=20260915-1"></script>
-    <script src="./js/state.js?v=20260914-1"></script>
-    <script src="./js/world.js?v=20260918-1"></script>
-    <script src="./js/combat.js?v=20260918-1"></script>
-    <script src="./js/player.js?v=20260918-1"></script>
-    <script src="./js/enemies.js?v=20260918-1"></script>
-    <script src="./js/renderer.js?v=20260918-5"></script>
-    <script src="./js/input.js?v=20260915-4"></script>
-    <script src="./js/main.js?v=20260918-2"></script>
+    <script src="./js/config.js?v=20260919-4"></script>
+    <script src="./js/assets.js?v=20260919-2"></script>
+    <script src="./js/state.js?v=20260919-3"></script>
+    <script src="./js/world.js?v=20260919-2"></script>
+    <script src="./js/combat.js?v=20260919-4"></script>
+    <script src="./js/player.js?v=20260919-3"></script>
+    <script src="./js/enemies.js?v=20260918-7"></script>
+    <script src="./js/renderer.js?v=20260919-5"></script>
+    <script src="./js/input.js?v=20260919-2"></script>
+    <script src="./js/main.js?v=20260918-4"></script>
   </body>
 </html>

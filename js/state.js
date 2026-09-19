@@ -39,7 +39,10 @@ const player = {
   fireAnimationTime: 0,
   fireBarrel: 0,
   fireWasActive: false,
+  fireEnergy: PLAYER_FIRE_ENERGY_MAX,
   invincible: 0,
+  downPhase: "",
+  downTime: 0,
   hp: 3,
   score: 0,
   crouching: false,
@@ -52,6 +55,15 @@ const player = {
   deepFalling: false,
   fallAnimationTime: 0,
 };
+
+function playerIsDown() {
+  return player.downPhase === "fall" || player.downPhase === "hold";
+}
+
+function resetPlayerDownState() {
+  player.downPhase = "";
+  player.downTime = 0;
+}
 
 const bullets = [];
 const enemyBullets = [];
@@ -84,6 +96,8 @@ let bossDoor = null;
 let jumpQueued = false;
 let showPlayerArea = false;
 let showMonsterArea = false;
+let showFullMap = false;
+let testInvincibility = false;
 let testOrientationOverride = null;
 let testJumpRouteIndex = -1;
 let testResolutionPresetIndex = TEST_RESOLUTION_SHORT_SIDES.indexOf(

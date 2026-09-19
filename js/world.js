@@ -2014,14 +2014,17 @@ function enemyRectOverlapsEnemy(
   ignoredEnemy = null,
   separation = ENEMY_BODY_SEPARATION,
 ) {
-  return enemies.some((enemy) => (
-    enemy !== ignoredEnemy &&
-    enemy.alive &&
-    x < enemy.x + enemy.width + separation &&
-    x + width + separation > enemy.x &&
-    y < enemy.y + enemy.height + separation &&
-    y + height + separation > enemy.y
-  ));
+  const hitbox = ignoredEnemy
+    ? getEnemyHitbox(ignoredEnemy, x, y) : { x, y, width, height };
+  return enemies.some((enemy) => {
+    if (
+      enemy === ignoredEnemy || !enemy.alive ||
+      x >= enemy.x + enemy.width + separation || x + width + separation <= enemy.x
+    ) return false;
+    const otherHitbox = getEnemyHitbox(enemy);
+    return hitbox.y < otherHitbox.y + otherHitbox.height + separation &&
+      hitbox.y + hitbox.height + separation > otherHitbox.y;
+  });
 }
 
 function addEnemy(platform, x, kind = "monster1") {
@@ -2029,13 +2032,6 @@ function addEnemy(platform, x, kind = "monster1") {
   const y = (
     platformSurfaceY(platform, x + definition.width / 2) - definition.height
   );
-  if (enemyRectOverlapsEnemy(
-    x,
-    y,
-    definition.width,
-    definition.height,
-  )) return null;
-
   const enemy = {
     x,
     y,
@@ -2044,6 +2040,7 @@ function addEnemy(platform, x, kind = "monster1") {
     spriteWidth: definition.spriteWidth,
     spriteHeight: definition.spriteHeight,
     spriteBottomOffset: definition.spriteBottomOffset,
+    spriteTopInset: definition.spriteTopInset,
     spriteFacing: definition.spriteFacing ?? 1,
     kind,
     platform,
@@ -2092,18 +2089,26 @@ function addEnemy(platform, x, kind = "monster1") {
     moving: false,
     attackCooldown: definition.attackCooldown,
     attackTimer: 0,
+    ambientFireDelayMin: definition.ambientFireDelayMin,
+    ambientFireDelayMax: definition.ambientFireDelayMax,
+    ambientFireTimer: kind === "monster2"
+      ? definition.ambientFireDelayMin + mapRandom() * (definition.ambientFireDelayMax - definition.ambientFireDelayMin)
+      : 0,
     attackRange: definition.attackRange,
     attackVerticalRange: definition.attackVerticalRange,
     inhaleDuration: definition.inhaleDuration,
-    flameDuration: definition.flameDuration,
-    flameLength: definition.flameLength,
-    flameRampDuration: definition.flameRampDuration,
-    flameRise: definition.flameRise,
-    flameNearHalfHeight: definition.flameNearHalfHeight,
-    flameFarHalfHeight: definition.flameFarHalfHeight,
-    flameMouthForwardOffset: definition.flameMouthForwardOffset,
-    flameMouthHeight: definition.flameMouthHeight,
-    flameParticleTimer: 0,
+    fireballCount: definition.fireballCount,
+    fireballInterval: definition.fireballInterval,
+    fireballRecovery: definition.fireballRecovery,
+    fireballSpeed: definition.fireballSpeed,
+    fireballRadius: definition.fireballRadius,
+    fireballRange: definition.fireballRange,
+    fireballRiseAcceleration: definition.fireballRiseAcceleration,
+    mouthForwardOffset: definition.mouthForwardOffset,
+    mouthHeight: definition.mouthHeight,
+    fireballsFired: 0,
+    fireballTimer: 0,
+    fireRecoilTimer: 0,
     attackDirection: -1,
     hitDuration: definition.hitDuration,
     hitTimer: 0,
@@ -2112,11 +2117,13 @@ function addEnemy(platform, x, kind = "monster1") {
     hitKnockbackMaxSpeed: definition.hitKnockbackMaxSpeed,
     hitKnockbackDamping: definition.hitKnockbackDamping,
     hitKnockbackVelocity: 0,
+    revivalKnockback: false,
     hitAirImpulse: definition.hitAirImpulse,
     score: definition.score,
     alive: true,
     facing: -1,
   };
+  if (enemyRectOverlapsEnemy(x, y, enemy.width, enemy.height, enemy)) return null;
   enemies.push(enemy);
   return enemy;
 }
@@ -2132,7 +2139,8 @@ function addTurret(platform, x) {
     hp: TURRET.hp,
     maxHp: TURRET.hp,
     facing: -platform.direction,
-    fireTimer: TURRET.fireInterval,
+    fireTimer: TURRET.fireInterval * (0.55 + mapRandom() * 0.45),
+    burstShotsRemaining: 0,
     chargeParticleTimer: 0,
     recoilTimer: 0,
     hitTimer: 0,
@@ -2309,6 +2317,7 @@ function startingPlatform() {
 }
 
 function resetPlayerPosition() {
+  resetPlayerDownState();
   player.x = 110;
   player.platform = startingPlatform();
   player.y = platformSurfaceY(
@@ -2321,6 +2330,7 @@ function resetPlayerPosition() {
   player.fireAnimationTime = 0;
   player.fireBarrel = 0;
   player.fireWasActive = false;
+  player.fireEnergy = PLAYER_FIRE_ENERGY_MAX;
   player.grounded = true;
   player.crouching = false;
   player.jumpLatch = false;
@@ -2507,7 +2517,9 @@ function movePlayerToHorizontalJumpPath() {
   player.fireTimer = 0;
   player.fireAnimationTime = 0;
   player.fireWasActive = false;
+  player.fireEnergy = PLAYER_FIRE_ENERGY_MAX;
   player.invincible = 1;
+  resetPlayerDownState();
   gameOver = false;
 
   cameraLookDirection = direction;
@@ -2655,6 +2667,19 @@ function cycleTestResolution() {
   resizeGameResolution(nextResolution.width, nextResolution.height);
 }
 
+function updateTestMapButton() {
+  if (!TEST_MODE || !testMapButton) return;
+  testMapButton.setAttribute("aria-pressed", String(showFullMap));
+  testMapButton.setAttribute("aria-label", `전체 지도 표시 ${showFullMap ? "켜짐, 다시 누르면 닫기" : "꺼짐"}`);
+}
+
+function toggleTestMap() {
+  if (!TEST_MODE) return;
+  resetAllInputs();
+  showFullMap = !showFullMap;
+  updateTestMapButton();
+}
+
 function resetGame() {
   bullets.length = 0;
   enemyBullets.length = 0;
@@ -2679,6 +2704,8 @@ function resetGame() {
   );
   cameraY = 0;
   gameOver = false;
+  showFullMap = false;
+  updateTestMapButton();
   buildStage();
   testJumpRouteIndex = -1;
   updateTestJumpPathButton();

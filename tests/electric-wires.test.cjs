@@ -94,11 +94,12 @@ test("contact costs half a heart, grants invincibility, and the last half-heart 
   touchCable(scope);
   vm.runInContext("updateElectricWires()", scope);
   assert.equal(vm.runInContext("player.hp", scope), 2.5);
-  assert.equal(vm.runInContext("player.invincible", scope), 1.3);
+  assert.equal(vm.runInContext("player.invincible", scope), 2.625);
+  assert.equal(vm.runInContext("player.downPhase", scope), "fall");
   vm.runInContext("updateElectricWires()", scope);
   assert.equal(vm.runInContext("player.hp", scope), 2.5);
   for (const remaining of [2, 1.5, 1, 0.5, 0]) {
-    vm.runInContext("player.invincible=0; updateElectricWires()", scope);
+    vm.runInContext("resetPlayerDownState(); player.invincible=0; updateElectricWires()", scope);
     assert.equal(vm.runInContext("player.hp", scope), remaining);
   }
   assert.equal(vm.runInContext("gameOver", scope), true);

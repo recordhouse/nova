@@ -32,10 +32,11 @@ const playerSprites = {
   blastJump: loadPlayerSprite("./assets/images/main/stage/blast-jump.png", 10, PLAYER_BLAST_FRAMES),
   blastSit: loadPlayerSprite("./assets/images/main/stage/blast-sit.png", 10, PLAYER_BLAST_FRAMES),
   sit: loadPlayerSprite("./assets/images/main/stage/sit.png", 5, PLAYER_SIT_FRAMES),
+  down: loadPlayerSprite("./assets/images/main/stage/down.png", PLAYER_DOWN_FPS, PLAYER_DOWN_FRAMES),
 };
 
 const enemySprites = {
-  monster1: loadImageAsset("./assets/images/monsters/monster_01.png"),
+  monster1: loadImageAsset("./assets/images/monsters/monster_01.png?v=20260919-2"),
   monster2: loadImageAsset("./assets/images/monsters/monster_02.png"),
 };
 

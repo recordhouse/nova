@@ -189,7 +189,7 @@ const preventBrowserAction = (event) => event.preventDefault();
 });
 
 canvas.addEventListener("pointerdown", () => {
-  if (gameOver) resetGame();
+  if (gameOver && !playerIsDown()) resetGame();
 });
 
 testJumpPathButton?.addEventListener("click", (event) => {
@@ -206,6 +206,29 @@ testOrientationButton?.addEventListener("click", (event) => {
   event.preventDefault();
   toggleTestOrientation();
 });
+
+testMapButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  toggleTestMap();
+});
+
+function updateTestInvincibilityButton() {
+  if (!TEST_MODE || !testInvincibilityButton) return;
+  testInvincibilityButton.setAttribute("aria-pressed", String(testInvincibility));
+  testInvincibilityButton.setAttribute("aria-label", `무적 모드 ${testInvincibility ? "켜짐" : "꺼짐"}`);
+}
+
+function toggleTestInvincibility() {
+  if (!TEST_MODE) return;
+  testInvincibility = !testInvincibility;
+  updateTestInvincibilityButton();
+}
+
+testInvincibilityButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  toggleTestInvincibility();
+});
+updateTestInvincibilityButton();
 
 testSpawnMonster1Button?.addEventListener("click", (event) => {
   event.preventDefault();
@@ -235,11 +258,11 @@ testPlayerAreaButton?.addEventListener("click", (event) => {
 testMonsterAreaButton?.addEventListener("click", (event) => {
   event.preventDefault();
   showMonsterArea = !showMonsterArea;
-  updateTestAreaButton(testMonsterAreaButton, showMonsterArea, "몬스터");
+  updateTestAreaButton(testMonsterAreaButton, showMonsterArea, "몬스터·포탑");
 });
 
 updateTestAreaButton(testPlayerAreaButton, showPlayerArea, "주인공");
-updateTestAreaButton(testMonsterAreaButton, showMonsterArea, "몬스터");
+updateTestAreaButton(testMonsterAreaButton, showMonsterArea, "몬스터·포탑");
 
 let orientationSyncFrame = null;
 function scheduleCanvasOrientationSync() {
