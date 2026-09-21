@@ -111,18 +111,19 @@ test("the down artwork sits below standing while its collision box stays put", (
   assert.equal(calls.find((call) => call.operation === "translate").args[1], standingAnchor[1]);
 });
 
-test("standing and firing sprites sit lower while running and jumping keep their anchors", () => {
+test("standing, running, jumping, crouching and firing sprites share a lower anchor", () => {
   const { scope, calls } = createGame();
   const centerX = read(scope, "player.x + player.width / 2");
   const physicalFeetY = read(scope, "player.y + player.height");
   const cases = [
-    { setup: "player.vx=245", sprite: "/run.png?", offset: 0 },
+    { setup: "player.vx=245", sprite: "/run.png?", offset: 8 },
     { setup: "player.vx=0", sprite: "/stand.png?", offset: 8 },
     { setup: "controls.fire=true", sprite: "/blast.png?", offset: 8 },
     { setup: "controls.up=true", sprite: "/blast-high.png?", offset: 8 },
     { setup: "controls.up=false; player.crouching=true", sprite: "/blast-sit.png?", offset: 8 },
-    { setup: "player.crouching=false; player.grounded=false", sprite: "/blast-jump.png?", offset: 8 },
-    { setup: "controls.fire=false", sprite: "/jump.png?", offset: 0 },
+    { setup: "controls.fire=false", sprite: "/sit.png?", offset: 8 },
+    { setup: "controls.fire=true; player.crouching=false; player.grounded=false", sprite: "/blast-jump.png?", offset: 8 },
+    { setup: "controls.fire=false", sprite: "/jump.png?", offset: 8 },
   ];
   for (const { setup, sprite, offset } of cases) {
     read(scope, setup);
@@ -161,6 +162,29 @@ test("damage starts a protected down animation and cancels crouching, movement a
   read(scope, "player.invincible=0");
   assert.equal(scope.takePlayerDamage(1), false, "the down state itself also rejects repeat damage");
   assert.equal(read(scope, "player.hp"), 2);
+});
+
+test("a hit nudges the player away from its source and quickly comes to rest", () => {
+  for (const [sourceX, direction] of [[850, 1], [1150, -1]]) {
+    const { scope } = createGame();
+    const startX = read(scope, "player.x");
+    assert.equal(scope.takePlayerDamage(1, { kind: "monster1", x: sourceX, y: 430 }), true);
+    assert.equal(Math.sign(read(scope, "player.vx")), direction);
+    for (let frame = 0; frame < 18; frame += 1) scope.updatePlayer(1 / 60);
+    const distance = read(scope, "player.x") - startX;
+    assert.equal(Math.sign(distance), direction);
+    assert.ok(Math.abs(distance) >= 20 && Math.abs(distance) <= 30, `${distance}px knockback`);
+    assert.equal(read(scope, "player.hitKnockbackTime"), 0);
+    assert.equal(read(scope, "player.hitKnockbackVelocity"), 0);
+    assert.equal(read(scope, "player.vx"), 0);
+  }
+});
+
+test("a centered projectile uses its travel direction for hit knockback", () => {
+  const { scope } = createGame();
+  const centerX = read(scope, "player.x + player.width / 2");
+  scope.takePlayerDamage(1, { kind: "turret-laser", x: centerX, y: 450, vx: -420 });
+  assert.equal(read(scope, "player.hitKnockbackVelocity"), -300);
 });
 
 test("the down motion plays once in order, stays visible, and never loops on the final pose", () => {
@@ -298,7 +322,7 @@ test("recovery immunity lasts three seconds without restoring health", () => {
   assert.equal(read(scope, "player.downPhase"), "fall");
 });
 
-test("the revival wave knocks nearby living monsters left/right without damaging them or turrets", () => {
+test("the revival wave deals two damage to nearby hostiles and knocks surviving monsters outward", () => {
   const { scope } = createGame();
   read(scope, `
     globalThis.left=addEnemy(fixtureRoad,820,'monster1'); left.state='windup';
@@ -306,32 +330,35 @@ test("the revival wave knocks nearby living monsters left/right without damaging
     globalThis.far=addEnemy(fixtureRoad,1400,'monster1');
     globalThis.dead=addEnemy(fixtureRoad,740,'monster1'); dead.alive=false;
     globalThis.above=addEnemy(fixtureRoad,970,'monster1'); above.y=-300; above.state='jump';
-    turrets.push({x:950,y:350,width:108,height:156,alive:true,hp:15});
+    turrets.push({x:950,y:350,width:108,height:156,alive:true,hp:15,hitTimer:0});
+    midBosses.push({x:1030,y:370,width:80,height:90,alive:true,hp:8});
   `);
   scope.takePlayerDamage(1);
   recover(scope);
-  assert.equal(scope.left.hitKnockbackVelocity, -1500);
+  assert.equal(scope.left.hp, 0);
+  assert.equal(scope.left.alive, false);
   assert.equal(scope.right.hitKnockbackVelocity, 1500);
-  assert.equal(scope.left.hitTimer, 0.72);
   assert.equal(scope.right.hitTimer, 0.72);
-  assert.equal(scope.left.state, "chase");
   assert.equal(scope.right.state, "chase");
   for (const enemy of [scope.far, scope.dead, scope.above]) assert.equal(enemy.hitKnockbackVelocity, 0);
-  assert.equal(scope.left.hp, 2);
-  assert.equal(scope.right.hp, 10);
-  assert.equal(read(scope, "turrets[0].hp"), 15);
+  assert.equal(scope.right.hp, 8);
+  assert.equal(scope.far.hp, 2);
+  assert.equal(scope.dead.hp, 2);
+  assert.equal(scope.above.hp, 2);
+  assert.equal(read(scope, "turrets[0].hp"), 13);
+  assert.equal(read(scope, "turrets[0].hitTimer"), 0.18);
   assert.equal(read(scope, "turrets[0].hitKnockbackVelocity"), undefined);
-  assert.equal(read(scope, "player.score"), 0);
-  const leftX = scope.left.x;
+  assert.equal(read(scope, "midBosses[0].hp"), 6);
+  assert.equal(read(scope, "player.score"), scope.left.score);
   const rightX = scope.right.x;
   scope.updateEnemies(0.02);
-  assert.ok(scope.left.x < leftX);
   assert.ok(scope.right.x > rightX);
 });
 
 test("a close monster group is pushed outwards without body overlap", () => {
   const { scope } = createGame();
   const group = read(scope, "[1080,1152,1224].map(x=>addEnemy(fixtureRoad,x,'monster1'))");
+  for (const enemy of group) enemy.hp = 4;
   const startingX = Array.from(group, (enemy) => enemy.x);
   scope.takePlayerDamage(1);
   recover(scope);
@@ -364,6 +391,7 @@ test("slower down timing keeps the fall visible past the previous half-second li
 function knockbackDistance(kind, dt) {
   const { scope } = createGame();
   const enemy = read(scope, `addEnemy(fixtureRoad,${kind === "monster1" ? 820 : 1070},'${kind}')`);
+  enemy.hp = Math.max(enemy.hp, 4);
   scope.takePlayerDamage(1);
   recover(scope);
   const startX = enemy.x;
@@ -401,7 +429,7 @@ test("normal bullets do not truncate the stronger revival push, and normal impac
   const box = scope.getEnemyHitbox(enemy);
   read(scope, `bullets.push({x:${enemy.x + enemy.width / 2},y:${box.y + 30},vx:1520,vy:0,radius:3})`);
   scope.updateBullets(0);
-  assert.equal(enemy.hp, 9);
+  assert.equal(enemy.hp, 7);
   assert.equal(enemy.hitKnockbackVelocity, 1500);
   assert.equal(enemy.hitTimer, 0.72);
   assert.equal(enemy.revivalKnockback, true);
@@ -434,6 +462,7 @@ test("airborne monsters are also knocked away instead of being snapped to the gr
   enemy.state = "jump";
   enemy.jumpVy = -80;
   enemy.jumpOriginSurfaceY = 500;
+  enemy.hp = 4;
   scope.takePlayerDamage(1);
   recover(scope);
   assert.equal(enemy.jumpVx, 1500);

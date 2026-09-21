@@ -2030,7 +2030,8 @@ function enemyRectOverlapsEnemy(
 function addEnemy(platform, x, kind = "monster1") {
   const definition = MONSTER_TYPES[kind] ?? MONSTER_TYPES.monster1;
   const y = (
-    platformSurfaceY(platform, x + definition.width / 2) - definition.height
+    platformSurfaceY(platform, x + definition.width / 2) - definition.height -
+    (definition.hoverHeight ?? 0)
   );
   const enemy = {
     x,
@@ -2086,9 +2087,21 @@ function addEnemy(platform, x, kind = "monster1") {
     stateTimer: 0,
     animationTime: mapRandom() * Math.PI * 2,
     animationPhase: mapRandom() * Math.PI * 2,
+    hoverBaseY: y,
+    hoverAnchorX: x,
+    hoverAmplitude: definition.hoverAmplitude,
+    hoverSpeed: definition.hoverSpeed,
+    patrolRadius: definition.patrolRadius,
+    chargeDuration: definition.chargeDuration,
+    laserSpeed: definition.laserSpeed,
+    laserRadius: definition.laserRadius,
+    laserRicochets: definition.laserRicochets,
+    attackCooldownMin: definition.attackCooldownMin,
+    attackCooldownMax: definition.attackCooldownMax,
     moving: false,
     attackCooldown: definition.attackCooldown,
-    attackTimer: 0,
+    attackTimer: kind === "monster3"
+      ? 0.8 + mapRandom() * 2.2 : 0,
     ambientFireDelayMin: definition.ambientFireDelayMin,
     ambientFireDelayMax: definition.ambientFireDelayMax,
     ambientFireTimer: kind === "monster2"
@@ -2174,7 +2187,56 @@ function addMidBoss(turnX, surfaceLevel, incomingDirection, group) {
   });
 }
 
+function tryAddMonster3(platform, startX, endX, attempts = 6) {
+  const flyer = MONSTER_TYPES.monster3;
+  if (endX - startX < flyer.width) return null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const x = startX + mapRandom() * (endX - startX - flyer.width);
+    const y = platformSurfaceY(platform, x + flyer.width / 2) -
+      flyer.height - flyer.hoverHeight;
+    const spriteTop = y + flyer.height - flyer.spriteHeight;
+    const obstructed = platforms.some((other) => {
+      if (other === platform || other.end <= x || other.start >= x + flyer.width) return false;
+      const bounds = platformVisualBounds(other);
+      return bounds.top < y + flyer.height + 20 && bounds.bottom > spriteTop - 12;
+    });
+    if (!obstructed) {
+      const enemy = addEnemy(platform, x, "monster3");
+      if (enemy) return enemy;
+    }
+  }
+  return null;
+}
+
+function tryAddHeartItem(platform, startX, endX, avoidEnemies = true) {
+  if (endX - startX < 52) return false;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const x = startX + 26 + mapRandom() * (endX - startX - 52);
+    const occupied = turrets.some((turret) =>
+      turret.platform === platform && Math.abs(x - turret.x - turret.width / 2) < 95
+    ) || enemies.some((enemy) =>
+      avoidEnemies && enemy.platform === platform && enemy.kind !== "monster3" &&
+      Math.abs(x - enemy.x - enemy.width / 2) < 70
+    ) || heartItems.some((heart) =>
+      heart.platform === platform && Math.abs(x - heart.x) < 150
+    ) || (
+      bossDoor?.platform === platform && Math.abs(x - bossDoor.centerX) < 110
+    );
+    if (occupied) continue;
+    heartItems.push({
+      x,
+      y: platformSurfaceY(platform, x) - 54,
+      radius: HEART_ITEM_RADIUS,
+      phase: mapRandom() * Math.PI * 2,
+      platform,
+    });
+    return true;
+  }
+  return false;
+}
+
 function buildStage() {
+  let eligibleHeartPlatforms = 0;
   for (const platform of platforms) {
     if (platform.kind !== "flat") continue;
     if (platform.trick === "horizontal-jump") continue;
@@ -2309,6 +2371,42 @@ function buildStage() {
       }
     }
     if (turretX !== null) addTurret(platform, turretX);
+
+    if (
+      platform.routeRole === "main" && !platform.startingRoad &&
+      platformLength >= MONSTER_TYPES.monster3.spawnMinPlatformLength &&
+      mapRandom() < MONSTER_TYPES.monster3.spawnChance
+    ) {
+      tryAddMonster3(platform, visibleStart, visibleEnd);
+    }
+
+    if (platform.routeRole === "main" && !platform.startingRoad) {
+      eligibleHeartPlatforms += 1;
+      if (eligibleHeartPlatforms % 2 === 0) {
+        tryAddHeartItem(platform, visibleStart, visibleEnd);
+      }
+    }
+  }
+
+  const routeRoads = platforms.filter((platform) =>
+    platform.kind === "flat" && platform.routeRole === "main" &&
+    !platform.startingRoad && platform.end - platform.start >= 170
+  );
+  if (!enemies.some((enemy) => enemy.kind === "monster3")) {
+    const offset = Math.floor(mapRandom() * Math.max(1, routeRoads.length));
+    for (let index = 0; index < routeRoads.length; index += 1) {
+      const platform = routeRoads[(offset + index) % routeRoads.length];
+      if (platform.end - platform.start < MONSTER_TYPES.monster3.spawnMinPlatformLength) continue;
+      if (tryAddMonster3(platform, platform.start + 24, platform.end - 24, 12)) break;
+    }
+  }
+  if (heartItems.length < 7) {
+    const offset = Math.floor(mapRandom() * Math.max(1, routeRoads.length));
+    for (let index = 0; index < routeRoads.length && heartItems.length < 7; index += 1) {
+      const platform = routeRoads[(offset + index) % routeRoads.length];
+      if (heartItems.some((heart) => heart.platform === platform)) continue;
+      tryAddHeartItem(platform, platform.start + 16, platform.end - 16, false);
+    }
   }
 }
 
@@ -2380,12 +2478,14 @@ function spawnTestMonster(kind) {
       )))].map((x) => {
         const centerX = x + definition.width / 2;
         const surfaceY = platformSurfaceY(platform, centerX);
+        const spawnCenterY = surfaceY - (definition.hoverHeight ?? 0) - definition.height / 2;
         const isCurrentPlatform = platform === player.platform;
+        const onScreenY = kind === "monster3" ? spawnCenterY : surfaceY;
         const onScreen = (
           centerX >= cameraX &&
           centerX <= cameraX + WIDTH &&
-          surfaceY >= cameraY &&
-          surfaceY <= cameraY + HEIGHT
+          onScreenY >= cameraY &&
+          onScreenY <= cameraY + HEIGHT
         );
         const separation = Math.abs(centerX - playerCenterX);
         const minimumSeparation = (definition.width + player.width) / 2 + 34;
@@ -2420,7 +2520,9 @@ function spawnTestMonster(kind) {
             (isCurrentPlatform ? -100000 : 0) +
             (onScreen ? -10000 : 0) +
             Math.abs(centerX - desiredCenterX) +
-            Math.abs(surfaceY - playerFeetY) * 1.5
+            (kind === "monster3"
+              ? Math.abs(spawnCenterY - (playerFeetY - player.height / 2))
+              : Math.abs(surfaceY - playerFeetY)) * 1.5
           ),
         };
       });
@@ -2435,9 +2537,9 @@ function spawnTestMonster(kind) {
   enemy.facing = Math.sign(playerCenterX - spawn.centerX) || -facing;
   enemy.attackDirection = enemy.facing;
   burst(
-    spawn.centerX,
-    platformSurfaceY(spawn.platform, spawn.centerX) - enemy.height / 2,
-    kind === "monster2" ? "#dc55e9" : "#7cff48",
+    enemy.x + enemy.width / 2,
+    enemy.y + enemy.height / 2,
+    kind === "monster3" ? "#ff9c59" : kind === "monster2" ? "#dc55e9" : "#7cff48",
     15,
     145,
   );
@@ -2604,6 +2706,10 @@ function resizeGameResolution(width, height) {
   player.y += verticalShift;
   player.fallReferenceY += verticalShift;
   for (const enemy of enemies) enemy.y += verticalShift;
+  for (const enemy of enemies) {
+    if (enemy.kind === "monster3") enemy.hoverBaseY += verticalShift;
+  }
+  for (const heart of heartItems) heart.y += verticalShift;
   for (const turret of turrets) turret.y += verticalShift;
   for (const boss of midBosses) {
     boss.y += verticalShift;
@@ -2637,7 +2743,10 @@ function syncCanvasOrientation() {
   if (
     nextResolution.width === WIDTH &&
     nextResolution.height === HEIGHT
-  ) return;
+  ) {
+    syncCanvasBackingScale();
+    return;
+  }
 
   resetAllInputs();
   resizeGameResolution(nextResolution.width, nextResolution.height);
@@ -2689,11 +2798,13 @@ function resetGame() {
   enemyBullets.length = 0;
   particles.length = 0;
   enemies.length = 0;
+  heartItems.length = 0;
   turrets.length = 0;
   generateMap();
   resetPlayerPosition();
 
   player.hp = 3;
+  player.maxHp = 3;
   player.score = 0;
   player.invincible = 0;
   cameraLookDirection = 1;

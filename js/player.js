@@ -111,6 +111,18 @@ function emitPlayerReversalSparks(dt, brakingDirection) {
 
 function updatePlayer(dt) {
   const downForThisFrame = playerIsDown();
+  const knockbackDt = downForThisFrame
+    ? Math.min(dt, player.hitKnockbackTime)
+    : 0;
+  let hitKnockbackDistance = 0;
+  if (knockbackDt > 0) {
+    const decay = Math.exp(-PLAYER_HIT_KNOCKBACK_DAMPING * knockbackDt);
+    hitKnockbackDistance = player.hitKnockbackVelocity *
+      (1 - decay) / PLAYER_HIT_KNOCKBACK_DAMPING;
+    player.hitKnockbackVelocity *= decay;
+    player.hitKnockbackTime = Math.max(0, player.hitKnockbackTime - dt);
+    if (player.hitKnockbackTime === 0) player.hitKnockbackVelocity = 0;
+  }
   player.invincible = Math.max(0, player.invincible - dt);
   player.fireEnergy = Math.min(
     PLAYER_FIRE_ENERGY_MAX,
@@ -145,7 +157,9 @@ function updatePlayer(dt) {
     player.reversalSparkTimer = 0;
   }
   let brakingDirection = 0;
-  if (!preserveAirMomentum) {
+  if (knockbackDt > 0) {
+    player.vx = dt > 0 ? hitKnockbackDistance / dt : 0;
+  } else if (!preserveAirMomentum) {
     if (player.reversalDirection === move && canReverseOnGround) {
       const previousVx = player.vx;
       const braking = Math.sign(previousVx) === -move;

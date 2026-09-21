@@ -51,7 +51,7 @@ function createGame() {
 
 function read(scope, source) { return vm.runInContext(source, scope); }
 
-test("only a road crossing the hero is faded locally; the supporting and distant roads stay solid", () => {
+test("roads remain solid around the hero without revealing a background-shaped patch", () => {
   const { scope, calls, ctx } = createGame();
   const before = read(scope, "JSON.stringify(platforms)");
   scope.drawTerrain();
@@ -59,15 +59,16 @@ test("only a road crossing the hero is faded locally; the supporting and distant
   assert.deepEqual(Array.from(passes.filter((pass) => pass.id === scope.support.id),
     (pass) => pass.alpha), [1]);
   assert.deepEqual(Array.from(passes.filter((pass) => pass.id === scope.overhead.id),
-    (pass) => pass.alpha), [1, 0.22]);
+    (pass) => pass.alpha), [1]);
   assert.deepEqual(Array.from(passes.filter((pass) => pass.id === scope.distant.id),
     (pass) => pass.alpha), [1]);
-  assert.equal(calls.filter((call) => call.operation === "clip" && call.args[0] === "evenodd").length, 1);
+  assert.equal(calls.some((call) => call.operation === "clip" && call.args[0] === "evenodd"), false);
+  assert.equal(calls.some((call) => call.operation === "ellipse"), false);
   assert.equal(ctx.globalAlpha, 1);
   assert.equal(read(scope, "JSON.stringify(platforms)"), before);
 });
 
-test("triangular undersides fade when they intrude into the hero's upper-body space", () => {
+test("triangular undersides stay solid when they cross the hero's upper-body space", () => {
   const { scope, calls } = createGame();
   read(scope, `
     overhead.isJumpPad=true;
@@ -78,11 +79,11 @@ test("triangular undersides fade when they intrude into the hero's upper-body sp
   `);
   scope.drawTerrain();
   assert.deepEqual(Array.from(read(scope, "drawPasses.filter(pass=>pass.id===overhead.id)"),
-    (pass) => pass.alpha), [1, 0.22]);
-  assert.ok(calls.some((call) => call.operation === "clip" && call.args[0] === "evenodd"));
+    (pass) => pass.alpha), [1]);
+  assert.equal(calls.some((call) => call.operation === "clip" && call.args[0] === "evenodd"), false);
 });
 
-test("sloped roads use the same local fade without changing their geometry", () => {
+test("sloped roads stay solid without changing their geometry", () => {
   const { scope } = createGame();
   read(scope, `
     overhead.kind='ramp';
@@ -93,15 +94,31 @@ test("sloped roads use the same local fade without changing their geometry", () 
   const before = read(scope, "JSON.stringify(overhead)");
   scope.drawTerrain();
   assert.deepEqual(Array.from(read(scope, "drawPasses.filter(pass=>pass.id===overhead.id)"),
-    (pass) => pass.alpha), [1, 0.22]);
+    (pass) => pass.alpha), [1]);
   assert.equal(read(scope, "JSON.stringify(overhead)"), before);
 });
 
-test("roads stop fading once the player leaves their visual overlap", () => {
+test("moving the player does not change road opacity", () => {
   const { scope, calls } = createGame();
   read(scope, "player.x=700");
   scope.drawTerrain();
   assert.deepEqual(Array.from(read(scope, "drawPasses.filter(pass=>pass.id===overhead.id)"),
     (pass) => pass.alpha), [1]);
   assert.equal(calls.some((call) => call.operation === "clip" && call.args[0] === "evenodd"), false);
+});
+
+test("the hero is painted after solid terrain so roads cannot cover the sprite", () => {
+  const { scope } = createGame();
+  read(scope, `
+    globalThis.layerOrder=[];
+    drawTerrain=()=>layerOrder.push('terrain');
+    drawHeartItems=()=>{};
+    drawBossGate=()=>{};
+    drawPlayer=()=>layerOrder.push('player');
+    drawPlayerPhysicsDebug=()=>{};
+    drawProjectiles=()=>{};
+    drawParticles=()=>{};
+  `);
+  scope.drawWorld();
+  assert.deepEqual(Array.from(read(scope, "layerOrder")), ["terrain", "player"]);
 });

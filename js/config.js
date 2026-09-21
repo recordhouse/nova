@@ -13,6 +13,7 @@ const testPlayerAreaButton = document.querySelector("[data-test-player-area]");
 const testMonsterAreaButton = document.querySelector("[data-test-monster-area]");
 const testSpawnMonster1Button = document.querySelector("[data-test-spawn-monster1]");
 const testSpawnMonster2Button = document.querySelector("[data-test-spawn-monster2]");
+const testSpawnMonster3Button = document.querySelector("[data-test-spawn-monster3]");
 const gameShellElement = document.querySelector(".game-shell");
 if (testControlsElement) testControlsElement.hidden = !TEST_MODE;
 
@@ -39,7 +40,7 @@ const initialCanvasResolution = canvasResolutionForOrientation();
 const BASE_GROUND_SCREEN_RATIO = 748 / 960;
 let WIDTH = initialCanvasResolution.width;
 let HEIGHT = initialCanvasResolution.height;
-const RENDER_SCALE = 1;
+const MAX_RENDER_SCALE = 2;
 let BASE_GROUND_Y = HEIGHT * BASE_GROUND_SCREEN_RATIO;
 const GRAVITY = 2100;
 const JUMP_SPEED = 950;
@@ -139,12 +140,22 @@ const PLAYER_JUMP_SPRITE_SCALE = 1.12;
 const PLAYER_GET_OFF_SPRITE_SCALE = PLAYER_JUMP_SPRITE_SCALE;
 const PLAYER_STAND_SPRITE_Y_OFFSET = 8;
 const PLAYER_FIRE_SPRITE_Y_OFFSET = 8;
+const PLAYER_RUN_SPRITE_Y_OFFSET = 8;
+const PLAYER_JUMP_SPRITE_Y_OFFSET = 8;
+const PLAYER_SIT_SPRITE_Y_OFFSET = 8;
 const PLAYER_DOWN_SPRITE_SCALE = PLAYER_STAND_SPRITE_SCALE;
 const PLAYER_DOWN_SPRITE_Y_OFFSET = 16;
+const PLAYER_MAX_HEARTS = 10;
+const HEART_ITEM_RADIUS = 26;
+const HEART_ITEM_DRAW_SCALE = 6;
 const PLAYER_DOWN_FPS = 8;
 const PLAYER_DOWN_HOLD_DURATION = 2;
+const PLAYER_HIT_KNOCKBACK_SPEED = 300;
+const PLAYER_HIT_KNOCKBACK_DURATION = 0.22;
+const PLAYER_HIT_KNOCKBACK_DAMPING = 10;
 const PLAYER_REVIVAL_INVINCIBILITY = 3;
 const PLAYER_REVIVAL_RADIUS = 240;
+const PLAYER_REVIVAL_DAMAGE = 2;
 const PLAYER_REVIVAL_LIGHT_COUNT = 72;
 const PLAYER_REVIVAL_KNOCKBACK_SPEED = 1500;
 const PLAYER_REVIVAL_KNOCKBACK_DURATION = 0.72;
@@ -194,6 +205,7 @@ const TURRET = {
   spriteWidth: 132,
   spriteHeight: 174,
   spriteBottomOffset: 3,
+  visualGroundOffset: 12,
   hp: 15,
   activationRangeX: 980,
   activationRangeY: 660,
@@ -307,6 +319,35 @@ const MONSTER_TYPES = {
     spawnMinPlatformLength: 420,
     score: 300,
   },
+  monster3: {
+    displayName: "몹3",
+    width: 82,
+    height: 94,
+    spriteWidth: 118,
+    spriteHeight: 142,
+    spriteBottomOffset: 2,
+    spriteTopInset: 12 / 372,
+    spriteFacing: -1,
+    hp: 5,
+    hoverHeight: 188,
+    hoverAmplitude: 13,
+    hoverSpeed: 1.85,
+    patrolRadius: 48,
+    chargeDuration: 0.8,
+    laserSpeed: 700,
+    laserRadius: 5,
+    laserRicochets: 3,
+    attackRange: 840,
+    attackCooldownMin: 2.7,
+    attackCooldownMax: 4.4,
+    hitDuration: 0.2,
+    hitKnockbackSpeed: 200,
+    hitKnockbackMaxSpeed: 340,
+    hitKnockbackDamping: 8,
+    spawnChance: 0.28,
+    spawnMinPlatformLength: 300,
+    score: 200,
+  },
 };
 const RUN_FRAME_WIDTH = 400;
 const RUN_FRAME_HEIGHT = 500;
@@ -365,9 +406,27 @@ function configureCanvasResolution(width, height) {
   WIDTH = width;
   HEIGHT = height;
   BASE_GROUND_Y = HEIGHT * BASE_GROUND_SCREEN_RATIO;
-  canvas.width = Math.round(WIDTH * RENDER_SCALE);
-  canvas.height = Math.round(HEIGHT * RENDER_SCALE);
-  ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
+  const renderScale = canvasBackingScale();
+  canvas.width = Math.round(WIDTH * renderScale);
+  canvas.height = Math.round(HEIGHT * renderScale);
+  ctx.setTransform(canvas.width / WIDTH, 0, 0, canvas.height / HEIGHT, 0, 0);
+}
+
+function canvasBackingScale() {
+  const cssWidth = canvas.getBoundingClientRect?.().width ?? 0;
+  const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
+  if (!(cssWidth > 0)) return 1;
+  return Math.max(1, Math.min(MAX_RENDER_SCALE, cssWidth * pixelRatio / WIDTH));
+}
+
+function syncCanvasBackingScale() {
+  const scale = canvasBackingScale();
+  if (
+    canvas.width === Math.round(WIDTH * scale) &&
+    canvas.height === Math.round(HEIGHT * scale)
+  ) return false;
+  configureCanvasResolution(WIDTH, HEIGHT);
+  return true;
 }
 
 configureCanvasResolution(WIDTH, HEIGHT);

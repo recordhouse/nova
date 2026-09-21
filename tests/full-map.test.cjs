@@ -8,8 +8,10 @@ const vm = require("node:vm");
 
 function createGame(testMode = true, landscape = false) {
   const strokes = [];
+  const strokeRects = [];
   const clips = [];
   const fills = [];
+  const gradients = [];
   let points = [];
   const ctx = {
     setTransform() {}, save() {}, restore() {}, clip() {},
@@ -21,9 +23,19 @@ function createGame(testMode = true, landscape = false) {
     rect(...values) { clips.push(values); },
     stroke() { strokes.push({ color: this.strokeStyle, points: [...points] }); },
     fill() { fills.push({ color: this.fillStyle, points: [...points] }); },
-    fillRect() {}, strokeRect() {},
-    createRadialGradient: () => ({ addColorStop() {} }),
-    createLinearGradient: () => ({ addColorStop() {} }),
+    fillRect() {}, strokeRect(...values) { strokeRects.push(values); },
+    createRadialGradient(...args) {
+      const gradient = { type: "radial", args, stops: [],
+        addColorStop(offset, color) { this.stops.push({ offset, color }); } };
+      gradients.push(gradient);
+      return gradient;
+    },
+    createLinearGradient(...args) {
+      const gradient = { type: "linear", args, stops: [],
+        addColorStop(offset, color) { this.stops.push({ offset, color }); } };
+      gradients.push(gradient);
+      return gradient;
+    },
   };
   const button = {
     attributes: {}, listeners: {},
@@ -53,7 +65,7 @@ function createGame(testMode = true, landscape = false) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "js", `${name}.js`), "utf8"),
       scope, { filename: `${name}.js` });
   }
-  return { scope, button, tools, strokes, clips, fills };
+  return { scope, button, tools, strokes, strokeRects, clips, fills, gradients };
 }
 
 test("MAP button toggles the full map, clears held controls and pauses the game clock", () => {
@@ -132,11 +144,29 @@ test("full map skips world effects and is not hidden by the game-over overlay", 
 });
 
 test("closed map keeps the small, cropped minimap", () => {
-  const { scope, strokes, clips } = createGame();
+  const { scope, strokes, strokeRects, clips, gradients } = createGame();
   scope.drawMinimap();
   const [x, y, width, height] = clips.at(-1);
   assert.ok(width < 282 && height <= 148);
   const roads = strokes.filter((stroke) => stroke.color === "rgba(83, 221, 242, 0.62)");
-  assert.ok(roads.some((road) => road.points.some((point) =>
-    point.x < x || point.x > x + width || point.y < y || point.y > y + height)));
+  assert.ok(roads.length > 0);
+  assert.ok(roads.length < vm.runInContext("platforms.length", scope),
+    "the small map should skip roads outside its visible quarter");
+  const distanceFog = gradients.find((gradient) => gradient.stops.some((stop) =>
+    stop.color === "rgba(1, 3, 8, 0.9)"));
+  assert.ok(distanceFog, "the local minimap should darken paths farther from the player");
+  assert.deepEqual(distanceFog.stops.map((stop) => stop.offset), [0, 0.25, 0.55, 0.82, 1]);
+  assert.equal(distanceFog.args[0], distanceFog.args[3]);
+  assert.equal(distanceFog.args[1], distanceFog.args[4]);
+  const blendedBackground = gradients.find((gradient) => gradient.stops.some((stop) =>
+    stop.color === "rgba(3, 8, 14, 0)"));
+  assert.ok(blendedBackground, "the frameless minimap background should fade into space");
+  assert.equal(strokeRects.length, 0, "the minimap should not draw a rectangular border");
+});
+
+test("test mode full map stays clear without the local distance fog", () => {
+  const { scope, gradients } = createGame();
+  scope.drawMinimap(true);
+  assert.equal(gradients.some((gradient) => gradient.stops.some((stop) =>
+    stop.color === "rgba(1, 3, 8, 0.9)")), false);
 });

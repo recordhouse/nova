@@ -35,6 +35,8 @@ const player = {
   speed: 245,
   reversalDirection: 0,
   reversalSparkTimer: 0,
+  hitKnockbackVelocity: 0,
+  hitKnockbackTime: 0,
   facing: 1,
   grounded: true,
   fireTimer: 0,
@@ -46,6 +48,7 @@ const player = {
   downPhase: "",
   downTime: 0,
   hp: 3,
+  maxHp: 3,
   score: 0,
   crouching: false,
   platform: null,
@@ -65,12 +68,15 @@ function playerIsDown() {
 function resetPlayerDownState() {
   player.downPhase = "";
   player.downTime = 0;
+  player.hitKnockbackVelocity = 0;
+  player.hitKnockbackTime = 0;
 }
 
 const bullets = [];
 const enemyBullets = [];
 const particles = [];
 const enemies = [];
+const heartItems = [];
 const turrets = [];
 const midBosses = [];
 const stars = [];

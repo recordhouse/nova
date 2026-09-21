@@ -43,6 +43,7 @@ function createGame() {
     player.x=1000; player.y=500-player.height;
     player.grounded=true; player.platform=fixtureRoad;
     minWorldX=0; maxWorldX=2000;
+    cameraX=700;
   `, scope);
   return { scope, calls, ctx };
 }

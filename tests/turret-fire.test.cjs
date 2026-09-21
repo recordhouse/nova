@@ -43,6 +43,7 @@ test("turrets independently choose one, two or three shots for each timed burst"
   scope.updateTurrets(0.1);
   assert.equal(read(scope, "enemyBullets.length"), 1);
   assert.equal(read(scope, "enemyBullets[0].kind"), "turret-laser");
+  assert.equal(read(scope, "enemyBullets[0].ricochetColor"), "#dc347f");
   assert.ok(read(scope, "enemyBullets[0].vx") < 0, "distant shots follow the turret's facing");
   assert.equal(turret.active, true);
   assert.equal(turret.burstShotsRemaining, 0);
@@ -83,4 +84,17 @@ test("turrets still aim at a nearby player and skip distant firing particles", (
   assert.equal(read(scope, "enemyBullets.length"), 2);
   assert.equal(read(scope, "particles.length"), 0);
   assert.equal(read(scope, "shake"), 0);
+});
+
+test("turret muzzle follows the lowered visual artwork", () => {
+  const scope = createGame();
+  const turret = scope.fixtureTurret;
+  const muzzle = read(scope, "turretMuzzlePosition(fixtureTurret)");
+  assert.equal(muzzle.y, (
+    turret.y + turret.height +
+    read(scope, "TURRET.visualGroundOffset") -
+    read(scope, "TURRET.spriteHeight") +
+    read(scope, "TURRET.spriteBottomOffset") +
+    read(scope, "TURRET.spriteHeight") * 0.2
+  ));
 });

@@ -63,6 +63,20 @@ test("each lost turret HP adds a permanent visible crack after the sprite", () =
   }
 });
 
+test("turret artwork sits into the road without moving its physical body", () => {
+  const { scope, calls, turret } = createGame();
+  const physicalY = turret.y;
+  scope.drawTurret(turret);
+  const translate = calls.find((call) => call.operation === "translate");
+  const visualGroundOffset = vm.runInContext("TURRET.visualGroundOffset", scope);
+  assert.equal(visualGroundOffset, 12);
+  assert.deepEqual(translate.args, [
+    turret.x + turret.width / 2,
+    turret.y + turret.height + visualGroundOffset,
+  ]);
+  assert.equal(turret.y, physicalY, "rendering does not move the collision body");
+});
+
 test("cracks mirror with turret facing and stay stable across redraws and hit flashes", () => {
   const { scope, calls, turret } = createGame();
   turret.hp = 6;

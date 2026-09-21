@@ -51,6 +51,8 @@ function drawBackground() {
     );
   }
 
+  drawSpaceWonders();
+
   const starSpan = WIDTH + 160;
   const starHeight = HEIGHT + 180;
   for (const star of stars) {
@@ -71,8 +73,103 @@ function drawBackground() {
   ctx.globalAlpha = 1;
 }
 
+function cosmicNoise(index, salt) {
+  const value = Math.sin(index * 127.1 + salt * 311.7) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function drawNebulaWonder(radius, time) {
+  ctx.save();
+  ctx.rotate(Math.sin(time * 0.3) * 0.18);
+  for (let layer = 0; layer < 3; layer += 1) {
+    const offsetX = Math.sin(time * (0.24 + layer * 0.07) + layer * 2) * radius * 0.16;
+    const offsetY = Math.cos(time * (0.2 + layer * 0.09) + layer) * radius * 0.12;
+    const cloud = ctx.createRadialGradient(0, 0, 2,
+      0, 0, radius * (layer === 0 ? 1.45 : 1.05));
+    cloud.addColorStop(0, layer === 1 ? "rgba(108, 245, 239, 0.48)" : "rgba(156, 104, 245, 0.42)");
+    cloud.addColorStop(0.45, layer === 2 ? "rgba(247, 110, 203, 0.18)" : "rgba(79, 110, 237, 0.16)");
+    cloud.addColorStop(1, "rgba(31, 26, 91, 0)");
+    ctx.fillStyle = cloud;
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(1.25 + layer * 0.13, 0.52 + layer * 0.1);
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * (layer === 0 ? 1.45 : 1.05), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawRingedWorld(radius, time) {
+  ctx.save();
+  ctx.rotate(-0.25 + Math.sin(time * 0.16) * 0.07);
+  ctx.scale(1, 0.4);
+  ctx.strokeStyle = "rgba(183, 224, 249, 0.52)";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 1.5, Math.PI * 0.1, Math.PI * 1.92);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(166, 112, 240, 0.4)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 1.68, Math.PI * 0.16, Math.PI * 1.8);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.globalCompositeOperation = "source-over";
+  const sphere = ctx.createRadialGradient(-radius * 0.3, -radius * 0.38, 2,
+    0, 0, radius);
+  sphere.addColorStop(0, "rgba(161, 245, 235, 0.78)");
+  sphere.addColorStop(0.42, "rgba(74, 130, 190, 0.76)");
+  sphere.addColorStop(1, "rgba(24, 27, 75, 0.92)");
+  ctx.fillStyle = sphere;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(185, 238, 253, 0.32)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius - 1, Math.PI * 0.55, Math.PI * 1.5);
+  ctx.stroke();
+
+  const moonAngle = time * 0.42;
+  const moonX = Math.cos(moonAngle) * radius * 1.9;
+  const moonY = Math.sin(moonAngle) * radius * 0.8;
+  ctx.fillStyle = "rgba(226, 241, 255, 0.85)";
+  ctx.beginPath();
+  ctx.arc(moonX, moonY, Math.max(4, radius * 0.1), 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawSpaceWonders() {
+  const depth = 0.18;
+  const spacing = 1100;
+  const parallaxX = cameraX * depth;
+  const first = Math.floor((parallaxX - 300) / spacing) - 1;
+  const last = Math.ceil((parallaxX + WIDTH + 300) / spacing) + 1;
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  for (let index = first; index <= last; index += 1) {
+    const x = index * spacing + 250 + cosmicNoise(index, 1) * 380 - parallaxX;
+    if (x < -210 || x > WIDTH + 210) continue;
+    const phase = cosmicNoise(index, 2) * Math.PI * 2;
+    const time = gameTime + phase;
+    const y = HEIGHT * (0.2 + cosmicNoise(index, 3) * 0.52) -
+      cameraY * 0.07 + Math.sin(time * 0.44) * 16;
+    const radius = 48 + cosmicNoise(index, 4) * 28;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalAlpha = 0.48 + Math.sin(time * 0.7) * 0.08;
+    if (((index % 2) + 2) % 2 === 0) drawNebulaWonder(radius, time);
+    else drawRingedWorld(radius * 0.7, time);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 function drawStationPanels(platform, thickness = PLATFORM_DECK_THICKNESS - 4) {
-  const panelWidths = [84, 112, 140];
+  const panelWidths = [96, 120, 144];
   const panelPalettes = [
     ["#18232d", "#1c2934"],
     ["#20252d", "#252c35"],
@@ -85,91 +182,97 @@ function drawStationPanels(platform, thickness = PLATFORM_DECK_THICKNESS - 4) {
     Math.ceil((platform.end - platform.start) / panelWidth) - 1,
     Math.floor((cameraX + WIDTH + 48 - platform.start) / panelWidth),
   );
-  const y = pixelSnap(platform.y + 3);
+  const y = pixelSnap(platform.y + 3, 1);
 
   for (let panel = first; panel <= last; panel += 1) {
     const start = platform.start + panel * panelWidth;
     const width = Math.min(panelWidth, platform.end - start);
     if (width < 16) continue;
-    const x = pixelSnap(start);
+    const x = pixelSnap(start, 1);
     ctx.fillStyle = palette[panel % 2];
-    ctx.fillRect(x + 2, y, width - 4, thickness);
-    ctx.fillStyle = "#0a131b";
-    ctx.fillRect(x, y + 2, 2, thickness - 2);
-    ctx.fillRect(x + width - 2, y + 2, 2, thickness - 2);
-    ctx.fillStyle = "#526878";
-    ctx.fillRect(x + 6, y + 2, 10, 2);
-    ctx.fillRect(x + width - 16, y + 2, 10, 2);
-    ctx.fillStyle = "#080e15";
-    ctx.fillRect(x + 10, y + 7, 4, 2);
-    ctx.fillRect(x + width - 14, y + 7, 4, 2);
+    ctx.fillRect(x + 1, y, width - 2, thickness);
+    ctx.fillStyle = "rgba(5, 12, 17, 0.7)";
+    ctx.fillRect(x, y + 2, 1, thickness - 2);
+    ctx.fillRect(x + width - 1, y + 2, 1, thickness - 2);
+    ctx.fillStyle = "rgba(112, 143, 160, 0.58)";
+    ctx.fillRect(x + 7, y + 2, 8, 1);
+    ctx.fillRect(x + width - 15, y + 2, 8, 1);
+    ctx.fillStyle = "rgba(5, 10, 15, 0.72)";
+    ctx.fillRect(x + 11, y + 7, 3, 1);
+    ctx.fillRect(x + width - 14, y + 7, 3, 1);
 
     if (platform.style === 0) {
-      ctx.fillStyle = "#324856";
-      if (width >= 64) ctx.fillRect(x + 24, y + 5, width - 48, 2);
-      ctx.fillStyle = "#101a23";
-      ctx.fillRect(x + Math.floor(width / 2) - 2, y + 3, 4, 8);
+      ctx.fillStyle = "rgba(67, 96, 112, 0.62)";
+      if (width >= 64) ctx.fillRect(x + 24, y + 5, width - 48, 1);
+      ctx.fillStyle = "rgba(12, 23, 31, 0.72)";
+      ctx.fillRect(x + Math.floor(width / 2) - 1, y + 3, 2, 7);
     } else if (platform.style === 1) {
-      ctx.fillStyle = "#46515c";
-      for (let mark = 20; mark < width - 16; mark += 20) {
-        ctx.fillRect(x + mark, y + (mark % 40 === 0 ? 6 : 4), 8, 2);
+      ctx.fillStyle = "rgba(91, 104, 116, 0.55)";
+      for (let mark = 20; mark < width - 16; mark += 24) {
+        ctx.fillRect(x + mark, y + (mark % 48 === 0 ? 6 : 4), 6, 1);
       }
     } else {
-      ctx.fillStyle = "#315765";
+      ctx.fillStyle = "rgba(60, 105, 118, 0.58)";
       if (width >= 56) {
-        ctx.fillRect(x + 24, y + 4, 4, 6);
-        ctx.fillRect(x + width - 28, y + 4, 4, 6);
+        ctx.fillRect(x + 24, y + 4, 2, 6);
+        ctx.fillRect(x + width - 26, y + 4, 2, 6);
       }
-      if (width >= 72) ctx.fillRect(x + 32, y + 8, width - 64, 2);
+      if (width >= 72) ctx.fillRect(x + 32, y + 8, width - 64, 1);
     }
   }
 }
 
 function drawRoadPixelTexture(platform, palette, isSubPath = false) {
-  const tileWidth = 32;
+  const tileWidth = 28;
   const first = Math.max(0, Math.floor((cameraX - 40 - platform.start) / tileWidth));
   const last = Math.min(
     Math.ceil((platform.end - platform.start) / tileWidth) - 1,
     Math.floor((cameraX + WIDTH + 40 - platform.start) / tileWidth),
   );
+  ctx.save();
+  const baseAlpha = ctx.globalAlpha;
   for (let tile = first; tile <= last; tile += 1) {
     const start = platform.start + tile * tileWidth;
-    const x = pixelSnap(start);
-    const y = pixelSnap(platformSurfaceY(platform, start + 16));
+    const x = pixelSnap(start, 1);
+    const y = pixelSnap(platformSurfaceY(platform, start + tileWidth / 2), 1);
     const wear = platformFeatureNoise(platform, tile * 37 + 19);
+    ctx.globalAlpha = baseAlpha * 0.62;
     ctx.fillStyle = palette[2];
-    ctx.fillRect(x + 4, y + 8, 6, 2);
-    ctx.fillRect(x + 24, y + 5, 4, 2);
+    ctx.fillRect(x + 3, y + 8, 4, 1);
+    ctx.fillRect(x + 18, y + 5, 3, 1);
+    ctx.globalAlpha = baseAlpha * 0.5;
     ctx.fillStyle = palette[0];
-    ctx.fillRect(x + 12, y + 4, wear > 0.58 ? 8 : 4, 2);
+    ctx.fillRect(x + 9, y + 4, wear > 0.58 ? 6 : 3, 1);
     if (wear > 0.68) {
+      ctx.globalAlpha = baseAlpha * 0.64;
       ctx.fillStyle = isSubPath ? "#a286d0" : "#6eafbd";
-      ctx.fillRect(x + 20, y + 6, 4, 2);
+      ctx.fillRect(x + 15, y + 6, 3, 1);
     }
   }
+  ctx.restore();
 }
 
 function drawPixelRoadRail(platform, railColor, isSubPath = false) {
-  const highlight = isSubPath ? "#c9aeff" : "#69e2ee";
+  const highlight = isSubPath ? "rgba(201, 174, 255, 0.72)" : "rgba(105, 226, 238, 0.74)";
   const visibleStart = Math.max(platform.start, cameraX - 16);
   const visibleEnd = Math.min(platform.end, cameraX + WIDTH + 16);
   if (visibleEnd <= visibleStart) return;
   if (platform.kind === "flat") {
-    const y = pixelSnap(platform.y);
+    const y = pixelSnap(platform.y, 1);
     ctx.fillStyle = railColor;
-    ctx.fillRect(visibleStart, y - 4, visibleEnd - visibleStart, 4);
+    ctx.fillRect(visibleStart, y - 3, visibleEnd - visibleStart, 3);
     ctx.fillStyle = highlight;
-    ctx.fillRect(visibleStart, y - 2, visibleEnd - visibleStart, 2);
+    ctx.fillRect(visibleStart, y - 1, visibleEnd - visibleStart, 1);
     ctx.fillStyle = "#0c161e";
-    const firstNotch = Math.max(0, Math.floor((visibleStart - platform.start) / 48));
-    for (let notch = firstNotch; platform.start + notch * 48 < visibleEnd; notch += 1) {
-      const x = pixelSnap(platform.start + notch * 48 + 36);
-      if (x + 4 <= platform.end) ctx.fillRect(x, y - 2, 4, 2);
+    const firstNotch = Math.max(0, Math.floor((visibleStart - platform.start) / 56));
+    for (let notch = firstNotch; platform.start + notch * 56 < visibleEnd; notch += 1) {
+      const x = pixelSnap(platform.start + notch * 56 + 42, 1);
+      if (x + 3 <= platform.end) ctx.fillRect(x, y - 1, 3, 1);
     }
     return;
   }
 
-  const blockWidth = 8;
+  const blockWidth = 6;
   const first = Math.max(0, Math.floor((visibleStart - platform.start) / blockWidth));
   const last = Math.min(
     Math.ceil((platform.end - platform.start) / blockWidth) - 1,
@@ -178,12 +281,12 @@ function drawPixelRoadRail(platform, railColor, isSubPath = false) {
   for (let block = first; block <= last; block += 1) {
     const x = platform.start + block * blockWidth;
     const width = Math.min(blockWidth, platform.end - x);
-    const y = pixelSnap(platformSurfaceY(platform, x + width / 2));
+    const y = pixelSnap(platformSurfaceY(platform, x + width / 2), 1);
     ctx.fillStyle = railColor;
-    ctx.fillRect(x, y - 4, width, 4);
-    if (block % 6 !== 5) {
+    ctx.fillRect(x, y - 3, width, 3);
+    if (block % 8 !== 7) {
       ctx.fillStyle = highlight;
-      ctx.fillRect(x, y - 2, width, 2);
+      ctx.fillRect(x, y - 1, width, 1);
     }
   }
 }
@@ -739,20 +842,20 @@ function drawRamp(platform, palette, railColor) {
   ctx.restore();
 
   ctx.strokeStyle = palette[0];
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(platform.entryX, platform.entryY + 3);
   ctx.lineTo(platform.exitX, platform.exitY + 3);
   ctx.stroke();
   ctx.strokeStyle = palette[2];
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(bottomEntryX, platform.entryY + PLATFORM_DECK_THICKNESS - 2);
   ctx.lineTo(bottomExitX, platform.exitY + PLATFORM_DECK_THICKNESS - 2);
   ctx.stroke();
 
-  const divisions = Math.max(3, Math.floor((platform.end - platform.start) / 54));
-  ctx.strokeStyle = "rgba(104, 151, 171, 0.34)";
+  const divisions = Math.max(3, Math.floor((platform.end - platform.start) / 48));
+  ctx.strokeStyle = "rgba(104, 151, 171, 0.26)";
   ctx.lineWidth = 1;
   for (let division = 1; division < divisions; division += 1) {
     const progress = division / divisions;
@@ -767,7 +870,7 @@ function drawRamp(platform, palette, railColor) {
   drawPixelRoadRail(platform, railColor, platform.routeRole === "sub");
 
   ctx.strokeStyle = "#0a1017";
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2;
   ctx.beginPath();
   if (!joinedAtEntry) {
     ctx.moveTo(platform.entryX, platform.entryY);
@@ -801,18 +904,18 @@ function drawInvertedTrianglePlatform(platform, palette, railColor) {
   ctx.lineTo(centerX, apexY);
   ctx.closePath();
   ctx.clip();
-  for (let bandY = pixelSnap(platform.y + 8); bandY < apexY; bandY += 10) {
-    const band = Math.floor((bandY - platform.y) / 10);
+  for (let bandY = pixelSnap(platform.y + 7, 1); bandY < apexY; bandY += 8) {
+    const band = Math.floor((bandY - platform.y) / 8);
     ctx.fillStyle = band % 2 === 0 ? palette[0] : palette[2];
-    ctx.globalAlpha = baseAlpha * 0.32;
-    ctx.fillRect(platform.start, bandY, platform.end - platform.start, 4);
+    ctx.globalAlpha = baseAlpha * 0.24;
+    ctx.fillRect(platform.start, bandY, platform.end - platform.start, 2);
   }
   ctx.globalAlpha = baseAlpha;
   drawRoadPixelTexture(platform, palette, platform.routeRole === "sub");
   ctx.restore();
 
-  ctx.strokeStyle = "rgba(102, 139, 157, 0.72)";
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(119, 151, 166, 0.58)";
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(platform.start, platform.y);
   ctx.lineTo(centerX, apexY);
@@ -872,25 +975,25 @@ function drawTerrainPlatform(platform, palette, railColor, isSubPath) {
   ctx.fillStyle = palette[0];
   ctx.fillRect(
     platform.start,
-    pixelSnap(platform.y + 2),
+    pixelSnap(platform.y + 2, 1),
     platform.end - platform.start,
-    4,
+    3,
   );
   ctx.fillStyle = palette[2];
   ctx.fillRect(
     platform.start,
-    pixelSnap(platform.y + PLATFORM_DECK_THICKNESS - 4),
+    pixelSnap(platform.y + PLATFORM_DECK_THICKNESS - 3, 1),
     platform.end - platform.start,
-    4,
+    2,
   );
   drawStationPanels(platform);
   drawRoadPixelTexture(platform, palette, isSubPath);
   ctx.fillStyle = "#0a1118";
   ctx.fillRect(
     platform.start,
-    platform.y + PLATFORM_DECK_THICKNESS - 2,
+    platform.y + PLATFORM_DECK_THICKNESS - 1,
     platform.end - platform.start,
-    2,
+    1,
   );
   drawPlatformArchitecture(platform);
   ctx.restore();
@@ -900,7 +1003,7 @@ function drawTerrainPlatform(platform, palette, railColor, isSubPath) {
   drawPlatformFeature(platform);
 
   ctx.strokeStyle = "#0a1017";
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2;
   ctx.beginPath();
   if (!joinedAtStart) {
     ctx.moveTo(platform.start, platform.y);
@@ -919,20 +1022,6 @@ function drawTerrainPlatform(platform, palette, railColor, isSubPath) {
   ctx.stroke();
 }
 
-const PLAYER_ROAD_FADE_ALPHA = 0.22;
-
-function playerRoadVisibilityArea() {
-  const centerX = player.x + player.width / 2;
-  const feetY = player.y + player.height;
-  const halfWidth = 100;
-  return {
-    left: centerX - halfWidth,
-    right: centerX + halfWidth,
-    top: feetY - PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_BLAST_HIGH_SPRITE_SCALE - 16,
-    bottom: feetY - 12,
-  };
-}
-
 function drawTerrain() {
   const deckPalettes = [
     ["#253541", "#17232d", "#0d151c"],
@@ -940,17 +1029,16 @@ function drawTerrain() {
     ["#214049", "#172c32", "#0c181c"],
   ];
   const railColors = ["#718391", "#8b8378", "#668f96"];
-  const visibilityArea = playerRoadVisibilityArea();
-
   for (const platform of platforms) {
+    if (platform.end < cameraX - 120 || platform.start > cameraX + WIDTH + 120) {
+      continue;
+    }
     const bounds = platformVisualBounds(platform);
     let platformBottomY = bounds.bottom;
     if (platform.features?.some((feature) => feature.type === "electric-hose")) {
       platformBottomY = Math.max(platformBottomY, platform.y + ELECTRIC_WIRE_MAX_DROP);
     }
     if (
-      platform.end < cameraX - 120 ||
-      platform.start > cameraX + WIDTH + 120 ||
       platformBottomY < cameraY - 100 ||
       bounds.top > cameraY + HEIGHT + 120
     ) continue;
@@ -960,39 +1048,7 @@ function drawTerrain() {
       ? ["#332a48", "#211c32", "#120f1e"]
       : deckPalettes[platform.style];
     const railColor = railColors[platform.style];
-    const overlapsPlayer = platform !== player.platform &&
-      platformBoundsConflict(bounds, visibilityArea, 0, 0);
-    if (!overlapsPlayer) {
-      drawTerrainPlatform(platform, palette, railColor, isSubPath);
-      continue;
-    }
-
-    // Keep the road intact away from the hero, but fade only the intersecting window.
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(cameraX - 120, cameraY - 120, WIDTH + 240, HEIGHT + 240);
-    ctx.rect(
-      visibilityArea.left,
-      visibilityArea.top,
-      visibilityArea.right - visibilityArea.left,
-      visibilityArea.bottom - visibilityArea.top,
-    );
-    ctx.clip("evenodd");
     drawTerrainPlatform(platform, palette, railColor, isSubPath);
-    ctx.restore();
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(
-      visibilityArea.left,
-      visibilityArea.top,
-      visibilityArea.right - visibilityArea.left,
-      visibilityArea.bottom - visibilityArea.top,
-    );
-    ctx.clip();
-    ctx.globalAlpha *= PLAYER_ROAD_FADE_ALPHA;
-    drawTerrainPlatform(platform, palette, railColor, isSubPath);
-    ctx.restore();
   }
 }
 
@@ -1114,9 +1170,13 @@ function drawPlayerSprite(centerX) {
     ? PLAYER_DOWN_SPRITE_Y_OFFSET
     : isFiring
       ? PLAYER_FIRE_SPRITE_Y_OFFSET
-      : sprite === playerSprites.stand
-        ? PLAYER_STAND_SPRITE_Y_OFFSET
-        : 0;
+      : isCrouching
+        ? PLAYER_SIT_SPRITE_Y_OFFSET
+        : isJumping
+          ? PLAYER_JUMP_SPRITE_Y_OFFSET
+          : isRunning
+            ? PLAYER_RUN_SPRITE_Y_OFFSET
+            : PLAYER_STAND_SPRITE_Y_OFFSET;
   const spriteFeetY = player.y + player.height + spriteYOffset;
   if (!sprite?.loaded || !sprite.image.naturalWidth || !sprite.image.naturalHeight) {
     return spriteFeetY - PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_STAND_SPRITE_SCALE;
@@ -1198,7 +1258,7 @@ function drawCombatantHealthBar(centerX, topY, width, hp, maxHp) {
 
 function drawCombatantPhysicsDebug(target, color) {
   if (!TEST_MODE || !showMonsterArea || !target.alive) return;
-  const hitbox = target.kind === "monster1" || target.kind === "monster2"
+  const hitbox = MONSTER_TYPES[target.kind]
     ? getEnemyHitbox(target) : target;
   if (
     hitbox.x + hitbox.width < cameraX - 24 ||
@@ -1224,6 +1284,17 @@ function drawEnemyAwarenessDebug(enemy) {
   const feetY = enemy.y + enemy.height;
 
   ctx.save();
+  if (enemy.kind === "monster3") {
+    const eye = monster3EyeOrigin(enemy);
+    ctx.setLineDash([8, 6]);
+    ctx.fillStyle = "rgba(255, 157, 81, 0.025)";
+    ctx.strokeStyle = "rgba(255, 172, 99, 0.22)";
+    ctx.lineWidth = 1;
+    ctx.fillRect(eye.x - enemy.attackRange, eye.y - 640, enemy.attackRange * 2, 1280);
+    ctx.strokeRect(eye.x - enemy.attackRange, eye.y - 640, enemy.attackRange * 2, 1280);
+    ctx.restore();
+    return;
+  }
   if (enemy.kind === "monster2") {
     const direction = (enemy.state === "inhale" || enemy.state === "shoot"
       ? enemy.attackDirection : enemy.facing) || -1;
@@ -1378,9 +1449,43 @@ function drawMonster2Attack(enemy) {
   ctx.restore();
 }
 
+function drawMonster3Charge(enemy) {
+  if (enemy.kind !== "monster3" || enemy.state !== "charge") return;
+  const eye = monster3EyeOrigin(enemy);
+  const progress = Math.max(0, Math.min(1,
+    1 - enemy.stateTimer / enemy.chargeDuration,
+  ));
+  const pulse = 0.78 + Math.sin(gameTime * 28) * 0.22;
+  ctx.save();
+  ctx.translate(pixelSnap(eye.x), pixelSnap(eye.y));
+  ctx.globalCompositeOperation = "lighter";
+  ctx.shadowColor = "#ff7944";
+  ctx.shadowBlur = 10 + progress * 18;
+  ctx.fillStyle = `rgba(255, 89, 42, ${0.35 + progress * 0.45})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, (6 + progress * 10) * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 5;
+  ctx.fillStyle = "#fff4b5";
+  ctx.fillRect(-2, -2, 4, 4);
+  ctx.fillStyle = "#ffb060";
+  for (let index = 0; index < 8; index += 1) {
+    const angle = index * Math.PI / 4 + gameTime * 1.6;
+    const radius = 28 - progress * 17;
+    ctx.fillRect(
+      pixelSnap(Math.cos(angle) * radius),
+      pixelSnap(Math.sin(angle) * radius),
+      3 + progress * 2,
+      3 + progress * 2,
+    );
+  }
+  ctx.restore();
+}
+
 function drawEnemy(enemy) {
   const sprite = enemySprites[enemy.kind];
   const isMonster2 = enemy.kind === "monster2";
+  const isMonster3 = enemy.kind === "monster3";
   const pose = enemySpritePose(enemy);
 
   ctx.save();
@@ -1389,10 +1494,12 @@ function drawEnemy(enemy) {
     pose.feetY,
   );
   ctx.translate(pose.hitOffsetX, 0);
-  ctx.fillStyle = "rgba(72, 255, 48, 0.08)";
-  ctx.fillRect(-pixelSnap(enemy.width * 0.55), -6, pixelSnap(enemy.width * 1.1), 6);
-  ctx.fillStyle = "rgba(72, 255, 48, 0.18)";
-  ctx.fillRect(-pixelSnap(enemy.width * 0.42), -4, pixelSnap(enemy.width * 0.84), 4);
+  if (!isMonster3) {
+    ctx.fillStyle = "rgba(72, 255, 48, 0.08)";
+    ctx.fillRect(-pixelSnap(enemy.width * 0.55), -6, pixelSnap(enemy.width * 1.1), 6);
+    ctx.fillStyle = "rgba(72, 255, 48, 0.18)";
+    ctx.fillRect(-pixelSnap(enemy.width * 0.42), -4, pixelSnap(enemy.width * 0.84), 4);
+  }
   const spriteDirection = enemy.facing * (enemy.spriteFacing ?? 1);
   ctx.transform(spriteDirection * pose.scaleX, 0, 0, pose.scaleY, 0, 0);
 
@@ -1416,6 +1523,7 @@ function drawEnemy(enemy) {
   }
   ctx.restore();
   if (isMonster2) drawMonster2Attack(enemy);
+  if (isMonster3) drawMonster3Charge(enemy);
   drawMonsterHealthGauge(enemy, pose);
 }
 
@@ -1466,6 +1574,7 @@ function drawTurretDamageCracks(turret) {
 
 function drawTurret(turret) {
   const bottomY = turret.y + turret.height;
+  const visualBottomY = bottomY + TURRET.visualGroundOffset;
   const charge = turret.active && turret.burstShotsRemaining === 0 && turret.fireTimer <= TURRET.chargeDuration
     ? Math.max(0, Math.min(1, 1 - turret.fireTimer / TURRET.chargeDuration))
     : 0;
@@ -1476,7 +1585,7 @@ function drawTurret(turret) {
   ctx.save();
   ctx.translate(
     pixelSnap(turret.x + turret.width / 2 - turret.facing * recoil * 5),
-    pixelSnap(bottomY),
+    pixelSnap(visualBottomY),
   );
   ctx.scale(turret.facing, 1);
   if (hitPulse > 0) ctx.filter = "brightness(1.8) saturate(1.35)";
@@ -1505,7 +1614,7 @@ function drawTurret(turret) {
 
   drawCombatantHealthBar(
     turret.x + turret.width / 2,
-    bottomY - TURRET.spriteHeight + TURRET.spriteBottomOffset - 13,
+    visualBottomY - TURRET.spriteHeight + TURRET.spriteBottomOffset - 13,
     Math.max(58, Math.min(72, TURRET.spriteWidth * 0.72)),
     turret.hp,
     turret.maxHp,
@@ -1646,51 +1755,135 @@ function drawMonster2Fireball(bullet) {
   ctx.restore();
 }
 
+function paintPlayerProjectile(context, shimmer = 1) {
+  context.lineCap = "round";
+  context.shadowColor = "#b35cff";
+  context.shadowBlur = 20 * shimmer;
+  context.strokeStyle = "rgba(181, 108, 255, 0.72)";
+  context.lineWidth = 8.5 * shimmer;
+  context.beginPath();
+  context.moveTo(-19, 0);
+  context.lineTo(14, 0);
+  context.stroke();
+  context.shadowBlur = 8;
+  context.strokeStyle = "#c996ff";
+  context.lineWidth = 4.5;
+  context.stroke();
+  context.shadowBlur = 0;
+  context.strokeStyle = "#fffaff";
+  context.lineWidth = 2;
+  context.stroke();
+
+  context.strokeStyle = "rgba(185, 124, 255, 0.42)";
+  context.lineWidth = 2.25 * shimmer;
+  context.beginPath();
+  context.moveTo(-36, 0);
+  context.lineTo(-20, 0);
+  context.stroke();
+  context.shadowBlur = 5;
+  context.globalAlpha *= shimmer;
+  context.fillStyle = "#eddaff";
+  context.fillRect(-26, -5, 2, 2);
+  context.fillRect(-34, 3, 2, 2);
+  context.fillStyle = "#ffffff";
+  context.fillRect(5, -1, 8, 2);
+  context.fillRect(8, -4, 2, 8);
+}
+
+let playerProjectileSprite = null;
+let playerProjectileSpriteAttempted = false;
+
+function cachedCanvasSprite(cache, key, width, height, paint) {
+  if (cache.has(key)) return cache.get(key);
+  const sprite = typeof OffscreenCanvas === "function"
+    ? new OffscreenCanvas(width * 2, height * 2)
+    : typeof document !== "undefined" ? document.createElement?.("canvas") : null;
+  if (!sprite) return null;
+  sprite.width = width * 2;
+  sprite.height = height * 2;
+  const spriteContext = sprite.getContext?.("2d");
+  if (!spriteContext) return null;
+  spriteContext.scale(2, 2);
+  paint(spriteContext);
+  cache.set(key, sprite);
+  return sprite;
+}
+
+function getPlayerProjectileSprite() {
+  if (playerProjectileSpriteAttempted) return playerProjectileSprite;
+  playerProjectileSpriteAttempted = true;
+  const sprite = typeof OffscreenCanvas === "function"
+    ? new OffscreenCanvas(224, 120)
+    : document.createElement?.("canvas");
+  if (!sprite) return null;
+  sprite.width = 224;
+  sprite.height = 120;
+  const spriteContext = sprite.getContext?.("2d");
+  if (!spriteContext) return null;
+  spriteContext.scale(2, 2);
+  spriteContext.translate(56, 30);
+  spriteContext.globalCompositeOperation = "lighter";
+  paintPlayerProjectile(spriteContext);
+  playerProjectileSprite = sprite;
+  return sprite;
+}
+
 function drawProjectiles() {
+  const playerSprite = bullets.length > 0 ? getPlayerProjectileSprite() : null;
   for (const bullet of bullets) {
+    if (
+      bullet.x < cameraX - 100 || bullet.x > cameraX + WIDTH + 100 ||
+      bullet.y < cameraY - 100 || bullet.y > cameraY + HEIGHT + 100
+    ) continue;
     const shimmer = 0.9 + Math.sin(gameTime * 12 + bullet.x * 0.008 + bullet.y * 0.004) * 0.1;
     ctx.save();
     ctx.translate(bullet.x, bullet.y);
     ctx.rotate(Math.atan2(bullet.vy, bullet.vx));
     ctx.globalCompositeOperation = "lighter";
-    ctx.lineCap = "round";
-    ctx.shadowColor = "#b35cff";
-    ctx.shadowBlur = 20 * shimmer;
-    ctx.strokeStyle = "rgba(181, 108, 255, 0.72)";
-    ctx.lineWidth = 8.5 * shimmer;
-    ctx.beginPath();
-    ctx.moveTo(-19, 0);
-    ctx.lineTo(14, 0);
-    ctx.stroke();
-    ctx.shadowBlur = 8;
-    ctx.strokeStyle = "#c996ff";
-    ctx.lineWidth = 4.5;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = "#fffaff";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.strokeStyle = "rgba(185, 124, 255, 0.42)";
-    ctx.lineWidth = 2.25 * shimmer;
-    ctx.beginPath();
-    ctx.moveTo(-36, 0);
-    ctx.lineTo(-20, 0);
-    ctx.stroke();
-    ctx.shadowBlur = 5;
-    ctx.globalAlpha *= shimmer;
-    ctx.fillStyle = "#eddaff";
-    ctx.fillRect(-26, -5, 2, 2);
-    ctx.fillRect(-34, 3, 2, 2);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(5, -1, 8, 2);
-    ctx.fillRect(8, -4, 2, 8);
+    if (playerSprite) {
+      ctx.globalAlpha *= shimmer;
+      ctx.drawImage(playerSprite, -56, -30, 112, 60);
+    } else {
+      paintPlayerProjectile(ctx, shimmer);
+    }
     ctx.restore();
   }
 
   for (const bullet of enemyBullets) {
+    if (
+      bullet.x < cameraX - 100 || bullet.x > cameraX + WIDTH + 100 ||
+      bullet.y < cameraY - 100 || bullet.y > cameraY + HEIGHT + 100
+    ) continue;
     if (bullet.kind === "monster2-fireball") {
       drawMonster2Fireball(bullet);
+      continue;
+    }
+    if (bullet.kind === "monster3-laser") {
+      const pulse = 0.85 + Math.sin(gameTime * 32) * 0.15;
+      ctx.save();
+      ctx.translate(bullet.x, bullet.y);
+      ctx.rotate(Math.atan2(bullet.vy, bullet.vx));
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round";
+      ctx.shadowColor = "#ff6c40";
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = "rgba(255, 91, 46, 0.45)";
+      ctx.lineWidth = 15 * pulse;
+      ctx.beginPath();
+      ctx.moveTo(-34, 0);
+      ctx.lineTo(14, 0);
+      ctx.stroke();
+      ctx.shadowBlur = 7;
+      ctx.strokeStyle = "#ffac62";
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "#fff6bd";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.fillStyle = "#fff8d4";
+      ctx.fillRect(11, -2, 6, 4);
+      ctx.restore();
       continue;
     }
     if (bullet.kind === "turret-laser") {
@@ -1698,23 +1891,23 @@ function drawProjectiles() {
       ctx.save();
       ctx.translate(bullet.x, bullet.y);
       ctx.globalCompositeOperation = "lighter";
-      ctx.shadowColor = "#7512ad";
+      ctx.shadowColor = "#dc216f";
       ctx.shadowBlur = 22;
-      ctx.fillStyle = "rgba(52, 3, 78, 0.92)";
+      ctx.fillStyle = "rgba(91, 8, 56, 0.94)";
       ctx.beginPath();
       ctx.arc(0, 0, 15 * pulse, 0, Math.PI * 2);
       ctx.fill();
       const orb = ctx.createRadialGradient(-3, -4, 1, 0, 0, 12);
-      orb.addColorStop(0, "#fff3ff");
-      orb.addColorStop(0.24, "#e293ff");
-      orb.addColorStop(0.58, "#9b2bdd");
-      orb.addColorStop(1, "#380752");
+      orb.addColorStop(0, "#fff3f8");
+      orb.addColorStop(0.24, "#ff8abd");
+      orb.addColorStop(0.58, "#d93482");
+      orb.addColorStop(1, "#5b103c");
       ctx.shadowBlur = 11;
       ctx.fillStyle = orb;
       ctx.beginPath();
       ctx.arc(0, 0, 11 * pulse, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "rgba(237, 180, 255, 0.9)";
+      ctx.strokeStyle = "rgba(255, 160, 204, 0.92)";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(0, 0, 13.5 * pulse, 0, Math.PI * 2);
@@ -1797,6 +1990,68 @@ function drawCombatExplosionFlash(particle) {
   ctx.restore();
 }
 
+function drawPlayerImpactFlash(particle) {
+  const remaining = Math.max(0, particle.life / particle.maxLife);
+  const progress = 1 - remaining;
+  const reach = 20 + progress * 90;
+  ctx.save();
+  ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = Math.pow(remaining, 1.35);
+  const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 38 + progress * 20);
+  glow.addColorStop(0, "rgba(255, 255, 255, 0.96)");
+  glow.addColorStop(0.25, particle.color);
+  glow.addColorStop(1, "rgba(66, 23, 81, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(0, 0, 38 + progress * 20, 0, Math.PI * 2);
+  ctx.fill();
+  for (let spoke = 0; spoke < 16; spoke += 1) {
+    ctx.save();
+    ctx.rotate(spoke * Math.PI / 8);
+    ctx.fillStyle = spoke % 2 === 0 ? "#fff5ec" : particle.color;
+    const length = 18 + (spoke % 3) * 7;
+    const thickness = spoke % 2 === 0 ? 4 : 3;
+    ctx.fillRect(pixelSnap(reach * 0.28), -thickness / 2, length, thickness);
+    ctx.fillRect(pixelSnap(reach * 0.84), -1, 7, 2);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawHeartPickupFlash(particle) {
+  const remaining = Math.max(0, particle.life / particle.maxLife);
+  const progress = 1 - remaining;
+  const radius = particle.size * (0.38 + progress * 0.72);
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = Math.pow(remaining, 1.15);
+  const halo = ctx.createRadialGradient(
+    particle.x,
+    particle.y,
+    1,
+    particle.x,
+    particle.y,
+    radius,
+  );
+  halo.addColorStop(0, "rgba(255, 255, 255, 1)");
+  halo.addColorStop(0.2, "rgba(255, 211, 226, 0.96)");
+  halo.addColorStop(0.52, "rgba(255, 83, 137, 0.62)");
+  halo.addColorStop(1, "rgba(255, 43, 111, 0)");
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(particle.x, particle.y, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.translate(particle.x, particle.y);
+  const heartGrowth = 1 + progress * 0.72;
+  ctx.scale(heartGrowth, heartGrowth);
+  ctx.shadowColor = "#ff79a7";
+  ctx.shadowBlur = 22 * remaining;
+  drawPixelHeart(-14, -12, 1, 4);
+  ctx.restore();
+}
+
 function drawOrganicDebris(particle) {
   const grounded = particle.groundDebris;
   const spread = grounded ? 1 - Math.pow(1 - particle.splatProgress, 3) : 0;
@@ -1859,12 +2114,78 @@ function drawCombatDebris(particle) {
   ctx.restore();
 }
 
+const lightRaySpriteCache = new Map();
+
+function lightRaySprite(particle, kind) {
+  const key = `${kind}:${particle.color}:${particle.coreColor}`;
+  return cachedCanvasSprite(lightRaySpriteCache, key, 40, 24, (spriteContext) => {
+    spriteContext.translate(20, 12);
+    spriteContext.globalCompositeOperation = "lighter";
+    spriteContext.shadowColor = particle.color;
+    spriteContext.shadowBlur = kind === "revival" ? 5 : 9;
+    spriteContext.fillStyle = particle.color;
+    if (kind === "revival") {
+      spriteContext.fillRect(-10.4, -0.65, 16, 1.3);
+      spriteContext.shadowBlur = 0;
+      spriteContext.globalAlpha = 0.75;
+      spriteContext.fillStyle = particle.coreColor;
+      spriteContext.fillRect(-5.12, -0.5, 7.68, 1);
+    } else {
+      spriteContext.fillRect(-6.6, -1.44, 12.3, 2.88);
+      spriteContext.shadowBlur = 0;
+      spriteContext.fillStyle = particle.coreColor;
+      spriteContext.fillRect(-1.95, -1, 4.8, 2);
+    }
+  });
+}
+
 function drawParticles() {
   for (const particle of particles) {
+    if (
+      particle.x < cameraX - 120 || particle.x > cameraX + WIDTH + 120 ||
+      particle.y < cameraY - 120 || particle.y > cameraY + HEIGHT + 120
+    ) continue;
     ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife);
     ctx.fillStyle = particle.color;
     if (particle.debris) {
       drawCombatDebris(particle);
+    } else if (particle.impactFlash) {
+      drawPlayerImpactFlash(particle);
+    } else if (particle.heartPickupFlash) {
+      drawHeartPickupFlash(particle);
+    } else if (particle.heartPickupShard) {
+      const remaining = Math.max(0, particle.life / particle.maxLife);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = Math.pow(remaining, 1.15);
+      ctx.translate(pixelSnap(particle.x, 1), pixelSnap(particle.y, 1));
+      ctx.rotate(particle.angle);
+      ctx.shadowColor = "#ff6f9f";
+      ctx.shadowBlur = 7 * remaining;
+      drawPixelHeart(-7, -6, 1, 2);
+      ctx.restore();
+    } else if (particle.impactRay) {
+      const remaining = Math.max(0, particle.life / particle.maxLife);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = Math.pow(remaining, 1.15);
+      ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
+      ctx.rotate(Math.atan2(particle.vy, particle.vx));
+      const raySprite = lightRaySprite(particle, "impact");
+      if (raySprite) {
+        const scale = particle.size / 3;
+        ctx.drawImage(raySprite, -20 * scale, -12 * scale, 40 * scale, 24 * scale);
+      } else {
+        ctx.shadowColor = particle.color;
+        ctx.shadowBlur = 9 * remaining;
+        ctx.fillStyle = particle.color;
+        ctx.fillRect(-particle.size * 2.2, -particle.size * 0.48,
+          particle.size * 4.1, Math.max(2, particle.size * 0.96));
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = particle.coreColor;
+        ctx.fillRect(-particle.size * 0.65, -1, particle.size * 1.6, 2);
+      }
+      ctx.restore();
     } else if (particle.explosionFlash) {
       drawCombatExplosionFlash(particle);
     } else if (particle.explosionSmoke) {
@@ -1921,14 +2242,20 @@ function drawParticles() {
       ctx.globalAlpha = Math.pow(remaining, 1.3);
       ctx.translate(pixelSnap(particle.x, 1), pixelSnap(particle.y, 1));
       ctx.rotate(Math.atan2(particle.vy, particle.vx));
-      ctx.shadowColor = particle.color;
-      ctx.shadowBlur = 5 * remaining;
-      ctx.fillStyle = particle.color;
-      ctx.fillRect(-length * 0.65, -thickness / 2, length, thickness);
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha *= 0.75;
-      ctx.fillStyle = particle.coreColor;
-      ctx.fillRect(-length * 0.32, -0.5, length * 0.48, 1);
+      const raySprite = lightRaySprite(particle, "revival");
+      if (raySprite) {
+        const scale = length / 16;
+        ctx.drawImage(raySprite, -20 * scale, -12 * scale, 40 * scale, 24 * scale);
+      } else {
+        ctx.shadowColor = particle.color;
+        ctx.shadowBlur = 5 * remaining;
+        ctx.fillStyle = particle.color;
+        ctx.fillRect(-length * 0.65, -thickness / 2, length, thickness);
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha *= 0.75;
+        ctx.fillStyle = particle.coreColor;
+        ctx.fillRect(-length * 0.32, -0.5, length * 0.48, 1);
+      }
       ctx.restore();
     } else if (particle.reversalSpark) {
       const sparkSize = Math.max(2, pixelSnap(particle.size, 1));
@@ -1970,10 +2297,11 @@ function drawParticles() {
     } else if (particle.lightImpact) {
       const progress = 1 - Math.max(0, particle.life / particle.maxLife);
       const radius = particle.size * (0.42 + progress * 0.82);
+      const isPlayerRicochet = Boolean(particle.playerRicochet);
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       ctx.shadowColor = particle.color;
-      ctx.shadowBlur = 24 * (1 - progress);
+      ctx.shadowBlur = (isPlayerRicochet ? 34 : 24) * (1 - progress);
       const flash = ctx.createRadialGradient(
         particle.x,
         particle.y,
@@ -1982,15 +2310,20 @@ function drawParticles() {
         particle.y,
         radius,
       );
-      flash.addColorStop(0, "rgba(255, 239, 255, 0.98)");
-      flash.addColorStop(0.28, "rgba(210, 91, 255, 0.76)");
-      flash.addColorStop(1, "rgba(73, 4, 106, 0)");
+      flash.addColorStop(0, isPlayerRicochet
+        ? "rgba(255, 255, 255, 1)" : "rgba(255, 239, 255, 0.98)");
+      flash.addColorStop(isPlayerRicochet ? 0.2 : 0.28, isPlayerRicochet
+        ? "rgba(235, 204, 255, 0.96)" : "rgba(210, 91, 255, 0.76)");
+      flash.addColorStop(1, isPlayerRicochet
+        ? "rgba(128, 45, 214, 0)" : "rgba(73, 4, 106, 0)");
       ctx.fillStyle = flash;
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, radius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = `rgba(226, 137, 255, ${0.82 * (1 - progress)})`;
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = isPlayerRicochet
+        ? `rgba(249, 232, 255, ${0.96 * (1 - progress)})`
+        : `rgba(226, 137, 255, ${0.82 * (1 - progress)})`;
+      ctx.lineWidth = isPlayerRicochet ? 2.5 : 2;
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, radius * 0.86, 0, Math.PI * 2);
       ctx.stroke();
@@ -2119,6 +2452,7 @@ function drawWorld() {
   const shakeY = shake > 0 ? (Math.random() - 0.5) * shake : 0;
   ctx.translate(-cameraX + shakeX, -cameraY + shakeY);
   drawTerrain();
+  drawHeartItems();
   drawBossGate();
   if (TEST_MODE && showMonsterArea) {
     for (const enemy of enemies) {
@@ -2167,21 +2501,109 @@ function drawWorld() {
   drawParticles();
   if (TEST_MODE && showMonsterArea) {
     for (const enemy of enemies) {
-      drawCombatantPhysicsDebug(enemy, enemy.kind === "monster2" ? "#ff96ec" : "#8aff9c");
+      drawCombatantPhysicsDebug(enemy,
+        enemy.kind === "monster3" ? "#ffbd78"
+          : enemy.kind === "monster2" ? "#ff96ec" : "#8aff9c");
     }
     for (const turret of turrets) drawCombatantPhysicsDebug(turret, "#ffd278");
   }
   ctx.restore();
 }
 
+function drawHeartItems() {
+  for (const heart of heartItems) {
+    if (
+      heart.x < cameraX - 90 || heart.x > cameraX + WIDTH + 90 ||
+      heart.y < cameraY - 90 || heart.y > cameraY + HEIGHT + 90
+    ) continue;
+    const floatPhase = gameTime * 2.1 + heart.phase;
+    const y = heart.y + Math.sin(floatPhase) * 9;
+    const glowRadius = 68 + Math.sin(floatPhase * 1.3) * 6;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const halo = ctx.createRadialGradient(heart.x, y, 3, heart.x, y, glowRadius);
+    halo.addColorStop(0, "rgba(255, 232, 239, 0.64)");
+    halo.addColorStop(0.32, "rgba(255, 88, 132, 0.4)");
+    halo.addColorStop(1, "rgba(255, 56, 114, 0)");
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(heart.x, y, glowRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowColor = "#ff719b";
+    ctx.shadowBlur = 32;
+    drawPixelHeart(
+      heart.x - HEART_ITEM_DRAW_SCALE * 3.5,
+      y - HEART_ITEM_DRAW_SCALE * 3,
+      1,
+      HEART_ITEM_DRAW_SCALE,
+    );
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#fff3f5";
+    for (let spark = 0; spark < 4; spark += 1) {
+      const angle = floatPhase * 0.55 + spark * Math.PI / 2;
+      const distance = 35 + Math.sin(floatPhase * 1.5 + spark) * 6;
+      ctx.fillRect(
+        pixelSnap(heart.x + Math.cos(angle) * distance),
+        pixelSnap(y + Math.sin(angle) * distance * 0.65),
+        spark % 2 === 0 ? 4 : 3,
+        spark % 2 === 0 ? 4 : 3,
+      );
+    }
+    ctx.restore();
+  }
+}
+
+function hudHeaderLayout() {
+  const portrait = HEIGHT > WIDTH;
+  const edge = WIDTH < 650 ? 18 : 22;
+  const gap = WIDTH < 650 ? 10 : 12;
+  const mapWidth = Math.round(WIDTH * (portrait ? 0.27 : 0.22));
+  const mapHeight = portrait
+    ? Math.max(104, Math.min(128, Math.round(mapWidth * 0.72)))
+    : Math.max(92, Math.min(112, Math.round(mapWidth * 0.48)));
+  const mapX = WIDTH - edge - mapWidth;
+  const contentWidth = mapX - edge - gap;
+  const scoreWidth = Math.round(contentWidth * 0.34);
+  const stageWidth = Math.round(contentWidth * 0.29);
+  return {
+    top: 22,
+    mainHeight: mapHeight,
+    score: { x: edge, width: scoreWidth },
+    stage: { x: edge + scoreWidth, width: stageWidth },
+    hearts: {
+      x: edge + scoreWidth + stageWidth,
+      width: contentWidth - scoreWidth - stageWidth,
+    },
+    map: { x: mapX, y: 22, width: mapWidth, height: mapHeight },
+  };
+}
+
+function drawMinimapDistanceFog(playerMapX, playerMapY, plotX, plotY, plotWidth, plotHeight) {
+  const fadeRadius = Math.hypot(plotWidth, plotHeight) * 0.55;
+  const clearRadius = Math.max(4, Math.min(plotWidth, plotHeight) * 0.08);
+  const fog = ctx.createRadialGradient(
+    playerMapX,
+    playerMapY,
+    clearRadius,
+    playerMapX,
+    playerMapY,
+    fadeRadius,
+  );
+  fog.addColorStop(0, "rgba(1, 3, 8, 0)");
+  fog.addColorStop(0.25, "rgba(1, 3, 8, 0.06)");
+  fog.addColorStop(0.55, "rgba(1, 3, 8, 0.38)");
+  fog.addColorStop(0.82, "rgba(1, 3, 8, 0.7)");
+  fog.addColorStop(1, "rgba(1, 3, 8, 0.9)");
+  ctx.fillStyle = fog;
+  ctx.fillRect(plotX, plotY, plotWidth, plotHeight);
+}
+
 function drawMinimap(fullMap = false) {
   if (platforms.length === 0) return;
   const expanded = fullMap && TEST_MODE;
 
-  const portrait = HEIGHT > WIDTH;
-  const panelWidth = expanded ? WIDTH - 44 : portrait
-    ? Math.min(226, WIDTH * 0.34)
-    : Math.min(282, WIDTH * 0.24);
+  const header = hudHeaderLayout();
+  const panelWidth = expanded ? WIDTH - 44 : header.map.width;
   const canvasBounds = expanded ? canvas.getBoundingClientRect?.() : null;
   const toolsBounds = expanded ? testControlsElement?.getBoundingClientRect?.() : null;
   const toolsBottom = canvasBounds?.height > 0 && toolsBounds
@@ -2189,9 +2611,9 @@ function drawMinimap(fullMap = false) {
     : 0;
   const panelY = expanded
     ? Math.min(HEIGHT * 0.5, Math.max(128, HEIGHT * 0.2, toolsBottom + 18))
-    : 110;
-  const panelHeight = expanded ? HEIGHT - panelY - HEIGHT * 0.16 - 20 : portrait ? 148 : 138;
-  const panelX = WIDTH - panelWidth - 22;
+    : header.map.y;
+  const panelHeight = expanded ? HEIGHT - panelY - HEIGHT * 0.16 - 20 : header.map.height;
+  const panelX = expanded ? WIDTH - panelWidth - 22 : header.map.x;
   const plotX = panelX + 10;
   const plotY = panelY + 10;
   const plotWidth = panelWidth - 20;
@@ -2273,27 +2695,14 @@ function drawMinimap(fullMap = false) {
     panelWidth * 0.08,
     panelCenterX,
     panelCenterY,
-    panelWidth * 0.72,
+    Math.hypot(panelWidth, panelHeight) * 0.56,
   );
-  panelBackground.addColorStop(0, "rgba(3, 9, 15, 0.54)");
-  panelBackground.addColorStop(0.7, "rgba(3, 8, 14, 0.44)");
-  panelBackground.addColorStop(1, "rgba(3, 8, 14, 0.22)");
+  panelBackground.addColorStop(0, "rgba(3, 9, 15, 0.5)");
+  panelBackground.addColorStop(0.56, "rgba(3, 8, 14, 0.38)");
+  panelBackground.addColorStop(0.82, "rgba(3, 8, 14, 0.12)");
+  panelBackground.addColorStop(1, "rgba(3, 8, 14, 0)");
   ctx.fillStyle = panelBackground;
   ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
-  const panelBorder = ctx.createLinearGradient(
-    panelX,
-    panelY,
-    panelX + panelWidth,
-    panelY + panelHeight,
-  );
-  panelBorder.addColorStop(0, "rgba(107, 214, 238, 0.08)");
-  panelBorder.addColorStop(0.48, "rgba(143, 226, 243, 0.25)");
-  panelBorder.addColorStop(1, "rgba(107, 214, 238, 0.09)");
-  ctx.strokeStyle = panelBorder;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelWidth - 1, panelHeight - 1);
-  ctx.strokeStyle = "rgba(123, 211, 231, 0.07)";
-  ctx.strokeRect(panelX + 2.5, panelY + 2.5, panelWidth - 5, panelHeight - 5);
 
   ctx.beginPath();
   ctx.rect(plotX, plotY, plotWidth, plotHeight);
@@ -2327,6 +2736,11 @@ function drawMinimap(fullMap = false) {
       if ((routeRole === "sub") !== isSubPath) continue;
       const startY = platform.kind === "ramp" ? platform.entryY : platform.y;
       const endY = platform.kind === "ramp" ? platform.exitY : platform.y;
+      if (
+        !expanded &&
+        (platform.end < worldLeft || platform.start > worldRight ||
+          Math.max(startY, endY) < worldTop || Math.min(startY, endY) > worldBottom)
+      ) continue;
       ctx.beginPath();
       ctx.moveTo(mapX(platform.entryX), mapY(startY));
       ctx.lineTo(mapX(platform.exitX), mapY(endY));
@@ -2353,6 +2767,18 @@ function drawMinimap(fullMap = false) {
 
   const playerMapX = mapX(player.x + player.width / 2);
   const playerMapY = mapY(player.y + player.height);
+  // The normal minimap is local navigation: retain nearby detail and let
+  // distant paths disappear gradually. The test-only full map stays clear.
+  if (!expanded) {
+    drawMinimapDistanceFog(
+      playerMapX,
+      playerMapY,
+      plotX,
+      plotY,
+      plotWidth,
+      plotHeight,
+    );
+  }
   const playerGlow = ctx.createRadialGradient(
     playerMapX,
     playerMapY,
@@ -2410,6 +2836,65 @@ const HUD_PIXEL_GLYPHS = {
   T: ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
 };
 
+const HUD_NUMERAL_GLYPHS = {
+  0: ["0111110", "1100011", "1100011", "1100111", "1101011", "1110011", "1100011", "1100011", "0111110"],
+  1: ["0011100", "0111100", "1101100", "0001100", "0001100", "0001100", "0001100", "0001100", "1111111"],
+  2: ["0111110", "1100011", "0000011", "0000110", "0011100", "0110000", "1100000", "1100000", "1111111"],
+  3: ["1111110", "0000011", "0000011", "0011110", "0000011", "0000011", "0000011", "1100011", "0111110"],
+  4: ["1100110", "1100110", "1100110", "1100110", "1111111", "0000110", "0000110", "0000110", "0000110"],
+  5: ["1111111", "1100000", "1100000", "1111110", "0000011", "0000011", "0000011", "1100011", "0111110"],
+  6: ["0111110", "1100011", "1100000", "1111110", "1100011", "1100011", "1100011", "1100011", "0111110"],
+  7: ["1111111", "0000011", "0000110", "0001100", "0011000", "0011000", "0011000", "0011000", "0011000"],
+  8: ["0111110", "1100011", "1100011", "0111110", "1100011", "1100011", "1100011", "1100011", "0111110"],
+  9: ["0111110", "1100011", "1100011", "1100011", "0111111", "0000011", "0000011", "1100011", "0111110"],
+};
+
+const hudGlyphSpriteCache = new Map();
+
+function hudNumeralWidth(text, scale) {
+  return text.length === 0 ? 0 : (text.length * 8 - 1) * scale;
+}
+
+function drawHudNumerals(text, x, y, scale) {
+  for (let digit = 0; digit < text.length; digit += 1) {
+    const glyph = HUD_NUMERAL_GLYPHS[text[digit]];
+    if (!glyph) continue;
+    const sprite = cachedCanvasSprite(
+      hudGlyphSpriteCache,
+      `number:${text[digit]}:${scale}`,
+      7 * scale,
+      9 * scale,
+      (spriteContext) => {
+        for (let row = 0; row < glyph.length; row += 1) {
+          spriteContext.fillStyle = row <= 2 ? "#ffffff" : row >= 7 ? "#a6cdd6" : "#e7f7fa";
+          for (let column = 0; column < glyph[row].length; column += 1) {
+            if (glyph[row][column] === "1") {
+              spriteContext.fillRect(column * scale, row * scale, scale, scale);
+            }
+          }
+        }
+      },
+    );
+    if (sprite) {
+      ctx.drawImage(sprite, pixelSnap(x + digit * 8 * scale, 1), pixelSnap(y, 1),
+        7 * scale, 9 * scale);
+      continue;
+    }
+    for (let row = 0; row < glyph.length; row += 1) {
+      ctx.fillStyle = row <= 2 ? "#ffffff" : row >= 7 ? "#a6cdd6" : "#e7f7fa";
+      for (let column = 0; column < glyph[row].length; column += 1) {
+        if (glyph[row][column] !== "1") continue;
+        ctx.fillRect(
+          pixelSnap(x + (digit * 8 + column) * scale, 1),
+          pixelSnap(y + row * scale, 1),
+          scale,
+          scale,
+        );
+      }
+    }
+  }
+}
+
 function pixelTextWidth(text, scale) {
   if (text.length === 0) return 0;
   return text.length * 5 * scale + (text.length - 1) * scale;
@@ -2427,6 +2912,28 @@ function drawPixelText(text, x, y, scale, color, align = "left") {
 
   for (const character of normalizedText) {
     const glyph = HUD_PIXEL_GLYPHS[character] ?? HUD_PIXEL_GLYPHS[" "];
+    const sprite = cachedCanvasSprite(
+      hudGlyphSpriteCache,
+      `letter:${character}:${scale}:${color}`,
+      5 * scale,
+      7 * scale,
+      (spriteContext) => {
+        spriteContext.fillStyle = color;
+        for (let row = 0; row < glyph.length; row += 1) {
+          for (let column = 0; column < glyph[row].length; column += 1) {
+            if (glyph[row][column] === "1") {
+              spriteContext.fillRect(column * scale, row * scale, scale, scale);
+            }
+          }
+        }
+      },
+    );
+    if (sprite) {
+      ctx.drawImage(sprite, pixelSnap(cursorX, 1), pixelSnap(y, 1),
+        5 * scale, 7 * scale);
+      cursorX += 6 * scale;
+      continue;
+    }
     for (let row = 0; row < glyph.length; row += 1) {
       for (let column = 0; column < glyph[row].length; column += 1) {
         if (glyph[row][column] !== "1") continue;
@@ -2442,7 +2949,7 @@ function drawPixelText(text, x, y, scale, color, align = "left") {
   }
 }
 
-function drawPixelHeart(x, y, fillAmount, scale = 3) {
+function paintPixelHeart(target, x, y, fillAmount, scale) {
   const fill = Math.max(0, Math.min(1, fillAmount));
   const pixels = [
     "0110110",
@@ -2459,51 +2966,73 @@ function drawPixelHeart(x, y, fillAmount, scale = 3) {
       const pixelY = pixelSnap(y + row * scale, 1);
       const filledWidth = Math.min(scale, Math.max(0, 7 * scale * fill - column * scale));
       if (filledWidth < scale) {
-        ctx.fillStyle = "rgba(94, 49, 56, 0.62)";
-        ctx.fillRect(pixelX, pixelY, scale, scale);
+        target.fillStyle = "rgba(73, 91, 104, 0.7)";
+        target.fillRect(pixelX, pixelY, scale, scale);
       }
       if (filledWidth > 0) {
-        ctx.fillStyle = "#ff4f5f";
-        ctx.fillRect(pixelX, pixelY, filledWidth, scale);
+        target.fillStyle = "#ff4f5f";
+        target.fillRect(pixelX, pixelY, filledWidth, scale);
       }
     }
   }
   if (fill <= 0) return;
-  ctx.fillStyle = "#ff98a2";
-  ctx.fillRect(x + scale, y + scale, scale, scale);
+  target.fillStyle = "#ffc3c8";
+  target.fillRect(x + scale, y + scale, scale, scale);
+  if (fill >= 0.75) {
+    target.fillStyle = "#ff8e9b";
+    target.fillRect(x + scale * 4, y + scale * 4, scale, scale);
+  }
+}
+
+function drawPixelHeart(x, y, fillAmount, scale = 3) {
+  const fill = Math.max(0, Math.min(1, fillAmount));
+  const sprite = cachedCanvasSprite(
+    hudGlyphSpriteCache,
+    `heart:${fill}:${scale}`,
+    7 * scale,
+    6 * scale,
+    (spriteContext) => paintPixelHeart(spriteContext, 0, 0, fill, scale),
+  );
+  if (sprite) {
+    ctx.drawImage(sprite, pixelSnap(x, 1), pixelSnap(y, 1),
+      7 * scale, 6 * scale);
+  } else {
+    paintPixelHeart(ctx, x, y, fill, scale);
+  }
 }
 
 function drawHud() {
-  const panelX = 22;
-  const panelY = 22;
-  const panelWidth = WIDTH - 44;
-  const panelHeight = 74;
-  const valueScale = WIDTH > HEIGHT ? 4 : 3;
-  const labelScale = WIDTH > HEIGHT ? 3 : 2;
-  const valueY = panelY + (panelHeight - 7 * valueScale) / 2;
-  const labelY = panelY + (panelHeight - 7 * labelScale) / 2;
-  const textGap = labelScale * 2;
+  const header = hudHeaderLayout();
+  const glyphScale = WIDTH >= 1100 ? 3 : 2;
+  const valueY = header.top + (header.mainHeight - 9 * glyphScale) / 2;
+  const labelY = header.top + (header.mainHeight - 7 * glyphScale) / 2;
+  const textGap = glyphScale * 3;
+  const scoreText = String(player.score).padStart(3, "0");
+  const stageText = String(CURRENT_STAGE).padStart(2, "0");
+  const scoreWidth = pixelTextWidth("SCORE", glyphScale) + textGap +
+    hudNumeralWidth(scoreText, glyphScale);
+  const scoreX = header.score.x + (header.score.width - scoreWidth) / 2;
 
   ctx.save();
+  ctx.shadowColor = "rgba(101, 218, 230, 0.35)";
+  ctx.shadowBlur = 5;
   drawPixelText(
     "SCORE",
-    panelX + 18,
+    scoreX,
     labelY,
-    labelScale,
-    "#f7d66d",
+    glyphScale,
+    "#99dce5",
   );
-  drawPixelText(
-    String(player.score).padStart(3, "0"),
-    panelX + 18 + pixelTextWidth("SCORE", labelScale) + textGap,
+  drawHudNumerals(
+    scoreText,
+    scoreX + pixelTextWidth("SCORE", glyphScale) + textGap,
     valueY,
-    valueScale,
-    "#f7d66d",
+    glyphScale,
   );
 
-  const stageCenterX = panelX + panelWidth / 2;
-  const stageLabelWidth = pixelTextWidth("STAGE", labelScale);
-  const stageValue = String(CURRENT_STAGE).padStart(2, "0");
-  const stageValueWidth = pixelTextWidth(stageValue, valueScale);
+  const stageCenterX = header.stage.x + header.stage.width / 2;
+  const stageLabelWidth = pixelTextWidth("STAGE", glyphScale);
+  const stageValueWidth = hudNumeralWidth(stageText, glyphScale);
   const stageStartX = (
     stageCenterX -
     (stageLabelWidth + textGap + stageValueWidth) / 2
@@ -2512,28 +3041,35 @@ function drawHud() {
     "STAGE",
     stageStartX,
     labelY,
-    labelScale,
-    "#eef8fa",
+    glyphScale,
+    "#99dce5",
   );
-  drawPixelText(
-    stageValue,
+  drawHudNumerals(
+    stageText,
     stageStartX + stageLabelWidth + textGap,
     valueY,
-    valueScale,
-    "#eef8fa",
+    glyphScale,
   );
 
-  const heartScale = 3;
+  ctx.shadowColor = "rgba(255, 87, 117, 0.44)";
+  ctx.shadowBlur = 6;
+  const heartScale = glyphScale;
   const heartWidth = 7 * heartScale;
-  const heartGap = 7;
-  const maximumHearts = 3;
-  const heartsWidth = maximumHearts * heartWidth + (maximumHearts - 1) * heartGap;
-  const heartsX = panelX + panelWidth - heartsWidth - 18;
-  const heartsY = panelY + (panelHeight - 6 * heartScale) / 2;
+  const heartGap = Math.round(glyphScale * 2.3);
+  const maximumHearts = Math.min(PLAYER_MAX_HEARTS, player.maxHp ?? 3);
+  const heartsPerRow = WIDTH > HEIGHT ? PLAYER_MAX_HEARTS : 5;
+  const heartRows = Math.ceil(maximumHearts / heartsPerRow);
+  const rowHeight = 6 * heartScale + 6;
+  const heartsY = header.top + (header.mainHeight - heartRows * rowHeight + 6) / 2;
   for (let heart = 0; heart < maximumHearts; heart += 1) {
+    const row = Math.floor(heart / heartsPerRow);
+    const column = heart % heartsPerRow;
+    const rowCount = Math.min(heartsPerRow, maximumHearts - row * heartsPerRow);
+    const rowWidth = rowCount * heartWidth + (rowCount - 1) * heartGap;
+    const heartsX = header.hearts.x + (header.hearts.width - rowWidth) / 2;
     drawPixelHeart(
-      heartsX + heart * (heartWidth + heartGap),
-      heartsY,
+      heartsX + column * (heartWidth + heartGap),
+      heartsY + row * rowHeight,
       Math.max(0, Math.min(1, player.hp - heart)),
       heartScale,
     );

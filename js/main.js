@@ -4,17 +4,19 @@
 
 function particleGroundCollision(particle, previousX, previousY) {
   const bottomOffset = particle.debris ? particle.debrisHeight / 2 : 0;
-  return platformsAt(particle.x)
-    .map((platform) => ({
-      platform,
-      surfaceY: platformSurfaceY(platform, particle.x),
-      previousSurfaceY: platformSurfaceY(platform, previousX),
-    }))
-    .filter((candidate) => (
-      previousY + bottomOffset <= candidate.previousSurfaceY + 2 &&
-      particle.y + bottomOffset >= candidate.surfaceY - 2
-    ))
-    .sort((first, second) => first.surfaceY - second.surfaceY)[0];
+  let nearest = null;
+  const candidates = typeof platforms === "undefined" ? platformsAt(particle.x) : platforms;
+  for (const platform of candidates) {
+    if (particle.x < platform.start || particle.x >= platform.end) continue;
+    const surfaceY = platformSurfaceY(platform, particle.x);
+    if (nearest && surfaceY >= nearest.surfaceY) continue;
+    const previousSurfaceY = platformSurfaceY(platform, previousX);
+    if (
+      previousY + bottomOffset <= previousSurfaceY + 2 &&
+      particle.y + bottomOffset >= surfaceY - 2
+    ) nearest = { platform, surfaceY, previousSurfaceY };
+  }
+  return nearest;
 }
 
 function updateParticles(dt) {
@@ -42,6 +44,9 @@ function updateParticles(dt) {
     particle.y += particle.vy * dt;
     particle.vy += (particle.gravity ?? 600) * dt;
     particle.life -= dt;
+    if (particle.heartPickupShard) {
+      particle.angle += particle.angularVelocity * dt;
+    }
     if (particle.debris) {
       particle.angle += particle.angularVelocity * dt;
       if (particle.vy > 0) {
@@ -96,7 +101,7 @@ function updateParticles(dt) {
 function update(dt) {
   if (TEST_MODE && showFullMap) return;
   gameTime += dt;
-  shake = Math.max(0, shake - dt * 28);
+  shake = Math.max(0, shake - dt * 48);
   if (gameOver) {
     if (playerIsDown()) {
       updatePlayer(dt);
@@ -105,12 +110,32 @@ function update(dt) {
     return;
   }
   updatePlayer(dt);
+  updateHeartItems();
   updateTurrets(dt);
   updateMidBosses(dt);
   updateBullets(dt);
   updateEnemies(dt);
   updateElectricWires();
   updateParticles(dt);
+}
+
+function updateHeartItems() {
+  if (playerIsDown()) return;
+  const hitbox = getPlayerHitbox();
+  for (let index = heartItems.length - 1; index >= 0; index -= 1) {
+    const heart = heartItems[index];
+    if (!overlapsCircleRect(heart, hitbox)) continue;
+    if (player.maxHp < PLAYER_MAX_HEARTS) {
+      player.maxHp += 1;
+      player.hp = Math.min(player.maxHp, player.hp + 1);
+    } else if (player.hp < player.maxHp) {
+      player.hp = Math.min(player.maxHp, player.hp + 1);
+    } else {
+      continue;
+    }
+    emitHeartPickupBurst(heart);
+    heartItems.splice(index, 1);
+  }
 }
 
 function draw() {

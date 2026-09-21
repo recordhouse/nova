@@ -43,15 +43,16 @@ function createGame() {
 function read(scope, source) { return vm.runInContext(source, scope); }
 function rects(calls) { return calls.filter((call) => call.operation === "fillRect"); }
 
-test("straight road panels use hard-edged pixel tiles, including a partial last tile", () => {
+test("straight road panels use fine one-pixel accents instead of chunky blocks", () => {
   const { scope, calls } = createGame();
   vm.runInContext("globalThis.road=addPlatform(0,200,0); road.style=0; cameraX=0", scope);
   scope.drawStationPanels(scope.road);
   const panels = rects(calls);
   assert.ok(panels.length > 12);
-  assert.ok(panels.some((call) => call.color === "#324856"));
+  assert.ok(panels.some((call) => call.color === "rgba(67, 96, 112, 0.62)"));
   assert.equal(calls.some((call) => call.operation === "strokeRect"), false);
-  assert.ok(panels.every((call) => call.args[3] % 2 === 0));
+  assert.ok(panels.filter((call) => call.args[3] === 1).length >= 8);
+  assert.ok(panels.every((call) => Number.isInteger(call.args[0]) && Number.isInteger(call.args[1])));
 });
 
 test("pixel texture is deterministic and only draws tiles near the camera", () => {
@@ -79,11 +80,12 @@ test("flat, sloped and triangular roads get pixel rails without changing their g
   const before = read(scope, "JSON.stringify(platforms)");
   scope.drawTerrain();
   const all = rects(calls);
-  const mainRail = all.filter((call) => call.color === "#69e2ee");
-  const subRail = all.filter((call) => call.color === "#c9aeff");
+  const mainRail = all.filter((call) => call.color === "rgba(105, 226, 238, 0.74)");
+  const subRail = all.filter((call) => call.color === "rgba(201, 174, 255, 0.72)");
   assert.ok(mainRail.some((call) => call.args[2] >= 200), "flat road keeps a pixel cap");
-  const rampSteps = mainRail.filter((call) => call.args[2] === 8);
-  assert.ok(rampSteps.length >= 15, "ramp rail is built from short pixel steps");
+  assert.ok(mainRail.every((call) => call.args[3] === 1), "rail highlights stay thin");
+  const rampSteps = mainRail.filter((call) => call.args[2] === 6);
+  assert.ok(rampSteps.length >= 20, "ramp rail is built from finer pixel steps");
   assert.ok(new Set(rampSteps.map((call) => call.args[1])).size > 5);
   assert.ok(subRail.some((call) => call.args[2] >= 200), "triangle keeps the sub-path palette");
   assert.ok(all.some((call) => call.color === "#a286d0"), "sub-path tiles keep purple highlights");

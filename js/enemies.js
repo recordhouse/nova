@@ -572,6 +572,82 @@ function updateMonster2(enemy, dt, playerHitbox, playerCenterX, playerFeetY) {
   }
 }
 
+function monster3EyeOrigin(enemy) {
+  return {
+    x: enemy.x + enemy.width / 2 + enemy.facing * 19,
+    y: enemy.y + enemy.height - 98,
+  };
+}
+
+function fireMonster3Laser(enemy, playerHitbox) {
+  const eye = monster3EyeOrigin(enemy);
+  const targetX = playerHitbox.x + playerHitbox.width / 2;
+  const targetY = playerHitbox.y + playerHitbox.height / 2;
+  const distance = Math.max(1, Math.hypot(targetX - eye.x, targetY - eye.y));
+  const directionX = (targetX - eye.x) / distance;
+  const directionY = (targetY - eye.y) / distance;
+  enemyBullets.push({
+    kind: "monster3-laser",
+    x: eye.x + directionX * 14,
+    y: eye.y + directionY * 14,
+    vx: directionX * enemy.laserSpeed,
+    vy: directionY * enemy.laserSpeed,
+    radius: enemy.laserRadius,
+    maxRicochets: enemy.laserRicochets,
+    ricochetColor: "#ffad68",
+  });
+  burst(eye.x, eye.y, "#ffe5a0", 10, 125);
+}
+
+function updateMonster3(enemy, dt, playerHitbox, playerCenterX) {
+  enemy.y = enemy.hoverBaseY + Math.sin(
+    enemy.animationTime * enemy.hoverSpeed + enemy.animationPhase,
+  ) * enemy.hoverAmplitude;
+  const patrolX = enemy.hoverAnchorX + Math.sin(
+    enemy.animationTime * 0.68 + enemy.animationPhase,
+  ) * enemy.patrolRadius;
+  const minX = enemy.platform.start + 20;
+  const maxX = enemy.platform.end - enemy.width - 20;
+  const targetX = Math.max(minX, Math.min(maxX, patrolX));
+  const knockback = enemy.hitKnockbackVelocity;
+  const nextX = Math.max(minX, Math.min(maxX,
+    enemy.x + Math.max(-75 * dt, Math.min(75 * dt, targetX - enemy.x)) + knockback * dt,
+  ));
+  if (!enemyRectOverlapsEnemy(nextX, enemy.y, enemy.width, enemy.height, enemy)) {
+    enemy.moving = Math.abs(nextX - enemy.x) > 0.5;
+    enemy.x = nextX;
+  }
+  if (Math.abs(knockback) > 1) {
+    enemy.hitKnockbackVelocity *= Math.exp(-enemy.hitKnockbackDamping * dt);
+    enemy.hoverAnchorX = Math.max(minX, Math.min(maxX,
+      enemy.hoverAnchorX + knockback * dt,
+    ));
+  }
+
+  if (enemy.state === "charge") {
+    enemy.stateTimer -= dt;
+    if (enemy.stateTimer > 0) return;
+    fireMonster3Laser(enemy, playerHitbox);
+    enemy.state = "hover";
+    enemy.stateTimer = 0;
+    enemy.attackTimer = enemy.attackCooldownMin +
+      Math.random() * (enemy.attackCooldownMax - enemy.attackCooldownMin);
+    return;
+  }
+
+  const eye = monster3EyeOrigin(enemy);
+  const playerCenterY = playerHitbox.y + playerHitbox.height / 2;
+  const playerNearby = Math.abs(playerCenterX - eye.x) <= enemy.attackRange &&
+    Math.abs(playerCenterY - eye.y) <= 640;
+  const onScreen = eye.x >= cameraX - 80 && eye.x <= cameraX + WIDTH + 80 &&
+    eye.y >= cameraY - 80 && eye.y <= cameraY + HEIGHT + 80;
+  if (playerNearby && onScreen && enemy.attackTimer <= 0) {
+    enemy.facing = Math.sign(playerCenterX - enemy.x - enemy.width / 2) || enemy.facing;
+    enemy.state = "charge";
+    enemy.stateTimer = enemy.chargeDuration;
+  }
+}
+
 function updateEnemies(dt) {
   const playerHitbox = getPlayerHitbox();
   const playerCenterX = playerHitbox.x + playerHitbox.width / 2;
@@ -588,6 +664,11 @@ function updateEnemies(dt) {
       enemy.revivalKnockback = false;
     }
     enemy.moving = false;
+
+    if (enemy.kind === "monster3") {
+      updateMonster3(enemy, dt, playerHitbox, playerCenterX);
+      continue;
+    }
 
     if (enemy.state !== "jump") {
       enemy.y = enemySurfaceY(enemy) - enemy.height;
@@ -691,24 +772,16 @@ function updateEnemies(dt) {
       player.invincible <= 0 &&
       enemy.attackTimer <= 0 &&
       overlapsRects(getEnemyHitbox(enemy), playerHitbox) &&
-      takePlayerDamage(1)
+      takePlayerDamage(1, enemy)
     ) {
       enemy.attackTimer = enemy.attackCooldown;
       enemy.jumpHit = true;
-      shake = 12;
-      burst(
-        playerHitbox.x + playerHitbox.width / 2,
-        playerHitbox.y + playerHitbox.height / 2,
-        "#ff704f",
-        16,
-        250,
-      );
     }
   }
 }
 
 function turretMuzzlePosition(turret) {
-  const bottomY = turret.y + turret.height;
+  const bottomY = turret.y + turret.height + TURRET.visualGroundOffset;
   return {
     x: turret.x + turret.width / 2 + turret.facing * TURRET.spriteWidth * 0.37,
     y: (
@@ -742,15 +815,15 @@ function fireTurretLaser(turret, aimedAtPlayer) {
     radius: TURRET.laserRadius,
     ricochets: 0,
     maxRicochets: TURRET.laserRicochets,
-    ricochetColor: "#8a24d6",
+    ricochetColor: "#dc347f",
   });
   turret.recoilTimer = 0.2;
   if (
     muzzle.x >= cameraX - 80 && muzzle.x <= cameraX + WIDTH + 80 &&
     muzzle.y >= cameraY - 80 && muzzle.y <= cameraY + HEIGHT + 80
   ) {
-    burst(muzzle.x, muzzle.y, "#bd4fff", 16, 185);
-    burst(muzzle.x, muzzle.y, "#421063", 9, 115);
+    burst(muzzle.x, muzzle.y, "#f04b96", 16, 185);
+    burst(muzzle.x, muzzle.y, "#6d153f", 9, 115);
     shake = Math.max(shake, 7);
   }
 }
@@ -794,7 +867,7 @@ function updateTurrets(dt) {
           burst(
             muzzle.x,
             muzzle.y,
-            chargeProgress > 0.68 ? "#d45cff" : "#7117aa",
+            chargeProgress > 0.68 ? "#ff609f" : "#9a245f",
             1,
             35 + chargeProgress * 35,
           );
@@ -890,11 +963,9 @@ function updateMidBosses(dt) {
 
     if (
       player.invincible <= 0 &&
-      overlapsRects(boss, playerHitbox) &&
-      takePlayerDamage(1)
+      overlapsRects(boss, playerHitbox)
     ) {
-      shake = 14;
-      burst(playerCenterX, playerCenterY, "#ff65d9", 18, 275);
+      takePlayerDamage(1, { x: bossCenterX, y: bossCenterY, kind: "boss" });
     }
   }
 }

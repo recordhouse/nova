@@ -2,14 +2,25 @@
 
 // Player fire, projectile collision, ricochets, and bullet updates.
 
-function takePlayerDamage(amount) {
+function takePlayerDamage(amount, source = null) {
   if (gameOver || player.hp <= 0 || player.invincible > 0 || playerIsDown() ||
       (TEST_MODE && testInvincibility)) return false;
+  const hitbox = getPlayerHitbox();
+  const playerCenterX = hitbox.x + hitbox.width / 2;
+  const sourceCenterX = source && Number.isFinite(source.x)
+    ? source.x + (source.width ?? 0) / 2
+    : playerCenterX;
+  const knockbackDirection = source
+    ? Math.sign(playerCenterX - sourceCenterX) || Math.sign(source.vx ?? 0) || -player.facing
+    : 0;
+  if (source) emitPlayerHitImpact(source);
   player.hp = Math.max(0, player.hp - amount);
   player.downPhase = "fall";
   player.downTime = 0;
   player.invincible = PLAYER_DOWN_ANIMATION_DURATION + PLAYER_DOWN_HOLD_DURATION;
-  player.vx = 0;
+  player.hitKnockbackVelocity = knockbackDirection * PLAYER_HIT_KNOCKBACK_SPEED;
+  player.hitKnockbackTime = knockbackDirection ? PLAYER_HIT_KNOCKBACK_DURATION : 0;
+  player.vx = player.hitKnockbackVelocity;
   player.vy = Math.max(0, player.vy);
   player.reversalDirection = 0;
   player.reversalSparkTimer = 0;
@@ -19,6 +30,52 @@ function takePlayerDamage(amount) {
   jumpQueued = false;
   if (player.hp <= 0) gameOver = true;
   return true;
+}
+
+function emitPlayerHitImpact(source) {
+  const hitbox = getPlayerHitbox();
+  const centerX = hitbox.x + hitbox.width / 2;
+  const centerY = hitbox.y + hitbox.height / 2;
+  const sourceKind = source.kind ?? "boss";
+  const accent = sourceKind === "monster1" ? "#b0ff73"
+    : sourceKind === "monster2-fireball" ? "#ffae68"
+      : sourceKind === "monster3-laser" ? "#ffd58d"
+        : sourceKind === "turret-laser" ? "#ff83b9" : "#ff8edb";
+  const fromX = source.x + (source.width ?? 0) / 2;
+  const fromY = source.y + (source.height ?? 0) / 2;
+  const pushAngle = Math.atan2(centerY - fromY, centerX - fromX);
+  const flashLife = 0.44;
+  particles.push({
+    x: centerX,
+    y: centerY,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life: flashLife,
+    maxLife: flashLife,
+    color: accent,
+    impactFlash: true,
+  });
+  for (let index = 0; index < 32; index += 1) {
+    const angle = index * Math.PI * 2 / 32 + (Math.random() - 0.5) * 0.18;
+    const forwardBias = 1 + Math.max(0, Math.cos(angle - pushAngle)) * 0.42;
+    const speed = (250 + Math.random() * 350) * forwardBias;
+    const life = 0.27 + Math.random() * 0.29;
+    particles.push({
+      x: centerX + Math.cos(angle) * 9,
+      y: centerY + Math.sin(angle) * 9,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      gravity: 0,
+      life,
+      maxLife: life,
+      color: index % 3 === 0 ? "#fff6e9" : accent,
+      coreColor: "#fff8ff",
+      size: 2.2 + Math.random() * 2.8,
+      impactRay: true,
+    });
+  }
+  shake = Math.max(shake, sourceKind === "boss" ? 26 : 22);
 }
 
 function emitPlayerRevival() {
@@ -48,10 +105,24 @@ function emitPlayerRevival() {
   const knockbackArea = { x: centerX, y: centerY, radius: PLAYER_REVIVAL_RADIUS };
   for (const enemy of enemies) {
     if (
-      !enemy.alive || (enemy.kind !== "monster1" && enemy.kind !== "monster2") ||
+      !enemy.alive || !MONSTER_TYPES[enemy.kind] ||
       !overlapsCircleRect(knockbackArea, getEnemyHitbox(enemy))
     ) continue;
     const direction = Math.sign(enemy.x + enemy.width / 2 - centerX) || enemy.facing || 1;
+    const impact = {
+      x: enemy.x + enemy.width / 2,
+      y: enemy.y + enemy.height / 2,
+      vx: direction * PLAYER_REVIVAL_KNOCKBACK_SPEED,
+      vy: 0,
+    };
+    enemy.hp = Math.max(0, enemy.hp - PLAYER_REVIVAL_DAMAGE);
+    burstMonsterFragments(impact, enemy, enemy.hp <= 0);
+    if (enemy.hp <= 0) {
+      enemy.alive = false;
+      player.score += enemy.score;
+      burstCombatantExplosion(enemy, enemy.kind);
+      continue;
+    }
     enemy.hitDirection = direction;
     enemy.hitTimer = PLAYER_REVIVAL_KNOCKBACK_DURATION;
     enemy.hitKnockbackVelocity = direction * PLAYER_REVIVAL_KNOCKBACK_SPEED;
@@ -60,10 +131,46 @@ function emitPlayerRevival() {
       enemy.jumpVx = direction * PLAYER_REVIVAL_KNOCKBACK_SPEED;
       enemy.jumpHit = true;
     } else {
-      enemy.state = "chase";
+      enemy.state = enemy.kind === "monster3" ? "hover" : "chase";
       enemy.stateTimer = 0;
     }
     enemy.attackTimer = Math.max(enemy.attackTimer, 0.6);
+  }
+
+  for (const turret of turrets) {
+    if (!turret.alive || !overlapsCircleRect(knockbackArea, turret)) continue;
+    const direction = Math.sign(turret.x + turret.width / 2 - centerX) || turret.facing || 1;
+    const impact = {
+      x: turret.x + turret.width / 2,
+      y: turret.y + turret.height / 2,
+      vx: direction * PLAYER_REVIVAL_KNOCKBACK_SPEED,
+      vy: 0,
+    };
+    turret.hp = Math.max(0, turret.hp - PLAYER_REVIVAL_DAMAGE);
+    turret.hitTimer = 0.18;
+    burstTurretFragments(impact);
+    if (turret.hp <= 0) {
+      turret.alive = false;
+      player.score += TURRET.score;
+      burstCombatantExplosion(turret, "turret");
+    }
+  }
+
+  for (const boss of midBosses) {
+    if (!boss.alive || !overlapsCircleRect(knockbackArea, boss)) continue;
+    boss.hp = Math.max(0, boss.hp - PLAYER_REVIVAL_DAMAGE);
+    burst(
+      boss.x + boss.width / 2,
+      boss.y + boss.height / 2,
+      "#ff8bf2",
+      boss.hp <= 0 ? 42 : 12,
+      boss.hp <= 0 ? 390 : 210,
+    );
+    if (boss.hp <= 0) {
+      boss.alive = false;
+      player.score += MID_BOSS.score;
+      shake = Math.max(shake, 16);
+    }
   }
   shake = Math.max(shake, 10);
 }
@@ -85,10 +192,68 @@ function burst(x, y, color, count = 10, force = 220) {
   }
 }
 
+function emitHeartPickupBurst(heart) {
+  const centerX = heart.x;
+  const centerY = heart.y + Math.sin(gameTime * 2.1 + (heart.phase ?? 0)) * 9;
+  const flashLife = 0.46;
+  particles.push({
+    x: centerX,
+    y: centerY,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life: flashLife,
+    maxLife: flashLife,
+    size: 76,
+    color: "#ff6f9f",
+    heartPickupFlash: true,
+  });
+
+  for (let shard = 0; shard < 10; shard += 1) {
+    const angle = shard * Math.PI * 2 / 10 + (Math.random() - 0.5) * 0.18;
+    const speed = 165 + Math.random() * 175;
+    const life = 0.58 + Math.random() * 0.3;
+    particles.push({
+      x: centerX + Math.cos(angle) * 8,
+      y: centerY + Math.sin(angle) * 8,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 38,
+      gravity: 180,
+      life,
+      maxLife: life,
+      angle,
+      angularVelocity: (Math.random() - 0.5) * 5,
+      heartPickupShard: true,
+    });
+  }
+
+  for (let ray = 0; ray < 16; ray += 1) {
+    const angle = ray * Math.PI * 2 / 16 + (Math.random() - 0.5) * 0.1;
+    const speed = 280 + Math.random() * 260;
+    const life = 0.3 + Math.random() * 0.2;
+    particles.push({
+      x: centerX + Math.cos(angle) * 6,
+      y: centerY + Math.sin(angle) * 6,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      gravity: 0,
+      life,
+      maxLife: life,
+      color: ray % 3 === 0 ? "#fff8fb" : "#ff6f9f",
+      coreColor: "#ffffff",
+      size: 2.4,
+      impactRay: true,
+    });
+  }
+  shake = Math.max(shake, 4);
+}
+
 function burstMonsterFragments(bullet, enemy, lethal = false) {
   const bulletSpeed = Math.max(1, Math.hypot(bullet.vx, bullet.vy));
   const baseAngle = Math.atan2(bullet.vy, bullet.vx);
-  const colors = enemy.kind === "monster2"
+  const colors = enemy.kind === "monster3"
+    ? ["#ffcf75", "#f46c3c", "#a34572", "#4d3d5e", "#273443"]
+    : enemy.kind === "monster2"
     ? ["#f094ed", "#cd4dc7", "#823980", "#5d2466", "#33223e"]
     : ["#70ff37", "#c9ff55", "#34ba32", "#713aa0", "#2b1647"];
   const count = lethal ? 30 : 16;
@@ -148,13 +313,16 @@ function burstTurretFragments(bullet) {
 
 function burstCombatantExplosion(target, kind) {
   const isTurret = kind === "turret";
-  const isLarge = isTurret || kind === "monster2";
+  const isLarge = isTurret || kind === "monster2" || kind === "monster3";
   const centerX = target.x + target.width / 2;
   const centerY = target.y + target.height * 0.52;
-  const color = kind === "monster1" ? "#99ff52" : "#ed81fa";
+  const color = kind === "monster1" ? "#99ff52"
+    : kind === "monster3" ? "#ffaf62" : "#ed81fa";
   const debrisColors = kind === "monster1"
     ? ["#358329", "#5bac35", "#6b396f", "#34233b"]
-    : isTurret
+    : kind === "monster3"
+      ? ["#ffb665", "#e97449", "#70435c", "#314458"]
+      : isTurret
       ? ["#687388", "#8f9bae", "#673677", "#3c2947", "#35414d"]
       : ["#af4aaa", "#77327a", "#58305e", "#3c2646"];
   const flashLife = isLarge ? 0.38 : 0.3;
@@ -311,6 +479,7 @@ function shootPlayer() {
     (isAirFiring ? PLAYER_AIR_MUZZLE_VERTICAL_ADJUST : 0)
   );
   bullets.push({
+    kind: "player-bullet",
     x: muzzleX,
     y: muzzleY,
     vx: direction.x * PLAYER_BULLET_SPEED,
@@ -374,7 +543,33 @@ function getPlayerHitbox() {
   };
 }
 
-function projectileSurfaceCollision(bullet, previousX, previousY) {
+function projectilePlatformCandidates(bullet, reachX, reachY = reachX) {
+  const left = bullet.x - reachX - bullet.radius;
+  const right = bullet.x + reachX + bullet.radius;
+  const top = bullet.y - reachY - bullet.radius;
+  const bottom = bullet.y + reachY + bullet.radius;
+  const candidates = [];
+
+  for (const platform of platforms) {
+    if (platform.start > right || platform.end < left) continue;
+    let surfaceTop;
+    let surfaceBottom;
+    if (platform.kind === "ramp") {
+      surfaceTop = Math.min(platform.entryY, platform.exitY) - 3;
+      surfaceBottom = Math.max(platform.entryY, platform.exitY) + PLATFORM_DECK_THICKNESS + 3;
+    } else if (isInvertedTrianglePlatform(platform)) {
+      surfaceTop = platform.y - 5;
+      surfaceBottom = platform.y + invertedTrianglePlatformDepth(platform);
+    } else {
+      surfaceTop = platform.y - 3;
+      surfaceBottom = platform.y + PLATFORM_DECK_THICKNESS;
+    }
+    if (surfaceTop <= bottom && surfaceBottom >= top) candidates.push(platform);
+  }
+  return candidates;
+}
+
+function projectileSurfaceCollision(bullet, previousX, previousY, candidates = platforms) {
   const collisionForRect = (rect) => {
     if (!overlapsCircleRect(bullet, rect)) return null;
 
@@ -481,7 +676,7 @@ function projectileSurfaceCollision(bullet, previousX, previousY) {
     return nearestCollision;
   };
 
-  for (const platform of platforms) {
+  for (const platform of candidates) {
     if (platform.kind === "ramp") {
       const collision = collisionForRamp(platform);
       if (collision) return collision;
@@ -509,7 +704,7 @@ function burstTurretLaserImpact(bullet, collision, finalImpact = false) {
   const tangentX = -normalY;
   const tangentY = normalX;
   const sparkCount = finalImpact ? 18 : 12;
-  const colors = ["#f2c8ff", "#dc79ff", "#9c2de0", "#511074"];
+  const colors = ["#ffd0e5", "#ff74ad", "#d52e7e", "#67143f"];
 
   for (let spark = 0; spark < sparkCount; spark += 1) {
     const outwardSpeed = 95 + Math.random() * (finalImpact ? 250 : 190);
@@ -536,11 +731,53 @@ function burstTurretLaserImpact(bullet, collision, finalImpact = false) {
     vy: 0,
     life: flashLife,
     maxLife: flashLife,
-    color: "#e8a2ff",
+    color: "#ff87bb",
     size: finalImpact ? 34 : 27,
     lightImpact: true,
   });
   shake = Math.max(shake, finalImpact ? 8 : 5.5);
+}
+
+function burstPlayerRicochetImpact(bullet, collision, finalImpact = false) {
+  const normalX = collision.normalX ?? 0;
+  const normalY = collision.normalY ?? -1;
+  const tangentX = -normalY;
+  const tangentY = normalX;
+  const rayCount = finalImpact ? 9 : 7;
+
+  for (let ray = 0; ray < rayCount; ray += 1) {
+    const outwardSpeed = 130 + Math.random() * (finalImpact ? 250 : 190);
+    const tangentSpeed = (Math.random() - 0.5) * (finalImpact ? 360 : 280);
+    const life = 0.13 + Math.random() * 0.13;
+    particles.push({
+      x: bullet.x + normalX * bullet.radius,
+      y: bullet.y + normalY * bullet.radius,
+      vx: normalX * outwardSpeed + tangentX * tangentSpeed,
+      vy: normalY * outwardSpeed + tangentY * tangentSpeed,
+      gravity: 0,
+      life,
+      maxLife: life,
+      color: ray % 2 === 0 ? "#e3b8ff" : "#bd79ff",
+      coreColor: "#ffffff",
+      size: 2.1 + Math.random() * 1.4,
+      impactRay: true,
+    });
+  }
+
+  const flashLife = finalImpact ? 0.24 : 0.19;
+  particles.push({
+    x: bullet.x,
+    y: bullet.y,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life: flashLife,
+    maxLife: flashLife,
+    color: "#e5bdff",
+    size: finalImpact ? 36 : 29,
+    lightImpact: true,
+    playerRicochet: true,
+  });
 }
 
 function projectileScreenBounds(bullet) {
@@ -585,6 +822,8 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
   const travelDistance = Math.hypot(bullet.vx, bullet.vy) * dt;
   const steps = Math.max(1, Math.ceil(travelDistance / Math.max(3, bullet.radius * 0.8)));
   const stepTime = dt / steps;
+  // Any ricochet still stays within this frame's total travel distance.
+  const nearbyPlatforms = projectilePlatformCandidates(bullet, travelDistance);
 
   for (let step = 0; step < steps; step += 1) {
     const previousX = bullet.x;
@@ -592,13 +831,15 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
     bullet.x += bullet.vx * stepTime;
     bullet.y += bullet.vy * stepTime;
     const collision = projectileScreenCollision(bullet) ??
-      projectileSurfaceCollision(bullet, previousX, previousY);
+      projectileSurfaceCollision(bullet, previousX, previousY, nearbyPlatforms);
     if (!collision) continue;
 
     shake = Math.max(shake, PROJECTILE_SURFACE_HIT_SHAKE);
     const finalImpact = bullet.ricochets >= maxRicochets;
     if (bullet.kind === "turret-laser") {
       burstTurretLaserImpact(bullet, collision, finalImpact);
+    } else if (bullet.kind === "player-bullet") {
+      burstPlayerRicochetImpact(bullet, collision, finalImpact);
     } else {
       burst(bullet.x, bullet.y, ricochetColor, finalImpact ? 6 : 5, 115);
     }
@@ -667,20 +908,24 @@ function moveMonster2Fireball(bullet, dt) {
   const stepTime = horizontalSpeed > 0 ? stepDistance / horizontalSpeed : 0;
   const riseAcceleration = bullet.riseAcceleration ?? 0;
   const playerHitbox = getPlayerHitbox();
+  const flightTime = stepTime * steps;
+  const nearbyPlatforms = projectilePlatformCandidates(
+    bullet,
+    travelDistance,
+    Math.abs(bullet.vy) * flightTime + Math.abs(riseAcceleration) * flightTime * flightTime / 2,
+  );
   for (let step = 0; step < steps; step += 1) {
     const previousX = bullet.x;
     const previousY = bullet.y;
     bullet.x += bullet.vx * stepTime;
     bullet.y += bullet.vy * stepTime - riseAcceleration * stepTime * stepTime / 2;
     bullet.vy -= riseAcceleration * stepTime;
-    if (projectileSurfaceCollision(bullet, previousX, previousY)) {
+    if (projectileSurfaceCollision(bullet, previousX, previousY, nearbyPlatforms)) {
       burstMonster2FireballImpact(bullet);
       return false;
     }
     if (overlapsCircleRect(bullet, playerHitbox)) {
-      if (takePlayerDamage(1)) {
-        shake = Math.max(shake, 12);
-      }
+      takePlayerDamage(1, bullet);
       burstMonster2FireballImpact(bullet);
       return false;
     }
@@ -699,7 +944,12 @@ function updateBullets(dt) {
     let hit = false;
 
     for (const enemy of enemies) {
-      if (!enemy.alive || !overlapsCircleRect(bullet, getEnemyHitbox(enemy))) continue;
+      if (
+        !enemy.alive ||
+        bullet.x + bullet.radius < enemy.x ||
+        bullet.x - bullet.radius > enemy.x + enemy.width ||
+        !overlapsCircleRect(bullet, getEnemyHitbox(enemy))
+      ) continue;
       enemy.hp -= 1;
       hit = true;
       applyEnemyBulletImpact(enemy, bullet);
@@ -779,10 +1029,8 @@ function updateBullets(dt) {
 
     if (
       player.invincible <= 0 && overlapsCircleRect(bullet, getPlayerHitbox()) &&
-      takePlayerDamage(1)
+      takePlayerDamage(1, bullet)
     ) {
-      shake = 12;
-      burst(player.x + player.width / 2, player.y + 35, "#ffdf75", 18, 280);
       enemyBullets.splice(i, 1);
       continue;
     }
