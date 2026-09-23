@@ -32,9 +32,13 @@ const player = {
   height: 80,
   vx: 0,
   vy: 0,
-  speed: 245,
+  speed: PLAYER_RUN_SPEED,
+  runSpeed: PLAYER_RUN_SPEED,
   reversalDirection: 0,
   reversalSparkTimer: 0,
+  recentRunDirection: 0,
+  recentRunSpeed: 0,
+  reversalGraceTimer: 0,
   hitKnockbackVelocity: 0,
   hitKnockbackTime: 0,
   facing: 1,
@@ -42,6 +46,7 @@ const player = {
   fireTimer: 0,
   fireAnimationTime: 0,
   fireBarrel: 0,
+  fireImpactGroup: null,
   fireWasActive: false,
   fireEnergy: PLAYER_FIRE_ENERGY_MAX,
   invincible: 0,
@@ -53,6 +58,8 @@ const player = {
   crouching: false,
   platform: null,
   jumpLatch: false,
+  jumpBufferTimer: 0,
+  coyoteTime: PLAYER_COYOTE_TIME,
   jumpCount: 0,
   airJumpAvailable: true,
   jumpAnimationTime: 0,
@@ -70,6 +77,7 @@ function resetPlayerDownState() {
   player.downTime = 0;
   player.hitKnockbackVelocity = 0;
   player.hitKnockbackTime = 0;
+  player.runSpeed = player.speed;
 }
 
 const bullets = [];

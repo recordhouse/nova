@@ -23,7 +23,9 @@ function createGame() {
           assert.ok(args[2] >= 0 && args[3] >= 0);
           assert.ok(target.globalAlpha >= 0 && target.globalAlpha <= 1);
         }
-        calls.push({ operation: key, args, color: target.fillStyle, alpha: target.globalAlpha });
+        calls.push({ operation: key, args, color: target.fillStyle,
+          composite: target.globalCompositeOperation, shadowColor: target.shadowColor,
+          shadowBlur: target.shadowBlur, alpha: target.globalAlpha });
       };
     },
   });
@@ -150,6 +152,8 @@ test("charge grows visibly, renders over the body, and creates no persistent par
 test("monster2's walking sprite widens without a vertically squashed step", () => {
   const { scope } = createGame();
   const enemy = scope.fixtureEnemy;
+  assert.equal(enemy.spriteWidth, 190);
+  assert.equal(enemy.spriteHeight, 234);
   enemy.animationTime = 0;
   enemy.animationPhase = 0;
   enemy.moving = false;
@@ -177,8 +181,11 @@ test("pixel fireballs have an attached tapered tail and fade without particle al
     assert.equal(tail.length, 9);
     assert.ok(tail[0].args[0] < -bullet.radius * 2);
     assert.ok(tail[0].args[3] < tail.at(-1).args[3], "tail widens toward the head");
+    assert.ok(calls.some((call) => call.color === "#86271c" && call.args[2] === 10));
     assert.ok(calls.some((call) => call.color === "#ffd45a"));
     assert.ok(calls.some((call) => call.color === "#fff5c6"));
+    assert.ok(calls.some((call) => call.shadowColor === "#ff7526" && call.shadowBlur === 16));
+    assert.ok(calls.every((call) => call.composite !== "lighter"));
     assert.ok(calls.filter((call) => call.operation === "fillRect").every((call) => call.args[2] <= 44));
     assert.deepEqual({ ...bullet }, before);
     bullet.remainingRange = 80;

@@ -97,6 +97,8 @@ function releaseControlPointer(pointerId) {
 
 function resetAllInputs() {
   jumpQueued = false;
+  player.jumpBufferTimer = 0;
+  player.jumpLatch = false;
   releaseMovementJoystick();
   for (const pointer of activeControlPointers.values()) {
     pointer.button.classList.remove("active");

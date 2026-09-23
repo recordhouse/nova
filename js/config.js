@@ -44,6 +44,11 @@ const MAX_RENDER_SCALE = 2;
 let BASE_GROUND_Y = HEIGHT * BASE_GROUND_SCREEN_RATIO;
 const GRAVITY = 2100;
 const JUMP_SPEED = 950;
+const PLAYER_RUN_SPEED = 275;
+const PLAYER_RUN_MAX_SPEED = 410;
+const PLAYER_RUN_ACCELERATION = 60;
+const PLAYER_COYOTE_TIME = 0.11;
+const PLAYER_JUMP_BUFFER_TIME = 0.12;
 const PLAYER_MAX_FALL_SPEED = 760;
 const JUMP_ANIMATION_DURATION = (JUMP_SPEED * 2) / GRAVITY;
 const FIRE_AIM_ANGLE_DIAGONAL = Math.PI / 6;
@@ -162,7 +167,8 @@ const PLAYER_REVIVAL_KNOCKBACK_DURATION = 0.72;
 const PLAYER_REVIVAL_KNOCKBACK_DAMPING = 3;
 const PLAYER_DEEP_FALL_THRESHOLD = 28;
 const PLAYER_REVERSAL_MIN_SPEED = 100;
-const PLAYER_REVERSAL_BRAKE = 1450;
+const PLAYER_REVERSAL_INPUT_GRACE = 0.14;
+const PLAYER_REVERSAL_BRAKE = 1050;
 const PLAYER_REVERSAL_ACCELERATION = 1850;
 const PLAYER_REVERSAL_SPARK_INTERVAL = 0.025;
 const PLAYER_MUZZLE_HEIGHT_RATIO = 1 / 3;
@@ -192,6 +198,8 @@ const ENEMY_SPAWN_MIN_LENGTH = 92;
 const ENEMY_SPAWN_SLOT_LENGTH = 420;
 const ENEMY_SPAWN_MAX_SLOTS = 5;
 const ENEMY_SPAWN_DENSITY = 1;
+const PLAYER_START_SAFE_HORIZONTAL_RADIUS = 1120;
+const PLAYER_START_SAFE_VERTICAL_RADIUS = 720;
 const MONSTER1_SPAWN_COUNT_RATIO = 2 / 3;
 const ENEMY_BODY_SEPARATION = 8;
 const ENEMY_GROUP_MIN_SIZE = 2;
@@ -285,7 +293,7 @@ const MONSTER_TYPES = {
     displayName: "몹2",
     width: 132,
     height: 138,
-    spriteWidth: 174,
+    spriteWidth: 190,
     spriteHeight: 234,
     spriteBottomOffset: 12,
     spriteTopInset: 6 / 338,
@@ -305,7 +313,7 @@ const MONSTER_TYPES = {
     fireballRadius: 22,
     fireballRange: 490,
     fireballRiseAcceleration: 170,
-    mouthForwardOffset: 51,
+    mouthForwardOffset: 56,
     mouthHeight: 87,
     attackCooldown: 2.4,
     ambientFireDelayMin: 2.8,

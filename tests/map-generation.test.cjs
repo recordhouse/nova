@@ -75,6 +75,10 @@ function validateMap(game) {
     goal: goalPlatform?.id,
     farthest: farthestBossGatePlacement(110+player.width/2,
       platformSurfaceY(platforms.find(p=>p.startingRoad),110+player.width/2))?.platform?.id,
+    unsafeEnemies: enemies.filter(enemy => stageSpawnIsInStartSafeZone(
+      enemy.platform, enemy.x, MONSTER_TYPES[enemy.kind])).length,
+    unsafeTurrets: turrets.filter(turret => stageSpawnIsInStartSafeZone(
+      turret.platform, turret.x, TURRET)).length,
     routeIds: branches.flatMap(b=>b.routes.flatMap(r=>r.platforms??[])),
     reversals: branches.filter(b=>b.flowTransition?.horizontal==='reverse').length,
     connectionLimit: MAIN_PATH_MAX_CONNECTION_HEIGHT,
@@ -83,6 +87,8 @@ function validateMap(game) {
   assert.ok(ids.has(data.gate), "boss gate must remain on an existing road");
   assert.equal(data.gate, data.goal);
   assert.equal(data.gate, data.farthest);
+  assert.equal(data.unsafeEnemies, 0, "the player start must be clear of monsters");
+  assert.equal(data.unsafeTurrets, 0, "the player start must be clear of turrets");
   for (const id of data.routeIds) assert.ok(ids.has(id), "route metadata must not contain removed roads");
   for (let first = 0; first < data.roads.length; first += 1) {
     for (let second = first + 1; second < data.roads.length; second += 1) {

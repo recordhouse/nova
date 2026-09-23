@@ -130,36 +130,74 @@ function updatePlayer(dt) {
   );
   updatePlayerDown(dt);
   const jumpInputActive = controls.jump || controls.up;
-  const jumpPressed = !downForThisFrame && (jumpQueued || (jumpInputActive && !player.jumpLatch));
+  const jumpInputStarted = jumpQueued || (jumpInputActive && !player.jumpLatch);
   jumpQueued = false;
   player.jumpLatch = jumpInputActive;
+  if (downForThisFrame) {
+    player.jumpBufferTimer = 0;
+  } else if (jumpInputStarted && (!controls.fire || controls.jump)) {
+    // Up doubles as high aim while firing; Space remains an explicit buffered jump.
+    player.jumpBufferTimer = PLAYER_JUMP_BUFFER_TIME;
+  } else {
+    player.jumpBufferTimer = Math.max(0, player.jumpBufferTimer - dt);
+  }
+  if (player.grounded) {
+    player.coyoteTime = PLAYER_COYOTE_TIME;
+  } else {
+    player.coyoteTime = Math.max(0, player.coyoteTime - dt);
+  }
   player.crouching = !downForThisFrame && controls.down && player.grounded;
+  const canUseCoyoteJump = (
+    !player.grounded &&
+    player.jumpCount === 0 &&
+    player.coyoteTime > 0
+  );
   const canStartJump = (
-    jumpPressed &&
+    player.jumpBufferTimer > 0 &&
     !controls.fire &&
     !player.crouching &&
-    (player.grounded || player.airJumpAvailable)
+    (player.grounded || canUseCoyoteJump || player.airJumpAvailable)
   );
   const horizontalInput = downForThisFrame ? 0 : Number(controls.right) - Number(controls.left);
-  const preserveAirMomentum = !downForThisFrame && controls.fire && !player.grounded;
   const move = player.crouching || controls.fire
     ? 0
     : horizontalInput;
   const canReverseOnGround = player.grounded && !canStartJump && move !== 0;
+  player.reversalGraceTimer = Math.max(0, player.reversalGraceTimer - dt);
+  if (player.reversalGraceTimer === 0) {
+    player.recentRunDirection = 0;
+    player.recentRunSpeed = 0;
+  }
   if (!canReverseOnGround ||
       (player.reversalDirection !== 0 && player.reversalDirection !== move)) {
     player.reversalDirection = 0;
     player.reversalSparkTimer = 0;
   }
+  const reversingCurrentVelocity = (
+    Math.sign(player.vx) === -move &&
+    Math.abs(player.vx) >= PLAYER_REVERSAL_MIN_SPEED
+  );
+  const reversingRecentRun = (
+    player.reversalGraceTimer > 0 &&
+    player.recentRunDirection === -move &&
+    player.recentRunSpeed >= PLAYER_REVERSAL_MIN_SPEED
+  );
   if (canReverseOnGround && player.reversalDirection === 0 &&
-      Math.sign(player.vx) === -move && Math.abs(player.vx) >= PLAYER_REVERSAL_MIN_SPEED) {
+      (reversingCurrentVelocity || reversingRecentRun)) {
+    if (!reversingCurrentVelocity) {
+      player.vx = player.recentRunDirection * player.recentRunSpeed;
+    }
     player.reversalDirection = move;
     player.reversalSparkTimer = 0;
+    player.runSpeed = player.speed;
+    player.recentRunDirection = 0;
+    player.recentRunSpeed = 0;
+    player.reversalGraceTimer = 0;
   }
   let brakingDirection = 0;
   if (knockbackDt > 0) {
     player.vx = dt > 0 ? hitKnockbackDistance / dt : 0;
-  } else if (!preserveAirMomentum) {
+  } else if (player.grounded) {
     if (player.reversalDirection === move && canReverseOnGround) {
       const previousVx = player.vx;
       const braking = Math.sign(previousVx) === -move;
@@ -169,9 +207,39 @@ function updatePlayer(dt) {
       if (player.vx === move * player.speed) {
         player.reversalDirection = 0;
       }
+    } else if (move !== 0) {
+      const currentRunSpeed = Math.max(
+        player.speed,
+        Math.min(PLAYER_RUN_MAX_SPEED, player.runSpeed),
+      );
+      player.vx = move * currentRunSpeed;
+      if (!canStartJump) {
+        player.runSpeed = Math.min(
+          PLAYER_RUN_MAX_SPEED,
+          currentRunSpeed + PLAYER_RUN_ACCELERATION * dt,
+        );
+      }
     } else {
-      player.vx = move * player.speed;
+      player.vx = 0;
+      player.runSpeed = player.speed;
     }
+  } else if (!controls.fire && move !== 0 && Math.sign(player.vx) !== move) {
+    // Keep accumulated takeoff speed in the air; only an intentional turn replaces it.
+    player.runSpeed = player.speed;
+    player.vx = move * player.speed;
+  }
+
+  if (canReverseOnGround && player.reversalDirection === 0 &&
+      Math.sign(player.vx) === move && Math.abs(player.vx) >= PLAYER_REVERSAL_MIN_SPEED) {
+    player.recentRunDirection = move;
+    player.recentRunSpeed = Math.abs(player.vx);
+    player.reversalGraceTimer = PLAYER_REVERSAL_INPUT_GRACE;
+  } else if (
+    downForThisFrame || canStartJump || player.crouching || controls.fire || !player.grounded
+  ) {
+    player.recentRunDirection = 0;
+    player.recentRunSpeed = 0;
+    player.reversalGraceTimer = 0;
   }
 
   const stationaryTurn = player.crouching || controls.fire
@@ -183,13 +251,15 @@ function updatePlayer(dt) {
   }
 
   if (canStartJump) {
-    const isAirJump = !player.grounded;
+    const isAirJump = !player.grounded && !canUseCoyoteJump;
     if (!isAirJump || !Number.isFinite(player.fallReferenceY)) {
       player.fallReferenceY = player.y + player.height;
     }
     player.vy = -JUMP_SPEED;
     player.grounded = false;
     player.platform = null;
+    player.jumpBufferTimer = 0;
+    player.coyoteTime = 0;
     player.jumpCount = isAirJump ? 2 : 1;
     player.airJumpAvailable = !isAirJump;
     player.jumpAnimationTime = 0;
@@ -236,7 +306,7 @@ function updatePlayer(dt) {
         player.fallAnimationTime = 0;
         player.platform = null;
         player.grounded = false;
-        player.jumpCount = Math.max(1, player.jumpCount);
+        // Do not spend the first jump merely by stepping a few pixels off an edge.
         player.airJumpAvailable = true;
       }
     }

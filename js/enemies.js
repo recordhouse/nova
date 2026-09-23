@@ -818,10 +818,12 @@ function fireTurretLaser(turret, aimedAtPlayer) {
     ricochetColor: "#dc347f",
   });
   turret.recoilTimer = 0.2;
-  if (
+  const muzzleIsNearScreen = (
     muzzle.x >= cameraX - 80 && muzzle.x <= cameraX + WIDTH + 80 &&
     muzzle.y >= cameraY - 80 && muzzle.y <= cameraY + HEIGHT + 80
-  ) {
+  );
+  if (muzzleIsNearScreen) {
+    if (typeof playTurretLaserSound === "function") playTurretLaserSound();
     burst(muzzle.x, muzzle.y, "#f04b96", 16, 185);
     burst(muzzle.x, muzzle.y, "#6d153f", 9, 115);
     shake = Math.max(shake, 7);

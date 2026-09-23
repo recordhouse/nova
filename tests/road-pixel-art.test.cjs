@@ -22,7 +22,9 @@ function createGame() {
           assert.ok(args.every(Number.isFinite));
           assert.ok(args[2] >= 0 && args[3] >= 0);
         }
-        calls.push({ operation: key, args, color: target.fillStyle, alpha: target.globalAlpha });
+        calls.push({ operation: key, args, color: target.fillStyle,
+          strokeColor: target.strokeStyle, lineWidth: target.lineWidth,
+          shadowColor: target.shadowColor, alpha: target.globalAlpha });
       };
     },
   });
@@ -90,4 +92,53 @@ test("flat, sloped and triangular roads get pixel rails without changing their g
   assert.ok(subRail.some((call) => call.args[2] >= 200), "triangle keeps the sub-path palette");
   assert.ok(all.some((call) => call.color === "#a286d0"), "sub-path tiles keep purple highlights");
   assert.equal(read(scope, "JSON.stringify(platforms)"), before);
+});
+
+test("jump-pad triangles are hollow frames with animated current inside", () => {
+  const { scope, calls } = createGame();
+  read(scope, `
+    globalThis.triangle=addPlatform(100,264,0);
+    triangle.style=0;
+    triangle.isJumpPad=true;
+    triangle.trick='horizontal-jump';
+    triangle.jumpPadTriangleAngle=60;
+    triangle.lightColor='#ffe27a';
+    gameTime=0;
+  `);
+  const palette = ["#253541", "#17232d", "#0d151c"];
+  const before = read(scope, "JSON.stringify(triangle)");
+  scope.drawInvertedTrianglePlatform(scope.triangle, palette, "#718391");
+  assert.equal(calls.some((call) => call.operation === "fill" &&
+    call.color === palette[1]), false, "the old solid triangle body is gone");
+  assert.ok(calls.some((call) => call.operation === "stroke" &&
+    call.strokeColor === palette[1] && call.lineWidth === 7), "a slim structural frame remains");
+  for (const color of ["#c7fbff", "#dfc6ff"]) {
+    assert.ok(calls.some((call) => call.operation === "stroke" &&
+      call.strokeColor === color && call.shadowColor === color));
+  }
+  assert.equal(read(scope, "JSON.stringify(triangle)"), before);
+
+  const firstCurrent = calls.filter((call) => call.operation === "lineTo" &&
+    call.args[1] > scope.triangle.y + 10).map((call) => call.args);
+  calls.length = 0;
+  read(scope, "gameTime=0.5");
+  scope.drawInvertedTrianglePlatform(scope.triangle, palette, "#718391");
+  const movedCurrent = calls.filter((call) => call.operation === "lineTo" &&
+    call.args[1] > scope.triangle.y + 10).map((call) => call.args);
+  assert.notDeepEqual(movedCurrent, firstCurrent, "the electricity should visibly flow");
+});
+
+test("shallow floating-path triangles keep their existing filled body", () => {
+  const { scope, calls } = createGame();
+  read(scope, `
+    globalThis.triangle=addPlatform(100,500,0);
+    triangle.style=2;
+    triangle.routeRole='sub';
+    triangle.floatingTriangleAngle=10;
+  `);
+  const palette = ["#332a48", "#211c32", "#120f1e"];
+  scope.drawInvertedTrianglePlatform(scope.triangle, palette, "#8873ad");
+  assert.ok(calls.some((call) => call.operation === "fill" && call.color === palette[1]));
+  assert.equal(calls.some((call) => call.operation === "stroke" &&
+    ["#c7fbff", "#dfc6ff"].includes(call.strokeColor)), false);
 });

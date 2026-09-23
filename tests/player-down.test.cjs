@@ -116,7 +116,7 @@ test("standing, running, jumping, crouching and firing sprites share a lower anc
   const centerX = read(scope, "player.x + player.width / 2");
   const physicalFeetY = read(scope, "player.y + player.height");
   const cases = [
-    { setup: "player.vx=245", sprite: "/run.png?", offset: 8 },
+    { setup: "player.vx=player.speed", sprite: "/run.png?", offset: 8 },
     { setup: "player.vx=0", sprite: "/stand.png?", offset: 8 },
     { setup: "controls.fire=true", sprite: "/blast.png?", offset: 8 },
     { setup: "controls.up=true", sprite: "/blast-high.png?", offset: 8 },
@@ -150,7 +150,7 @@ test("the projectile origin follows the lowered firing artwork", () => {
 
 test("damage starts a protected down animation and cancels crouching, movement and queued fire", () => {
   const { scope } = createGame();
-  read(scope, "player.vx=245; player.vy=-400; player.crouching=true; jumpQueued=true; player.fireWasActive=true");
+  read(scope, "player.vx=player.speed; player.vy=-400; player.crouching=true; jumpQueued=true; player.fireWasActive=true");
   assert.equal(scope.takePlayerDamage(1), true);
   assert.equal(read(scope, "player.hp"), 2);
   assert.equal(read(scope, "player.downPhase"), "fall");

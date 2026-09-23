@@ -93,26 +93,6 @@ test("the four header regions and minimap stay separate in portrait and landscap
   }
 });
 
-test("non-vortex background bodies animate and move at a slower parallax rate", () => {
-  const { scope, calls } = createDisplay();
-  read(scope, "WIDTH=720; HEIGHT=1280; cameraX=0; cameraY=0; gameTime=0");
-  scope.drawSpaceWonders();
-  const firstTranslates = calls.filter((call) => call.operation === "translate");
-  assert.ok(firstTranslates.length > 0);
-  assert.ok(calls.some((call) => call.operation === "arc"));
-  assert.ok(calls.some((call) => call.operation === "fill"));
-  const firstX = firstTranslates[0].args[0];
-  calls.length = 0;
-  read(scope, "cameraX=500; gameTime=2");
-  scope.drawSpaceWonders();
-  const secondX = calls.find((call) => call.operation === "translate").args[0];
-  assert.ok(Math.abs(secondX - (firstX - 90)) < 1e-8);
-  scope.drawNebulaWonder(60, 1);
-  scope.drawRingedWorld(40, 1);
-  assert.equal(read(scope, "typeof drawRiftWonder"), "undefined");
-  assert.ok(calls.filter((call) => call.operation === "stroke").length >= 3);
-});
-
 test("player projectile glow is painted once and reused for every shot", () => {
   const { scope, calls } = createDisplay();
   const spriteCalls = [];
@@ -189,23 +169,6 @@ test("revival and impact rays reuse glow sprites and skip offscreen particles", 
   scope.drawParticles();
   assert.equal(created, 2);
   assert.equal(calls.filter((call) => call.operation === "drawImage").length, 4);
-});
-
-test("player ricochets use a bright white-purple impact flash", () => {
-  const { scope, calls, gradients } = createDisplay();
-  read(scope, `particles.push({x:120,y:140,vx:0,vy:0,life:0.19,maxLife:0.19,
-    size:29,color:'#e5bdff',lightImpact:true,playerRicochet:true})`);
-  scope.drawParticles();
-  const flash = gradients.find((gradient) => gradient.stops.some((stop) =>
-    stop.color === "rgba(255, 255, 255, 1)"));
-  assert.ok(flash);
-  assert.deepEqual(flash.stops.map((stop) => stop.color), [
-    "rgba(255, 255, 255, 1)",
-    "rgba(235, 204, 255, 0.96)",
-    "rgba(128, 45, 214, 0)",
-  ]);
-  assert.ok(calls.some((call) => call.operation === "stroke" &&
-    call.strokeColor === "rgba(249, 232, 255, 0.96)"));
 });
 
 test("non-fireball enemy shots are drawn only near the camera", () => {

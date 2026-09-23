@@ -24,6 +24,11 @@ function takePlayerDamage(amount, source = null) {
   player.vy = Math.max(0, player.vy);
   player.reversalDirection = 0;
   player.reversalSparkTimer = 0;
+  player.recentRunDirection = 0;
+  player.recentRunSpeed = 0;
+  player.reversalGraceTimer = 0;
+  player.jumpBufferTimer = 0;
+  player.coyoteTime = 0;
   player.crouching = false;
   player.fireAnimationTime = 0;
   player.fireWasActive = false;
@@ -453,6 +458,9 @@ function shootPlayer() {
       ? PLAYER_JUMP_SPRITE_SCALE
       : PLAYER_BLAST_SPRITE_SCALE;
   const firedUpperBarrel = player.fireBarrel === 0;
+  if (firedUpperBarrel || !player.fireImpactGroup) {
+    player.fireImpactGroup = { playedRicochetMask: 0 };
+  }
   const barrelOffsetY = firedUpperBarrel
     ? -PLAYER_MUZZLE_BARREL_OFFSET * firingSpriteScale
     : PLAYER_MUZZLE_BARREL_OFFSET * firingSpriteScale;
@@ -487,15 +495,31 @@ function shootPlayer() {
     radius: 5,
     ricochets: 0,
     ricochetScreenEdges: true,
+    impactSoundGroup: player.fireImpactGroup,
   });
   player.fireEnergy = Math.max(0, player.fireEnergy - PLAYER_FIRE_ENERGY_PER_SHOT);
+  if (typeof playPlayerGunSound === "function") playPlayerGunSound();
   burst(muzzleX, muzzleY, "#c9a7ff", 4, 90);
   player.fireBarrel = firedUpperBarrel ? 1 : 0;
+  if (!firedUpperBarrel) player.fireImpactGroup = null;
   player.fireTimer = firedUpperBarrel
     ? PLAYER_FIRE_STAGGER_DELAY
     : PLAYER_FIRE_PAIR_DELAY;
   shake = Math.max(shake, 2.5);
   return true;
+}
+
+function playGroupedPlayerRicochetSound(bullet) {
+  if (typeof playPlayerGunImpactSound !== "function") return;
+  const group = bullet.impactSoundGroup;
+  if (!group) {
+    playPlayerGunImpactSound();
+    return;
+  }
+  const ricochetBit = 1 << Math.min(30, bullet.ricochets);
+  if ((group.playedRicochetMask & ricochetBit) !== 0) return;
+  group.playedRicochetMask |= ricochetBit;
+  playPlayerGunImpactSound();
 }
 
 function playerFireDirection() {
@@ -757,27 +781,12 @@ function burstPlayerRicochetImpact(bullet, collision, finalImpact = false) {
       gravity: 0,
       life,
       maxLife: life,
-      color: ray % 2 === 0 ? "#e3b8ff" : "#bd79ff",
+      color: ray % 2 === 0 ? "#f2dcff" : "#d7a6ff",
       coreColor: "#ffffff",
       size: 2.1 + Math.random() * 1.4,
       impactRay: true,
     });
   }
-
-  const flashLife = finalImpact ? 0.24 : 0.19;
-  particles.push({
-    x: bullet.x,
-    y: bullet.y,
-    vx: 0,
-    vy: 0,
-    gravity: 0,
-    life: flashLife,
-    maxLife: flashLife,
-    color: "#e5bdff",
-    size: finalImpact ? 36 : 29,
-    lightImpact: true,
-    playerRicochet: true,
-  });
 }
 
 function projectileScreenBounds(bullet) {
@@ -871,6 +880,7 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
       bullet.vy -= 2 * velocityAlongNormal * collision.normalY;
     }
     bullet.ricochets += 1;
+    if (bullet.kind === "player-bullet") playGroupedPlayerRicochetSound(bullet);
   }
   return true;
 }
@@ -952,12 +962,21 @@ function updateBullets(dt) {
       ) continue;
       enemy.hp -= 1;
       hit = true;
+      if (enemy.kind === "monster3") {
+        if (typeof playMetalHitSound === "function") playMetalHitSound();
+      } else if (enemy.kind === "monster1" || enemy.kind === "monster2") {
+        if (typeof playGunHitSound === "function") playGunHitSound();
+      }
       applyEnemyBulletImpact(enemy, bullet);
       burstMonsterFragments(bullet, enemy, enemy.hp <= 0);
       burst(bullet.x, bullet.y, "#baff63", 5, 125);
       shake = Math.max(shake, enemy.hp <= 0 ? 9 : 4.5);
 
       if (enemy.hp <= 0) {
+        if ((enemy.kind === "monster1" || enemy.kind === "monster2") &&
+            typeof playMonsterDie01Sound === "function") {
+          playMonsterDie01Sound();
+        }
         enemy.alive = false;
         player.score += enemy.score;
         burstCombatantExplosion(enemy, enemy.kind);
@@ -971,6 +990,7 @@ function updateBullets(dt) {
         turret.hp -= 1;
         turret.hitTimer = 0.18;
         hit = true;
+        if (typeof playMetalHitSound === "function") playMetalHitSound();
         burstTurretFragments(bullet);
         shake = Math.max(shake, turret.hp <= 0 ? 11 : 5);
         if (turret.hp <= 0) {

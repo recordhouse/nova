@@ -8,6 +8,7 @@ const vm = require("node:vm");
 
 function createGame() {
   const calls = [];
+  const soundCalls = [];
   const stack = [];
   const ctx = new Proxy({ globalAlpha: 1 }, {
     get(target, key) {
@@ -28,6 +29,7 @@ function createGame() {
     document: { querySelector: (selector) => selector === "#game" ? { getContext: () => ctx } : null },
     window: { location: { search: "" }, innerWidth: 720, innerHeight: 1280,
       matchMedia: () => ({ matches: false }) },
+    playPlayerGunSound: () => soundCalls.push("gun"),
     playerSprites: {
       stand: { loaded: true, image: { naturalWidth: 400, naturalHeight: 500 }, fps: 1,
         frames: [{ x: 0, y: 0, width: 400, height: 500 }] },
@@ -45,7 +47,7 @@ function createGame() {
     player.grounded=true; player.platform=fixtureRoad;
     minWorldX=0; maxWorldX=2000;
   `, scope);
-  return { scope, calls };
+  return { scope, calls, soundCalls };
 }
 
 function read(scope, source) { return vm.runInContext(source, scope); }
@@ -93,6 +95,15 @@ test("energy recharges while idle and resets full without affecting down protect
   read(scope, "controls.fire=false");
   scope.resetPlayerPosition();
   assert.equal(read(scope, "player.fireEnergy"), 100);
+});
+
+test("each successful player shot plays the gun sound once", () => {
+  const { scope, soundCalls } = createGame();
+  assert.equal(scope.shootPlayer(), true);
+  assert.equal(soundCalls.length, 1);
+  read(scope, "player.fireEnergy=0");
+  assert.equal(scope.shootPlayer(), false);
+  assert.equal(soundCalls.length, 1);
 });
 
 test("purple gauge tracks the drawn sprite and never blinks with temporary immunity", () => {

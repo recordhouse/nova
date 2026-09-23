@@ -51,8 +51,6 @@ function drawBackground() {
     );
   }
 
-  drawSpaceWonders();
-
   const starSpan = WIDTH + 160;
   const starHeight = HEIGHT + 180;
   for (const star of stars) {
@@ -71,101 +69,6 @@ function drawBackground() {
     }
   }
   ctx.globalAlpha = 1;
-}
-
-function cosmicNoise(index, salt) {
-  const value = Math.sin(index * 127.1 + salt * 311.7) * 43758.5453;
-  return value - Math.floor(value);
-}
-
-function drawNebulaWonder(radius, time) {
-  ctx.save();
-  ctx.rotate(Math.sin(time * 0.3) * 0.18);
-  for (let layer = 0; layer < 3; layer += 1) {
-    const offsetX = Math.sin(time * (0.24 + layer * 0.07) + layer * 2) * radius * 0.16;
-    const offsetY = Math.cos(time * (0.2 + layer * 0.09) + layer) * radius * 0.12;
-    const cloud = ctx.createRadialGradient(0, 0, 2,
-      0, 0, radius * (layer === 0 ? 1.45 : 1.05));
-    cloud.addColorStop(0, layer === 1 ? "rgba(108, 245, 239, 0.48)" : "rgba(156, 104, 245, 0.42)");
-    cloud.addColorStop(0.45, layer === 2 ? "rgba(247, 110, 203, 0.18)" : "rgba(79, 110, 237, 0.16)");
-    cloud.addColorStop(1, "rgba(31, 26, 91, 0)");
-    ctx.fillStyle = cloud;
-    ctx.save();
-    ctx.translate(offsetX, offsetY);
-    ctx.scale(1.25 + layer * 0.13, 0.52 + layer * 0.1);
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * (layer === 0 ? 1.45 : 1.05), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-  ctx.restore();
-}
-
-function drawRingedWorld(radius, time) {
-  ctx.save();
-  ctx.rotate(-0.25 + Math.sin(time * 0.16) * 0.07);
-  ctx.scale(1, 0.4);
-  ctx.strokeStyle = "rgba(183, 224, 249, 0.52)";
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.arc(0, 0, radius * 1.5, Math.PI * 0.1, Math.PI * 1.92);
-  ctx.stroke();
-  ctx.strokeStyle = "rgba(166, 112, 240, 0.4)";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(0, 0, radius * 1.68, Math.PI * 0.16, Math.PI * 1.8);
-  ctx.stroke();
-  ctx.restore();
-
-  ctx.globalCompositeOperation = "source-over";
-  const sphere = ctx.createRadialGradient(-radius * 0.3, -radius * 0.38, 2,
-    0, 0, radius);
-  sphere.addColorStop(0, "rgba(161, 245, 235, 0.78)");
-  sphere.addColorStop(0.42, "rgba(74, 130, 190, 0.76)");
-  sphere.addColorStop(1, "rgba(24, 27, 75, 0.92)");
-  ctx.fillStyle = sphere;
-  ctx.beginPath();
-  ctx.arc(0, 0, radius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(185, 238, 253, 0.32)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(0, 0, radius - 1, Math.PI * 0.55, Math.PI * 1.5);
-  ctx.stroke();
-
-  const moonAngle = time * 0.42;
-  const moonX = Math.cos(moonAngle) * radius * 1.9;
-  const moonY = Math.sin(moonAngle) * radius * 0.8;
-  ctx.fillStyle = "rgba(226, 241, 255, 0.85)";
-  ctx.beginPath();
-  ctx.arc(moonX, moonY, Math.max(4, radius * 0.1), 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawSpaceWonders() {
-  const depth = 0.18;
-  const spacing = 1100;
-  const parallaxX = cameraX * depth;
-  const first = Math.floor((parallaxX - 300) / spacing) - 1;
-  const last = Math.ceil((parallaxX + WIDTH + 300) / spacing) + 1;
-  ctx.save();
-  ctx.globalCompositeOperation = "screen";
-  for (let index = first; index <= last; index += 1) {
-    const x = index * spacing + 250 + cosmicNoise(index, 1) * 380 - parallaxX;
-    if (x < -210 || x > WIDTH + 210) continue;
-    const phase = cosmicNoise(index, 2) * Math.PI * 2;
-    const time = gameTime + phase;
-    const y = HEIGHT * (0.2 + cosmicNoise(index, 3) * 0.52) -
-      cameraY * 0.07 + Math.sin(time * 0.44) * 16;
-    const radius = 48 + cosmicNoise(index, 4) * 28;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.globalAlpha = 0.48 + Math.sin(time * 0.7) * 0.08;
-    if (((index % 2) + 2) % 2 === 0) drawNebulaWonder(radius, time);
-    else drawRingedWorld(radius * 0.7, time);
-    ctx.restore();
-  }
-  ctx.restore();
 }
 
 function drawStationPanels(platform, thickness = PLATFORM_DECK_THICKNESS - 4) {
@@ -884,43 +787,113 @@ function drawRamp(platform, palette, railColor) {
   drawRampLights(platform);
 }
 
+function drawTriangleEnergyFrame(platform, palette, centerX, apexY) {
+  const depth = apexY - platform.y;
+  const halfWidth = (platform.end - platform.start) / 2;
+  const phase = platform.lightPhase / (Math.PI * 2);
+  const fixture = { seed: 1320 + platform.id * 7 };
+
+  // Two current bands travel through the open center without allocating particles.
+  for (let current = 0; current < 2; current += 1) {
+    const progress = (gameTime * 0.38 + phase + current * 0.5) % 1;
+    const y = platform.y + 13 + progress * Math.max(1, depth - 28);
+    const spanAtY = halfWidth * Math.max(0, 1 - (y - platform.y) / depth);
+    const inset = Math.min(10, spanAtY * 0.24);
+    const startX = centerX - spanAtY + inset;
+    const endX = centerX + spanAtY - inset;
+    if (endX - startX < 7) continue;
+    const color = current === 0 ? "#c7fbff" : "#dfc6ff";
+    drawPlatformElectricArc(
+      platform,
+      fixture,
+      startX,
+      y,
+      endX,
+      y,
+      1400 + current * 170,
+      color,
+    );
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(pixelSnap(startX - 1, 1), pixelSnap(y - 1, 1), 3, 3);
+    ctx.fillRect(pixelSnap(endX - 1, 1), pixelSnap(y - 1, 1), 3, 3);
+    ctx.restore();
+  }
+
+  const frameLeftX = platform.start + 5;
+  const frameRightX = platform.end - 5;
+  const frameTopY = platform.y + 5;
+  const frameApexY = apexY - 6;
+  const traceFrame = () => {
+    ctx.beginPath();
+    ctx.moveTo(frameLeftX, frameTopY);
+    ctx.lineTo(frameRightX, frameTopY);
+    ctx.lineTo(centerX, frameApexY);
+    ctx.closePath();
+  };
+
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "#080d14";
+  ctx.lineWidth = 11;
+  traceFrame();
+  ctx.stroke();
+  ctx.strokeStyle = palette[1];
+  ctx.lineWidth = 7;
+  traceFrame();
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(137, 176, 194, 0.72)";
+  ctx.lineWidth = 1.5;
+  traceFrame();
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawInvertedTrianglePlatform(platform, palette, railColor) {
   const centerX = (platform.start + platform.end) / 2;
   const depth = invertedTrianglePlatformDepth(platform);
   const apexY = platform.y + depth;
-  ctx.fillStyle = palette[1];
-  ctx.beginPath();
-  ctx.moveTo(platform.start, platform.y);
-  ctx.lineTo(platform.end, platform.y);
-  ctx.lineTo(centerX, apexY);
-  ctx.closePath();
-  ctx.fill();
+  const hollowEnergyFrame = platform.isJumpPad && platform.trick === "horizontal-jump";
+  if (hollowEnergyFrame) {
+    drawTriangleEnergyFrame(platform, palette, centerX, apexY);
+  } else {
+    ctx.fillStyle = palette[1];
+    ctx.beginPath();
+    ctx.moveTo(platform.start, platform.y);
+    ctx.lineTo(platform.end, platform.y);
+    ctx.lineTo(centerX, apexY);
+    ctx.closePath();
+    ctx.fill();
 
-  ctx.save();
-  const baseAlpha = ctx.globalAlpha;
-  ctx.beginPath();
-  ctx.moveTo(platform.start, platform.y);
-  ctx.lineTo(platform.end, platform.y);
-  ctx.lineTo(centerX, apexY);
-  ctx.closePath();
-  ctx.clip();
-  for (let bandY = pixelSnap(platform.y + 7, 1); bandY < apexY; bandY += 8) {
-    const band = Math.floor((bandY - platform.y) / 8);
-    ctx.fillStyle = band % 2 === 0 ? palette[0] : palette[2];
-    ctx.globalAlpha = baseAlpha * 0.24;
-    ctx.fillRect(platform.start, bandY, platform.end - platform.start, 2);
+    ctx.save();
+    const baseAlpha = ctx.globalAlpha;
+    ctx.beginPath();
+    ctx.moveTo(platform.start, platform.y);
+    ctx.lineTo(platform.end, platform.y);
+    ctx.lineTo(centerX, apexY);
+    ctx.closePath();
+    ctx.clip();
+    for (let bandY = pixelSnap(platform.y + 7, 1); bandY < apexY; bandY += 8) {
+      const band = Math.floor((bandY - platform.y) / 8);
+      ctx.fillStyle = band % 2 === 0 ? palette[0] : palette[2];
+      ctx.globalAlpha = baseAlpha * 0.24;
+      ctx.fillRect(platform.start, bandY, platform.end - platform.start, 2);
+    }
+    ctx.globalAlpha = baseAlpha;
+    drawRoadPixelTexture(platform, palette, platform.routeRole === "sub");
+    ctx.restore();
+
+    ctx.strokeStyle = "rgba(119, 151, 166, 0.58)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(platform.start, platform.y);
+    ctx.lineTo(centerX, apexY);
+    ctx.lineTo(platform.end, platform.y);
+    ctx.stroke();
   }
-  ctx.globalAlpha = baseAlpha;
-  drawRoadPixelTexture(platform, palette, platform.routeRole === "sub");
-  ctx.restore();
-
-  ctx.strokeStyle = "rgba(119, 151, 166, 0.58)";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(platform.start, platform.y);
-  ctx.lineTo(centerX, apexY);
-  ctx.lineTo(platform.end, platform.y);
-  ctx.stroke();
 
   drawPixelRoadRail(platform, railColor, platform.routeRole === "sub");
 
@@ -1728,6 +1701,17 @@ function drawMonster2Fireball(bullet) {
   const radius = bullet.radius * pulse;
   const fade = Math.max(0, Math.min(1, bullet.remainingRange / 165));
   ctx.globalAlpha = fade;
+  // A dark, stepped silhouette keeps the flame readable as pixel art.
+  ctx.shadowBlur = 0;
+  for (let segment = 0; segment < 9; segment += 1) {
+    const taper = segment / 8;
+    const x = pixelSnap(-radius * 2.7 + radius * 1.9 * taper - 1);
+    const waviness = Math.sin(gameTime * 22 + bullet.phase + segment * 1.3) * (1 - taper) * 3;
+    const halfHeight = Math.max(2, pixelSnap(radius * (0.12 + taper * 0.56)));
+    ctx.fillStyle = "#86271c";
+    ctx.fillRect(x, pixelSnap(waviness - halfHeight - 2), 10, halfHeight * 2 + 4);
+  }
+  drawPixelFireballDisk(radius, "#86271c", 2);
   ctx.shadowColor = "#ff7526";
   ctx.shadowBlur = 16;
   // Stepped, tapered flame stays attached to the hot head while the arc rises.
@@ -1739,7 +1723,7 @@ function drawMonster2Fireball(bullet) {
     ctx.fillStyle = segment < 3 ? "#d83b1f" : "#e64b21";
     ctx.fillRect(x, pixelSnap(waviness - halfHeight), 8, halfHeight * 2);
   }
-  drawPixelFireballDisk(radius, "#e64b21", 2);
+  drawPixelFireballDisk(Math.max(2, radius - 2), "#e64b21", 4);
   ctx.shadowBlur = 0;
   for (let segment = 2; segment < 9; segment += 1) {
     const taper = segment / 8;
@@ -2297,11 +2281,10 @@ function drawParticles() {
     } else if (particle.lightImpact) {
       const progress = 1 - Math.max(0, particle.life / particle.maxLife);
       const radius = particle.size * (0.42 + progress * 0.82);
-      const isPlayerRicochet = Boolean(particle.playerRicochet);
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       ctx.shadowColor = particle.color;
-      ctx.shadowBlur = (isPlayerRicochet ? 34 : 24) * (1 - progress);
+      ctx.shadowBlur = 24 * (1 - progress);
       const flash = ctx.createRadialGradient(
         particle.x,
         particle.y,
@@ -2310,20 +2293,15 @@ function drawParticles() {
         particle.y,
         radius,
       );
-      flash.addColorStop(0, isPlayerRicochet
-        ? "rgba(255, 255, 255, 1)" : "rgba(255, 239, 255, 0.98)");
-      flash.addColorStop(isPlayerRicochet ? 0.2 : 0.28, isPlayerRicochet
-        ? "rgba(235, 204, 255, 0.96)" : "rgba(210, 91, 255, 0.76)");
-      flash.addColorStop(1, isPlayerRicochet
-        ? "rgba(128, 45, 214, 0)" : "rgba(73, 4, 106, 0)");
+      flash.addColorStop(0, "rgba(255, 239, 255, 0.98)");
+      flash.addColorStop(0.28, "rgba(210, 91, 255, 0.76)");
+      flash.addColorStop(1, "rgba(73, 4, 106, 0)");
       ctx.fillStyle = flash;
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, radius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = isPlayerRicochet
-        ? `rgba(249, 232, 255, ${0.96 * (1 - progress)})`
-        : `rgba(226, 137, 255, ${0.82 * (1 - progress)})`;
-      ctx.lineWidth = isPlayerRicochet ? 2.5 : 2;
+      ctx.strokeStyle = `rgba(226, 137, 255, ${0.82 * (1 - progress)})`;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, radius * 0.86, 0, Math.PI * 2);
       ctx.stroke();

@@ -2187,11 +2187,33 @@ function addMidBoss(turnX, surfaceLevel, incomingDirection, group) {
   });
 }
 
-function tryAddMonster3(platform, startX, endX, attempts = 6) {
+function stageSpawnIsInStartSafeZone(platform, x, definition) {
+  const centerX = x + definition.width / 2;
+  const centerY = (
+    platformSurfaceY(platform, centerX) -
+    (definition.hoverHeight ?? 0) -
+    definition.height / 2
+  );
+  const playerCenterX = player.x + player.width / 2;
+  const playerCenterY = player.y + player.height / 2;
+  return (
+    Math.abs(centerX - playerCenterX) < PLAYER_START_SAFE_HORIZONTAL_RADIUS &&
+    Math.abs(centerY - playerCenterY) < PLAYER_START_SAFE_VERTICAL_RADIUS
+  );
+}
+
+function tryAddMonster3(
+  platform,
+  startX,
+  endX,
+  attempts = 6,
+  avoidStartSafeZone = false,
+) {
   const flyer = MONSTER_TYPES.monster3;
   if (endX - startX < flyer.width) return null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const x = startX + mapRandom() * (endX - startX - flyer.width);
+    if (avoidStartSafeZone && stageSpawnIsInStartSafeZone(platform, x, flyer)) continue;
     const y = platformSurfaceY(platform, x + flyer.width / 2) -
       flyer.height - flyer.hoverHeight;
     const spriteTop = y + flyer.height - flyer.spriteHeight;
@@ -2287,7 +2309,10 @@ function buildStage() {
           Math.abs(centerX - (turret.x + turret.width / 2)) < TURRET.minimumSeparation &&
           Math.abs(surfaceY - (turret.y + turret.height)) < LEVEL_GAP * 0.8
         ));
-        if (!tooCloseToTurret) {
+        if (
+          !tooCloseToTurret &&
+          !stageSpawnIsInStartSafeZone(platform, candidateX, TURRET)
+        ) {
           turretX = candidateX;
           break;
         }
@@ -2326,6 +2351,7 @@ function buildStage() {
         );
         if (
           !overlapsTurret &&
+          !stageSpawnIsInStartSafeZone(platform, monster2X, monster2) &&
           addEnemy(platform, monster2X, "monster2")
         ) continue;
       }
@@ -2367,7 +2393,14 @@ function buildStage() {
       ) continue;
 
       for (let member = 0; member < groupSize; member += 1) {
-        addEnemy(platform, groupStart + groupSpacing * member, "monster1");
+        const monster1X = groupStart + groupSpacing * member;
+        if (!stageSpawnIsInStartSafeZone(
+          platform,
+          monster1X,
+          MONSTER_TYPES.monster1,
+        )) {
+          addEnemy(platform, monster1X, "monster1");
+        }
       }
     }
     if (turretX !== null) addTurret(platform, turretX);
@@ -2377,7 +2410,7 @@ function buildStage() {
       platformLength >= MONSTER_TYPES.monster3.spawnMinPlatformLength &&
       mapRandom() < MONSTER_TYPES.monster3.spawnChance
     ) {
-      tryAddMonster3(platform, visibleStart, visibleEnd);
+      tryAddMonster3(platform, visibleStart, visibleEnd, 6, true);
     }
 
     if (platform.routeRole === "main" && !platform.startingRoad) {
@@ -2397,7 +2430,13 @@ function buildStage() {
     for (let index = 0; index < routeRoads.length; index += 1) {
       const platform = routeRoads[(offset + index) % routeRoads.length];
       if (platform.end - platform.start < MONSTER_TYPES.monster3.spawnMinPlatformLength) continue;
-      if (tryAddMonster3(platform, platform.start + 24, platform.end - 24, 12)) break;
+      if (tryAddMonster3(
+        platform,
+        platform.start + 24,
+        platform.end - 24,
+        12,
+        true,
+      )) break;
     }
   }
   if (heartItems.length < 7) {
@@ -2426,6 +2465,9 @@ function resetPlayerPosition() {
   player.vy = 0;
   player.reversalDirection = 0;
   player.reversalSparkTimer = 0;
+  player.recentRunDirection = 0;
+  player.recentRunSpeed = 0;
+  player.reversalGraceTimer = 0;
   player.fireTimer = 0;
   player.fireAnimationTime = 0;
   player.fireBarrel = 0;
@@ -2434,6 +2476,8 @@ function resetPlayerPosition() {
   player.grounded = true;
   player.crouching = false;
   player.jumpLatch = false;
+  player.jumpBufferTimer = 0;
+  player.coyoteTime = PLAYER_COYOTE_TIME;
   player.jumpCount = 0;
   player.airJumpAvailable = true;
   player.jumpAnimationTime = 0;
@@ -2609,11 +2653,16 @@ function movePlayerToHorizontalJumpPath() {
   player.vy = 0;
   player.reversalDirection = 0;
   player.reversalSparkTimer = 0;
+  player.recentRunDirection = 0;
+  player.recentRunSpeed = 0;
+  player.reversalGraceTimer = 0;
   player.facing = direction;
   player.platform = firstPlatform;
   player.grounded = true;
   player.crouching = false;
   player.jumpLatch = false;
+  player.jumpBufferTimer = 0;
+  player.coyoteTime = PLAYER_COYOTE_TIME;
   player.jumpCount = 0;
   player.airJumpAvailable = true;
   player.jumpAnimationTime = 0;
