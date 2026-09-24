@@ -84,6 +84,69 @@ function approachPlayerSpeed(value, target, maximumChange) {
   return Math.max(target, value - maximumChange);
 }
 
+function playerAccelerationProgress() {
+  return Math.max(0, Math.min(1, (
+    player.runSpeed - player.speed
+  ) / Math.max(1, PLAYER_RUN_MAX_SPEED - player.speed)));
+}
+
+function accelerationShieldStageForProgress(progress) {
+  if (progress >= PLAYER_ACCELERATION_SHIELD_STAGE_2_PROGRESS) return 2;
+  if (progress >= PLAYER_ACCELERATION_SHIELD_STAGE_1_PROGRESS) return 1;
+  return 0;
+}
+
+function smoothShieldStep(edgeStart, edgeEnd, value) {
+  const progress = Math.max(0, Math.min(1, (
+    value - edgeStart
+  ) / Math.max(0.0001, edgeEnd - edgeStart)));
+  return progress * progress * (3 - 2 * progress);
+}
+
+function updatePlayerAccelerationShield(dt) {
+  player.accelerationShieldHitTimer = Math.max(
+    0,
+    player.accelerationShieldHitTimer - dt,
+  );
+  player.accelerationShieldBlockTimer = Math.max(
+    0,
+    player.accelerationShieldBlockTimer - dt,
+  );
+
+  const progress = playerIsDown() ? 0 : playerAccelerationProgress();
+  const stage = accelerationShieldStageForProgress(progress);
+  if (stage === 0 && progress < 0.04) {
+    player.accelerationShieldStage = 0;
+    player.accelerationShieldCharges = 0;
+  } else if (stage > player.accelerationShieldStage) {
+    player.accelerationShieldCharges = Math.min(
+      2,
+      player.accelerationShieldCharges + stage - player.accelerationShieldStage,
+    );
+    player.accelerationShieldStage = stage;
+  }
+
+  const stageOneVisual = smoothShieldStep(
+    PLAYER_ACCELERATION_SHIELD_STAGE_1_PROGRESS * 0.72,
+    PLAYER_ACCELERATION_SHIELD_STAGE_1_PROGRESS,
+    progress,
+  );
+  const stageTwoVisual = smoothShieldStep(
+    PLAYER_ACCELERATION_SHIELD_STAGE_2_PROGRESS * 0.82,
+    PLAYER_ACCELERATION_SHIELD_STAGE_2_PROGRESS,
+    progress,
+  );
+  const targetVisual = player.accelerationShieldCharges > 0
+    ? stageOneVisual + stageTwoVisual : 0;
+  const blend = 1 - Math.exp(-PLAYER_ACCELERATION_SHIELD_VISUAL_SPEED * dt);
+  player.accelerationShieldVisual += (
+    targetVisual - player.accelerationShieldVisual
+  ) * blend;
+  if (Math.abs(player.accelerationShieldVisual - targetVisual) < 0.002) {
+    player.accelerationShieldVisual = targetVisual;
+  }
+}
+
 function emitPlayerReversalSparks(dt, brakingDirection) {
   if (!brakingDirection || !player.grounded) return;
   player.reversalSparkTimer -= dt;
@@ -228,6 +291,8 @@ function updatePlayer(dt) {
     player.runSpeed = player.speed;
     player.vx = move * player.speed;
   }
+
+  updatePlayerAccelerationShield(dt);
 
   if (canReverseOnGround && player.reversalDirection === 0 &&
       Math.sign(player.vx) === move && Math.abs(player.vx) >= PLAYER_REVERSAL_MIN_SPEED) {

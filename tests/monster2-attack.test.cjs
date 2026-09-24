@@ -31,12 +31,14 @@ function createGame() {
   });
   const canvas = { getContext: () => ctx };
   const scope = {
+    monster2FireSoundCalls: 0,
     performance: { now: () => 0 },
     document: { querySelector: (selector) => selector === "#game" ? canvas : null },
     window: { location: { search: "" }, innerWidth: 720, innerHeight: 1280,
       matchMedia: () => ({ matches: false }) },
     enemySprites: { monster2: { loaded: true, image: { naturalWidth: 309, naturalHeight: 338 } } },
   };
+  scope.playMonsterFire02Sound = () => { scope.monster2FireSoundCalls += 1; };
   vm.createContext(scope);
   for (const name of ["config", "state", "world", "combat", "enemies", "renderer"]) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "js", `${name}.js`), "utf8"),
@@ -76,6 +78,7 @@ test("a volley fires five enlarged fireballs at varied forward angles", () => {
   scope.updateMonster2Volley(enemy, enemy.fireballRecovery + 0.001);
   assert.equal(enemy.state, "chase");
   assert.equal(shots(scope).length, 5);
+  assert.equal(scope.monster2FireSoundCalls, 5);
   assert.ok(shots(scope).every((shot) => shot.kind === "monster2-fireball" && shot.radius === 22));
   const angles = shots(scope).map((shot) => Math.atan2(shot.vy, Math.abs(shot.vx)));
   assert.equal(new Set(angles.map((angle) => angle.toFixed(3))).size, 5);
@@ -226,6 +229,7 @@ test("autonomous attacks repeat offscreen without generating invisible particles
   }
   assert.ok(charges >= 3, "fire cycles must continue even when no player is in range");
   assert.equal(vm.runInContext("particles.length", scope), 0);
+  assert.equal(scope.monster2FireSoundCalls, 0, "offscreen fire stays silent");
   assert.equal(vm.runInContext("player.hp", scope), 3);
 });
 

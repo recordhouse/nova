@@ -1025,15 +1025,128 @@ function drawTerrain() {
   }
 }
 
+function drawPlayerAccelerationShield(frontLayer) {
+  const visualLevel = Math.max(0, Math.min(2, player.accelerationShieldVisual));
+  const hitProgress = Math.max(0, Math.min(
+    1,
+    player.accelerationShieldHitTimer / PLAYER_ACCELERATION_SHIELD_HIT_DURATION,
+  ));
+  if (visualLevel < 0.015 && hitProgress <= 0) return;
+
+  const hitbox = getPlayerHitbox();
+  const centerX = hitbox.x + hitbox.width / 2;
+  const centerY = hitbox.y + hitbox.height / 2 - 2;
+  const secondStage = Math.max(0, visualLevel - 1);
+  const pulse = 0.5 + Math.sin(gameTime * (5.5 + secondStage * 2.5)) * 0.5;
+  const radius = 78 + secondStage * 7 + pulse * 1.5 + hitProgress * 9;
+  const stageColor = secondStage > 0.08 ? "#c16fff" : "#9858ff";
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  if (!frontLayer) {
+    ctx.translate(centerX, centerY);
+    const field = ctx.createRadialGradient(0, 0, radius * 0.12, 0, 0, radius);
+    field.addColorStop(0, "rgba(193, 111, 255, 0.025)");
+    field.addColorStop(0.58, "rgba(154, 70, 255, 0.07)");
+    field.addColorStop(0.84, "rgba(126, 45, 239, 0.12)");
+    field.addColorStop(1, "rgba(94, 25, 190, 0)");
+    ctx.globalAlpha = Math.min(0.78, 0.3 + visualLevel * 0.16 + hitProgress * 0.3);
+    ctx.fillStyle = field;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  ctx.translate(pixelSnap(centerX, 1), pixelSnap(centerY, 1));
+  ctx.shadowColor = stageColor;
+  ctx.shadowBlur = 7 + secondStage * 6 + hitProgress * 10;
+
+  const ringGradient = ctx.createLinearGradient(-radius, -radius, radius, radius);
+  ringGradient.addColorStop(0, "rgba(113, 42, 232, 0.46)");
+  ringGradient.addColorStop(0.48, "rgba(218, 159, 255, 0.98)");
+  ringGradient.addColorStop(1, "rgba(143, 55, 255, 0.7)");
+  ctx.strokeStyle = ringGradient;
+  const ringCount = secondStage > 0.02 ? 5 : 3;
+  for (let ring = 0; ring < ringCount; ring += 1) {
+    const ringRadius = radius - ring * 3.7;
+    ctx.globalAlpha = Math.min(
+      1,
+      (0.4 + visualLevel * 0.18 + hitProgress * 0.4) * (1 - ring * 0.1),
+    );
+    ctx.lineWidth = 0.8 + (ring === 0 ? secondStage * 0.55 + hitProgress : 0);
+    ctx.setLineDash(ring % 2 === 0 ? [4, 3] : [2, 4]);
+    ctx.lineDashOffset = gameTime * (ring % 2 === 0 ? -34 : 27) + ring * 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  const crossGradient = ctx.createLinearGradient(-radius * 0.7, 0, radius * 0.7, 0);
+  crossGradient.addColorStop(0, "rgba(105, 34, 220, 0.16)");
+  crossGradient.addColorStop(0.5, "rgba(205, 132, 255, 0.66)");
+  crossGradient.addColorStop(1, "rgba(105, 34, 220, 0.16)");
+  ctx.strokeStyle = crossGradient;
+  ctx.shadowBlur = 4 + secondStage * 4;
+  ctx.lineWidth = 0.85 + secondStage * 0.3;
+  ctx.setLineDash([3, 3]);
+  const crossOffsets = secondStage > 0.02 ? [-8, -4, 0, 4, 8] : [-4, 0, 4];
+  const crossSpan = radius * 0.66;
+  for (let index = 0; index < crossOffsets.length; index += 1) {
+    const offset = crossOffsets[index];
+    ctx.globalAlpha = Math.min(
+      0.74,
+      0.25 + visualLevel * 0.12 + hitProgress * 0.24 - Math.abs(offset) * 0.008,
+    );
+    ctx.lineDashOffset = gameTime * (index % 2 === 0 ? -24 : 24) + index;
+    ctx.beginPath();
+    ctx.moveTo(-crossSpan, -crossSpan + offset);
+    ctx.lineTo(crossSpan, crossSpan + offset);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-crossSpan, crossSpan + offset);
+    ctx.lineTo(crossSpan, -crossSpan + offset);
+    ctx.stroke();
+  }
+
+  ctx.setLineDash([]);
+  ctx.shadowBlur = 5 + secondStage * 4;
+  ctx.fillStyle = "#b86cff";
+  const nodeCount = secondStage > 0.02 ? 32 : 24;
+  for (let node = 0; node < nodeCount; node += 1) {
+    const angle = node * Math.PI * 2 / nodeCount + gameTime * 0.18;
+    const nodeRadius = radius - 1.5;
+    const x = Math.cos(angle) * nodeRadius;
+    const y = Math.sin(angle) * nodeRadius;
+    const brightNode = node % 4 === 0;
+    const size = brightNode ? 2.4 : 1.4;
+    ctx.globalAlpha = brightNode ? 0.72 : 0.38 + secondStage * 0.14;
+    ctx.fillRect(pixelSnap(x - size / 2, 1), pixelSnap(y - size / 2, 1), size, size);
+  }
+
+  for (let charge = 0; charge < player.accelerationShieldCharges; charge += 1) {
+    const angle = -Math.PI / 2 + (charge === 0 ? -0.2 : 0.2);
+    const x = Math.cos(angle) * (radius - 10);
+    const y = Math.sin(angle) * (radius - 10);
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "#e0b7ff";
+    ctx.fillRect(pixelSnap(x - 2, 1), pixelSnap(y - 2, 1), 5, 5);
+  }
+  ctx.restore();
+}
+
 function drawPlayer() {
   const blinking = player.downPhase === "hold" || (!player.downPhase && player.invincible > 0);
   const blinkTime = player.downPhase === "hold"
     ? player.downTime - PLAYER_DOWN_ANIMATION_DURATION : gameTime;
+  drawPlayerAccelerationShield(false);
   ctx.save();
   // Dim rather than disappear completely, keeping the character easy to locate.
   if (blinking && Math.floor(blinkTime * 10) % 2 !== 0) ctx.globalAlpha *= 0.28;
   const spriteTopY = drawPlayerSprite(player.x + player.width / 2);
   ctx.restore();
+  drawPlayerAccelerationShield(true);
   drawPlayerFireEnergyGauge(spriteTopY);
 }
 
@@ -1112,7 +1225,15 @@ function drawPlayerPhysicsDebug() {
 
 function drawPlayerSprite(centerX) {
   const isDownPose = Boolean(player.downPhase);
-  const isRunning = Math.abs(player.vx) > 1;
+  const isReversingOrBridgingInput = player.grounded && (
+    player.reversalDirection !== 0 ||
+    (
+      player.reversalGraceTimer > 0 &&
+      player.recentRunDirection !== 0 &&
+      player.recentRunSpeed >= PLAYER_REVERSAL_MIN_SPEED
+    )
+  );
+  const isRunning = Math.abs(player.vx) > 1 || isReversingOrBridgingInput;
   const isJumping = !player.grounded;
   const isDeepFalling = isJumping && player.deepFalling;
   const isFiring = controls.fire && (
@@ -1459,6 +1580,7 @@ function drawEnemy(enemy) {
   const sprite = enemySprites[enemy.kind];
   const isMonster2 = enemy.kind === "monster2";
   const isMonster3 = enemy.kind === "monster3";
+  const isMonster4 = enemy.kind === "monster4";
   const pose = enemySpritePose(enemy);
 
   ctx.save();
@@ -1467,7 +1589,7 @@ function drawEnemy(enemy) {
     pose.feetY,
   );
   ctx.translate(pose.hitOffsetX, 0);
-  if (!isMonster3) {
+  if (!isMonster3 && !isMonster4) {
     ctx.fillStyle = "rgba(72, 255, 48, 0.08)";
     ctx.fillRect(-pixelSnap(enemy.width * 0.55), -6, pixelSnap(enemy.width * 1.1), 6);
     ctx.fillStyle = "rgba(72, 255, 48, 0.18)";
@@ -2003,13 +2125,13 @@ function drawPlayerImpactFlash(particle) {
   ctx.restore();
 }
 
-function drawHeartPickupFlash(particle) {
+function drawHeartPickupGlow(particle) {
   const remaining = Math.max(0, particle.life / particle.maxLife);
   const progress = 1 - remaining;
-  const radius = particle.size * (0.38 + progress * 0.72);
+  const radius = particle.size * (0.46 + progress * 0.42);
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  ctx.globalAlpha = Math.pow(remaining, 1.15);
+  ctx.globalAlpha = Math.pow(remaining, 1.25) * 0.72;
   const halo = ctx.createRadialGradient(
     particle.x,
     particle.y,
@@ -2018,21 +2140,41 @@ function drawHeartPickupFlash(particle) {
     particle.y,
     radius,
   );
-  halo.addColorStop(0, "rgba(255, 255, 255, 1)");
-  halo.addColorStop(0.2, "rgba(255, 211, 226, 0.96)");
-  halo.addColorStop(0.52, "rgba(255, 83, 137, 0.62)");
-  halo.addColorStop(1, "rgba(255, 43, 111, 0)");
+  halo.addColorStop(0, "rgba(255, 255, 255, 0.92)");
+  halo.addColorStop(0.3, "rgba(255, 218, 231, 0.72)");
+  halo.addColorStop(0.7, "rgba(255, 111, 159, 0.3)");
+  halo.addColorStop(1, "rgba(255, 86, 142, 0)");
   ctx.fillStyle = halo;
   ctx.beginPath();
   ctx.arc(particle.x, particle.y, radius, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.translate(particle.x, particle.y);
-  const heartGrowth = 1 + progress * 0.72;
-  ctx.scale(heartGrowth, heartGrowth);
-  ctx.shadowColor = "#ff79a7";
-  ctx.shadowBlur = 22 * remaining;
-  drawPixelHeart(-14, -12, 1, 4);
+  ctx.restore();
+}
+
+function drawHeartPickupCloud(particle) {
+  const remaining = Math.max(0, particle.life / particle.maxLife);
+  const progress = 1 - remaining;
+  const appear = Math.min(1, progress * 7);
+  const puffSize = particle.size * (0.52 + Math.sin(progress * Math.PI) * 0.48);
+  const wobble = Math.sin(gameTime * 5 + particle.phase) * 2.5;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = appear * Math.pow(remaining, 1.25) * 0.66;
+  ctx.translate(pixelSnap(particle.x + wobble, 1), pixelSnap(particle.y, 1));
+  ctx.shadowColor = particle.color;
+  ctx.shadowBlur = 10 * remaining;
+  ctx.fillStyle = particle.color;
+  ctx.beginPath();
+  ctx.arc(-puffSize * 0.28, 0, puffSize * 0.43, 0, Math.PI * 2);
+  ctx.arc(puffSize * 0.25, -puffSize * 0.08, puffSize * 0.48, 0, Math.PI * 2);
+  ctx.arc(0, puffSize * 0.2, puffSize * 0.52, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha *= 0.48;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(-puffSize * 0.08, -puffSize * 0.12, puffSize * 0.25, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -2135,19 +2277,10 @@ function drawParticles() {
       drawCombatDebris(particle);
     } else if (particle.impactFlash) {
       drawPlayerImpactFlash(particle);
-    } else if (particle.heartPickupFlash) {
-      drawHeartPickupFlash(particle);
-    } else if (particle.heartPickupShard) {
-      const remaining = Math.max(0, particle.life / particle.maxLife);
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = Math.pow(remaining, 1.15);
-      ctx.translate(pixelSnap(particle.x, 1), pixelSnap(particle.y, 1));
-      ctx.rotate(particle.angle);
-      ctx.shadowColor = "#ff6f9f";
-      ctx.shadowBlur = 7 * remaining;
-      drawPixelHeart(-7, -6, 1, 2);
-      ctx.restore();
+    } else if (particle.heartPickupGlow) {
+      drawHeartPickupGlow(particle);
+    } else if (particle.heartPickupCloud) {
+      drawHeartPickupCloud(particle);
     } else if (particle.impactRay) {
       const remaining = Math.max(0, particle.life / particle.maxLife);
       ctx.save();
@@ -2481,7 +2614,8 @@ function drawWorld() {
     for (const enemy of enemies) {
       drawCombatantPhysicsDebug(enemy,
         enemy.kind === "monster3" ? "#ffbd78"
-          : enemy.kind === "monster2" ? "#ff96ec" : "#8aff9c");
+          : enemy.kind === "monster2" ? "#ff96ec"
+            : enemy.kind === "monster4" ? "#ff9a72" : "#8aff9c");
     }
     for (const turret of turrets) drawCombatantPhysicsDebug(turret, "#ffd278");
   }
@@ -2556,10 +2690,18 @@ function hudHeaderLayout() {
   };
 }
 
-function drawMinimapDistanceFog(playerMapX, playerMapY, plotX, plotY, plotWidth, plotHeight) {
+function drawMinimapDistanceFog(
+  renderContext,
+  playerMapX,
+  playerMapY,
+  plotX,
+  plotY,
+  plotWidth,
+  plotHeight,
+) {
   const fadeRadius = Math.hypot(plotWidth, plotHeight) * 0.55;
   const clearRadius = Math.max(4, Math.min(plotWidth, plotHeight) * 0.08);
-  const fog = ctx.createRadialGradient(
+  const fog = renderContext.createRadialGradient(
     playerMapX,
     playerMapY,
     clearRadius,
@@ -2572,8 +2714,90 @@ function drawMinimapDistanceFog(playerMapX, playerMapY, plotX, plotY, plotWidth,
   fog.addColorStop(0.55, "rgba(1, 3, 8, 0.38)");
   fog.addColorStop(0.82, "rgba(1, 3, 8, 0.7)");
   fog.addColorStop(1, "rgba(1, 3, 8, 0.9)");
-  ctx.fillStyle = fog;
-  ctx.fillRect(plotX, plotY, plotWidth, plotHeight);
+  renderContext.fillStyle = fog;
+  renderContext.fillRect(plotX, plotY, plotWidth, plotHeight);
+}
+
+let minimapLayer = null;
+
+function prepareMinimapLayer(panelX, panelY, panelWidth, panelHeight) {
+  const renderScale = 2;
+  const pixelWidth = Math.max(1, Math.ceil(panelWidth * renderScale));
+  const pixelHeight = Math.max(1, Math.ceil(panelHeight * renderScale));
+  if (!minimapLayer) {
+    const surface = typeof OffscreenCanvas === "function"
+      ? new OffscreenCanvas(pixelWidth, pixelHeight)
+      : document.createElement?.("canvas");
+    const context = surface?.getContext?.("2d");
+    if (!surface || !context) return null;
+    minimapLayer = { surface, context };
+  }
+  const { surface, context } = minimapLayer;
+  if (surface.width !== pixelWidth) surface.width = pixelWidth;
+  if (surface.height !== pixelHeight) surface.height = pixelHeight;
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.clearRect(0, 0, pixelWidth, pixelHeight);
+  context.setTransform(
+    renderScale,
+    0,
+    0,
+    renderScale,
+    -panelX * renderScale,
+    -panelY * renderScale,
+  );
+  return minimapLayer;
+}
+
+function applyMinimapEdgeMask(
+  renderContext,
+  panelX,
+  panelY,
+  panelWidth,
+  panelHeight,
+  plotX,
+  plotY,
+  plotWidth,
+  plotHeight,
+) {
+  const leftEdge = (plotX - panelX) / panelWidth;
+  const rightEdge = (plotX + plotWidth - panelX) / panelWidth;
+  const topEdge = (plotY - panelY) / panelHeight;
+  const bottomEdge = (plotY + plotHeight - panelY) / panelHeight;
+  const horizontalFade = Math.min(0.13, (rightEdge - leftEdge) * 0.3);
+  const verticalFade = Math.min(0.18, (bottomEdge - topEdge) * 0.3);
+
+  renderContext.save();
+  renderContext.globalCompositeOperation = "destination-in";
+  const horizontalMask = renderContext.createLinearGradient(
+    panelX,
+    panelY,
+    panelX + panelWidth,
+    panelY,
+  );
+  horizontalMask.addColorStop(0, "rgba(0, 0, 0, 0)");
+  horizontalMask.addColorStop(leftEdge, "rgba(0, 0, 0, 0)");
+  horizontalMask.addColorStop(leftEdge + horizontalFade, "rgba(0, 0, 0, 1)");
+  horizontalMask.addColorStop(rightEdge - horizontalFade, "rgba(0, 0, 0, 1)");
+  horizontalMask.addColorStop(rightEdge, "rgba(0, 0, 0, 0)");
+  horizontalMask.addColorStop(1, "rgba(0, 0, 0, 0)");
+  renderContext.fillStyle = horizontalMask;
+  renderContext.fillRect(panelX, panelY, panelWidth, panelHeight);
+
+  const verticalMask = renderContext.createLinearGradient(
+    panelX,
+    panelY,
+    panelX,
+    panelY + panelHeight,
+  );
+  verticalMask.addColorStop(0, "rgba(0, 0, 0, 0)");
+  verticalMask.addColorStop(topEdge, "rgba(0, 0, 0, 0)");
+  verticalMask.addColorStop(topEdge + verticalFade, "rgba(0, 0, 0, 1)");
+  verticalMask.addColorStop(bottomEdge - verticalFade, "rgba(0, 0, 0, 1)");
+  verticalMask.addColorStop(bottomEdge, "rgba(0, 0, 0, 0)");
+  verticalMask.addColorStop(1, "rgba(0, 0, 0, 0)");
+  renderContext.fillStyle = verticalMask;
+  renderContext.fillRect(panelX, panelY, panelWidth, panelHeight);
+  renderContext.restore();
 }
 
 function drawMinimap(fullMap = false) {
@@ -2630,11 +2854,11 @@ function drawMinimap(fullMap = false) {
   const fullWorldHeight = Math.max(1, fullWorldBottom - fullWorldTop);
   const worldWidth = expanded ? fullWorldWidth : Math.min(
     fullWorldWidth,
-    Math.max(WIDTH * 1.25, fullWorldWidth * 0.25),
+    Math.max(WIDTH * 1.25, fullWorldWidth * MINIMAP_LOCAL_WORLD_RATIO),
   );
   const worldHeight = expanded ? fullWorldHeight : Math.min(
     fullWorldHeight,
-    Math.max(HEIGHT * 1.1, fullWorldHeight * 0.25),
+    Math.max(HEIGHT * 1.1, fullWorldHeight * MINIMAP_LOCAL_WORLD_RATIO),
   );
   const focusX = player.x + player.width / 2;
   const focusY = player.y + player.height / 2;
@@ -2660,6 +2884,7 @@ function drawMinimap(fullMap = false) {
     ? (value) => plotY + (plotHeight - worldHeight * mapScale) / 2 + (value - worldTop) * mapScale
     : (value) => plotY + (value - worldTop) / worldHeight * plotHeight;
 
+  const renderMap = (ctx) => {
   ctx.save();
   if (expanded) {
     ctx.fillStyle = "rgba(1, 4, 9, 0.86)";
@@ -2749,6 +2974,7 @@ function drawMinimap(fullMap = false) {
   // distant paths disappear gradually. The test-only full map stays clear.
   if (!expanded) {
     drawMinimapDistanceFog(
+      ctx,
       playerMapX,
       playerMapY,
       plotX,
@@ -2789,6 +3015,33 @@ function drawMinimap(fullMap = false) {
   ctx.arc(playerMapX, playerMapY, 3.4, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+  ctx.restore();
+  };
+
+  if (expanded) {
+    renderMap(ctx);
+    return;
+  }
+  const layer = prepareMinimapLayer(panelX, panelY, panelWidth, panelHeight);
+  if (!layer) {
+    renderMap(ctx);
+    return;
+  }
+  renderMap(layer.context);
+  applyMinimapEdgeMask(
+    layer.context,
+    panelX,
+    panelY,
+    panelWidth,
+    panelHeight,
+    plotX,
+    plotY,
+    plotWidth,
+    plotHeight,
+  );
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.drawImage(layer.surface, panelX, panelY, panelWidth, panelHeight);
   ctx.restore();
 }
 

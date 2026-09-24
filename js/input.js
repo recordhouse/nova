@@ -214,6 +214,34 @@ testMapButton?.addEventListener("click", (event) => {
   toggleTestMap();
 });
 
+let testMusicPaused = false;
+function updateTestMusicButton() {
+  if (!TEST_MODE || !testMusicButton) return;
+  testMusicButton.setAttribute("aria-pressed", String(testMusicPaused));
+  testMusicButton.setAttribute(
+    "aria-label",
+    testMusicPaused
+      ? "배경음악 일시정지됨, 다시 누르면 재생"
+      : "배경음악 재생 중, 누르면 일시정지",
+  );
+  testMusicButton.textContent = testMusicPaused ? "BGM ▶" : "BGM Ⅱ";
+}
+
+function toggleTestMusic() {
+  if (!TEST_MODE) return;
+  testMusicPaused = !testMusicPaused;
+  if (typeof setCurrentStageMusicPaused === "function") {
+    setCurrentStageMusicPaused(testMusicPaused);
+  }
+  updateTestMusicButton();
+}
+
+testMusicButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  toggleTestMusic();
+});
+updateTestMusicButton();
+
 function updateTestInvincibilityButton() {
   if (!TEST_MODE || !testInvincibilityButton) return;
   testInvincibilityButton.setAttribute("aria-pressed", String(testInvincibility));
@@ -245,6 +273,11 @@ testSpawnMonster2Button?.addEventListener("click", (event) => {
 testSpawnMonster3Button?.addEventListener("click", (event) => {
   event.preventDefault();
   spawnTestMonster("monster3");
+});
+
+testSpawnMonster4Button?.addEventListener("click", (event) => {
+  event.preventDefault();
+  spawnTestMonster("monster4");
 });
 
 function updateTestAreaButton(button, enabled, subject) {

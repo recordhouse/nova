@@ -6,12 +6,14 @@
     <meta name="theme-color" content="#050505" />
     <title>NOVA — Run &amp; Gun Prototype</title>
     <link rel="preload" href="./assets/sound/gun.mp3" as="fetch" crossorigin="anonymous" />
-    <link rel="preload" href="./assets/sound/gun_impact.mp3" as="fetch" crossorigin="anonymous" />
-    <link rel="preload" href="./assets/sound/gun_hit.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/gun_impact.mp3?v=20260924-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/gun_hit.mp3?v=20260924-1" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/metal.mp3" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/laser.mp3?v=20260922-2" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/monster_die_01.mp3" as="fetch" crossorigin="anonymous" />
-    <link rel="stylesheet" href="./styles.css?v=20260920-2" />
+    <link rel="preload" href="./assets/sound/monster_fire_02.mp3?v=20260923-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/music/stage_01.mp3?v=20260924-1" as="audio" />
+    <link rel="stylesheet" href="./styles.css?v=20260924-2" />
   </head>
   <body>
     <main class="game-shell" aria-label="NOVA 게임 프로토타입">
@@ -50,6 +52,15 @@
           aria-pressed="false"
         >
           MAP
+        </button>
+        <button
+          type="button"
+          class="test-music-button"
+          data-test-music
+          aria-label="배경음악 재생 중, 누르면 일시정지"
+          aria-pressed="false"
+        >
+          BGM Ⅱ
         </button>
         <button
           type="button"
@@ -102,6 +113,14 @@
         >
           M3
         </button>
+        <button
+          type="button"
+          class="test-monster-spawn-button monster4"
+          data-test-spawn-monster4
+          aria-label="몹4 한 마리 생성"
+        >
+          M4
+        </button>
       </section>
 
       <section class="touch-controls" aria-label="터치 조작 버튼">
@@ -125,15 +144,15 @@
       </section>
     </main>
 
-    <script src="./js/config.js?v=20260922-4"></script>
-    <script src="./js/assets.js?v=20260922-6"></script>
-    <script src="./js/state.js?v=20260922-4"></script>
-    <script src="./js/world.js?v=20260922-2"></script>
-    <script src="./js/combat.js?v=20260922-5"></script>
-    <script src="./js/player.js?v=20260922-2"></script>
-    <script src="./js/enemies.js?v=20260922-1"></script>
-    <script src="./js/renderer.js?v=20260920-2"></script>
-    <script src="./js/input.js?v=20260922-1"></script>
-    <script src="./js/main.js?v=20260920-1"></script>
+    <script src="./js/config.js?v=20260924-3"></script>
+    <script src="./js/assets.js?v=20260924-3"></script>
+    <script src="./js/state.js?v=20260924-1"></script>
+    <script src="./js/world.js?v=20260923-1"></script>
+    <script src="./js/combat.js?v=20260924-2"></script>
+    <script src="./js/player.js?v=20260924-1"></script>
+    <script src="./js/enemies.js?v=20260923-3"></script>
+    <script src="./js/renderer.js?v=20260924-3"></script>
+    <script src="./js/input.js?v=20260924-1"></script>
+    <script src="./js/main.js?v=20260923-1"></script>
   </body>
 </html>

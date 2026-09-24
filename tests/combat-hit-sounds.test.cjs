@@ -49,6 +49,7 @@ test("organic and metal targets play their matching bullet-hit sounds", () => {
   hitEnemy(scope, "monster1", 200);
   hitEnemy(scope, "monster2", 500);
   hitEnemy(scope, "monster3", 800);
+  hitEnemy(scope, "monster4", 950);
 
   vm.runInContext(`
     enemies.length=0; turrets.length=0; bullets.length=0;
@@ -59,18 +60,20 @@ test("organic and metal targets play their matching bullet-hit sounds", () => {
   `, scope);
   scope.updateBullets(0);
 
-  assert.deepEqual(soundCalls, ["gun_hit", "gun_hit", "metal", "metal"]);
+  assert.deepEqual(soundCalls, ["gun_hit", "gun_hit", "metal", "gun_hit", "metal"]);
 });
 
-test("monster death sound plays only for lethal hits on monster1 and monster2", () => {
+test("monster death sound plays only for lethal hits on organic monsters", () => {
   const { scope, soundCalls } = createGame();
   hitEnemy(scope, "monster1", 200, true);
   hitEnemy(scope, "monster2", 500, true);
   hitEnemy(scope, "monster3", 800, true);
+  hitEnemy(scope, "monster4", 950, true);
 
   assert.deepEqual(soundCalls, [
     "gun_hit", "monster_die_01",
     "gun_hit", "monster_die_01",
     "metal",
+    "gun_hit", "monster_die_01",
   ]);
 });

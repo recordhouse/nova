@@ -8,12 +8,14 @@ const testJumpPathButton = document.querySelector("[data-test-jump-path]");
 const testResolutionButton = document.querySelector("[data-test-resolution]");
 const testOrientationButton = document.querySelector("[data-test-orientation]");
 const testMapButton = document.querySelector("[data-test-map]");
+const testMusicButton = document.querySelector("[data-test-music]");
 const testInvincibilityButton = document.querySelector("[data-test-invincibility]");
 const testPlayerAreaButton = document.querySelector("[data-test-player-area]");
 const testMonsterAreaButton = document.querySelector("[data-test-monster-area]");
 const testSpawnMonster1Button = document.querySelector("[data-test-spawn-monster1]");
 const testSpawnMonster2Button = document.querySelector("[data-test-spawn-monster2]");
 const testSpawnMonster3Button = document.querySelector("[data-test-spawn-monster3]");
+const testSpawnMonster4Button = document.querySelector("[data-test-spawn-monster4]");
 const gameShellElement = document.querySelector(".game-shell");
 if (testControlsElement) testControlsElement.hidden = !TEST_MODE;
 
@@ -46,7 +48,12 @@ const GRAVITY = 2100;
 const JUMP_SPEED = 950;
 const PLAYER_RUN_SPEED = 275;
 const PLAYER_RUN_MAX_SPEED = 410;
-const PLAYER_RUN_ACCELERATION = 60;
+const PLAYER_RUN_ACCELERATION = 120;
+const PLAYER_ACCELERATION_SHIELD_STAGE_1_PROGRESS = 0.34;
+const PLAYER_ACCELERATION_SHIELD_STAGE_2_PROGRESS = 0.72;
+const PLAYER_ACCELERATION_SHIELD_VISUAL_SPEED = 7.5;
+const PLAYER_ACCELERATION_SHIELD_HIT_DURATION = 0.32;
+const PLAYER_ACCELERATION_SHIELD_BLOCK_GRACE = 0.24;
 const PLAYER_COYOTE_TIME = 0.11;
 const PLAYER_JUMP_BUFFER_TIME = 0.12;
 const PLAYER_MAX_FALL_SPEED = 760;
@@ -93,6 +100,7 @@ const ELECTRIC_WIRE_DAMAGE = 0.5;
 const MAP_FLOW_DISTANCE_MIN = 1200;
 const MAP_FLOW_DISTANCE_MAX = 3000;
 const MAP_FLOW_REVERSE_CHANCE = 0.34;
+const MINIMAP_LOCAL_WORLD_RATIO = 0.33;
 const MAP_FLOW_VERTICAL_STREAK_CHANCE = 0.56;
 const MAP_FLOW_VERTICAL_STREAK_MAX = 3;
 const MAP_FLOW_VERTICAL_SOFT_LIMIT = 10;
@@ -201,6 +209,11 @@ const ENEMY_SPAWN_DENSITY = 1;
 const PLAYER_START_SAFE_HORIZONTAL_RADIUS = 1120;
 const PLAYER_START_SAFE_VERTICAL_RADIUS = 720;
 const MONSTER1_SPAWN_COUNT_RATIO = 2 / 3;
+const MONSTER4_TO_MONSTER1_SPAWN_RATIO = 1 / 3;
+const MONSTER4_GROUP_SLOT_CHANCE = (
+  MONSTER4_TO_MONSTER1_SPAWN_RATIO /
+  (1 + MONSTER4_TO_MONSTER1_SPAWN_RATIO)
+);
 const ENEMY_BODY_SEPARATION = 8;
 const ENEMY_GROUP_MIN_SIZE = 2;
 const ENEMY_GROUP_MAX_SIZE = 5;
@@ -288,6 +301,51 @@ const MONSTER_TYPES = {
     hitKnockbackDamping: 9.5,
     hitAirImpulse: 90,
     score: 100,
+  },
+  monster4: {
+    displayName: "몹4",
+    width: 72,
+    height: 78,
+    spriteWidth: 115,
+    spriteHeight: 129,
+    spriteBottomOffset: 5,
+    spriteTopInset: 12 / 350,
+    hp: 3,
+    speed: 128,
+    chaseRange: 900,
+    chaseVerticalRange: 300,
+    climbSearchRange: 1400,
+    climbVerticalRange: 720,
+    climbMinimumHeight: 34,
+    jumpAttackRange: 260,
+    jumpAttackVerticalRange: 72,
+    jumpLandingVerticalRange: 72,
+    dropAttackRange: 720,
+    dropAttackMinHeight: 90,
+    dropAttackMaxHeight: 720,
+    dropAttackHorizontalDistance: 92,
+    dropAttackLaunchSpeed: 150,
+    dropLandingClearance: 30,
+    walkableStepHeight: 20,
+    jumpGapRange: 210,
+    jumpGapMaxRise: LEVEL_GAP + 12,
+    jumpGapMaxDrop: 72,
+    jumpGapMinHorizontalSpeed: 125,
+    climbJumpLaunchSpeed: 680,
+    jumpLaunchSpeed: 440,
+    jumpGravity: 1150,
+    jumpMinHorizontalSpeed: 105,
+    jumpMaxHorizontalSpeed: 410,
+    jumpWindupDuration: 0.12,
+    jumpRecoveryDuration: 0.1,
+    jumpCooldown: 0.7,
+    attackCooldown: 0.65,
+    hitDuration: 0.2,
+    hitKnockbackSpeed: 360,
+    hitKnockbackMaxSpeed: 600,
+    hitKnockbackDamping: 9.5,
+    hitAirImpulse: 90,
+    score: 150,
   },
   monster2: {
     displayName: "몹2",

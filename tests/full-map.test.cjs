@@ -145,13 +145,14 @@ test("full map skips world effects and is not hidden by the game-over overlay", 
 
 test("closed map keeps the small, cropped minimap", () => {
   const { scope, strokes, strokeRects, clips, gradients } = createGame();
+  assert.equal(vm.runInContext("MINIMAP_LOCAL_WORLD_RATIO", scope), 0.33);
   scope.drawMinimap();
   const [x, y, width, height] = clips.at(-1);
   assert.ok(width < 282 && height <= 148);
   const roads = strokes.filter((stroke) => stroke.color === "rgba(83, 221, 242, 0.62)");
   assert.ok(roads.length > 0);
   assert.ok(roads.length < vm.runInContext("platforms.length", scope),
-    "the small map should skip roads outside its visible quarter");
+    "the small map should still skip roads outside its wider local window");
   const distanceFog = gradients.find((gradient) => gradient.stops.some((stop) =>
     stop.color === "rgba(1, 3, 8, 0.9)"));
   assert.ok(distanceFog, "the local minimap should darken paths farther from the player");
@@ -162,6 +163,22 @@ test("closed map keeps the small, cropped minimap", () => {
     stop.color === "rgba(3, 8, 14, 0)"));
   assert.ok(blendedBackground, "the frameless minimap background should fade into space");
   assert.equal(strokeRects.length, 0, "the minimap should not draw a rectangular border");
+});
+
+test("the local minimap mask fades all four edges to true transparency", () => {
+  const { scope, gradients } = createGame();
+  vm.runInContext(
+    "applyMinimapEdgeMask(ctx, 0, 0, 200, 120, 10, 10, 180, 100)",
+    scope,
+  );
+  const masks = gradients.slice(-2);
+  assert.equal(masks.length, 2);
+  assert.ok(masks.every((gradient) => gradient.type === "linear"));
+  for (const mask of masks) {
+    assert.equal(mask.stops[0].color, "rgba(0, 0, 0, 0)");
+    assert.equal(mask.stops.at(-1).color, "rgba(0, 0, 0, 0)");
+    assert.equal(mask.stops.filter((stop) => stop.color === "rgba(0, 0, 0, 1)").length, 2);
+  }
 });
 
 test("test mode full map stays clear without the local distance fog", () => {

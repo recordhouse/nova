@@ -2,9 +2,54 @@
 
 // Player fire, projectile collision, ricochets, and bullet updates.
 
+function sourceIsEnemyAttack(source) {
+  return [
+    "monster1",
+    "monster4",
+    "monster2-fireball",
+    "monster3-laser",
+    "turret-laser",
+    "boss-laser",
+    "boss",
+  ].includes(source?.kind);
+}
+
+function emitPlayerShieldBlock(source) {
+  const hitbox = getPlayerHitbox();
+  const centerX = hitbox.x + hitbox.width / 2;
+  const centerY = hitbox.y + hitbox.height / 2;
+  const sourceCenterX = source.x + (source.width ?? 0) / 2;
+  const direction = Math.sign(sourceCenterX - centerX) || player.facing;
+  const color = player.accelerationShieldCharges > 0 ? "#aa63ff" : "#d2a0ff";
+  player.accelerationShieldHitTimer = PLAYER_ACCELERATION_SHIELD_HIT_DURATION;
+  player.accelerationShieldBlockTimer = PLAYER_ACCELERATION_SHIELD_BLOCK_GRACE;
+  burst(
+    centerX + direction * Math.min(42, hitbox.width * 0.62),
+    centerY,
+    color,
+    18,
+    230,
+  );
+  shake = Math.max(shake, 8);
+}
+
+function absorbEnemyAttackWithPlayerShield(source) {
+  if (
+    !sourceIsEnemyAttack(source) ||
+    player.accelerationShieldCharges <= 0
+  ) return false;
+  player.accelerationShieldCharges -= 1;
+  emitPlayerShieldBlock(source);
+  return true;
+}
+
 function takePlayerDamage(amount, source = null) {
   if (gameOver || player.hp <= 0 || player.invincible > 0 || playerIsDown() ||
       (TEST_MODE && testInvincibility)) return false;
+  if (sourceIsEnemyAttack(source) && player.accelerationShieldBlockTimer > 0) {
+    return false;
+  }
+  if (absorbEnemyAttackWithPlayerShield(source)) return true;
   const hitbox = getPlayerHitbox();
   const playerCenterX = hitbox.x + hitbox.width / 2;
   const sourceCenterX = source && Number.isFinite(source.x)
@@ -27,6 +72,11 @@ function takePlayerDamage(amount, source = null) {
   player.recentRunDirection = 0;
   player.recentRunSpeed = 0;
   player.reversalGraceTimer = 0;
+  player.accelerationShieldStage = 0;
+  player.accelerationShieldCharges = 0;
+  player.accelerationShieldVisual = 0;
+  player.accelerationShieldHitTimer = 0;
+  player.accelerationShieldBlockTimer = 0;
   player.jumpBufferTimer = 0;
   player.coyoteTime = 0;
   player.crouching = false;
@@ -43,6 +93,7 @@ function emitPlayerHitImpact(source) {
   const centerY = hitbox.y + hitbox.height / 2;
   const sourceKind = source.kind ?? "boss";
   const accent = sourceKind === "monster1" ? "#b0ff73"
+    : sourceKind === "monster4" ? "#ff9f68"
     : sourceKind === "monster2-fireball" ? "#ffae68"
       : sourceKind === "monster3-laser" ? "#ffd58d"
         : sourceKind === "turret-laser" ? "#ff83b9" : "#ff8edb";
@@ -200,57 +251,41 @@ function burst(x, y, color, count = 10, force = 220) {
 function emitHeartPickupBurst(heart) {
   const centerX = heart.x;
   const centerY = heart.y + Math.sin(gameTime * 2.1 + (heart.phase ?? 0)) * 9;
-  const flashLife = 0.46;
+  const glowLife = 0.58;
   particles.push({
     x: centerX,
     y: centerY,
     vx: 0,
     vy: 0,
     gravity: 0,
-    life: flashLife,
-    maxLife: flashLife,
-    size: 76,
+    life: glowLife,
+    maxLife: glowLife,
+    size: 68,
     color: "#ff6f9f",
-    heartPickupFlash: true,
+    heartPickupGlow: true,
   });
 
-  for (let shard = 0; shard < 10; shard += 1) {
-    const angle = shard * Math.PI * 2 / 10 + (Math.random() - 0.5) * 0.18;
-    const speed = 165 + Math.random() * 175;
-    const life = 0.58 + Math.random() * 0.3;
+  const cloudColors = ["#fff6fa", "#ffdce8", "#ffb9d0"];
+  for (let cloud = 0; cloud < 16; cloud += 1) {
+    const angle = cloud * Math.PI * 2 / 16 + (Math.random() - 0.5) * 0.32;
+    const distance = 9 + Math.random() * 22;
+    const speed = 16 + Math.random() * 30;
+    const life = 0.68 + Math.random() * 0.42;
     particles.push({
-      x: centerX + Math.cos(angle) * 8,
-      y: centerY + Math.sin(angle) * 8,
+      x: centerX + Math.cos(angle) * distance,
+      y: centerY + Math.sin(angle) * distance * 0.62,
       vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed - 38,
-      gravity: 180,
+      vy: -18 - Math.random() * 28 + Math.sin(angle) * 7,
+      gravity: -4,
       life,
       maxLife: life,
-      angle,
-      angularVelocity: (Math.random() - 0.5) * 5,
-      heartPickupShard: true,
+      size: 15 + Math.random() * 13,
+      phase: Math.random() * Math.PI * 2,
+      color: cloudColors[cloud % cloudColors.length],
+      heartPickupCloud: true,
     });
   }
-
-  for (let ray = 0; ray < 16; ray += 1) {
-    const angle = ray * Math.PI * 2 / 16 + (Math.random() - 0.5) * 0.1;
-    const speed = 280 + Math.random() * 260;
-    const life = 0.3 + Math.random() * 0.2;
-    particles.push({
-      x: centerX + Math.cos(angle) * 6,
-      y: centerY + Math.sin(angle) * 6,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      gravity: 0,
-      life,
-      maxLife: life,
-      color: ray % 3 === 0 ? "#fff8fb" : "#ff6f9f",
-      coreColor: "#ffffff",
-      size: 2.4,
-      impactRay: true,
-    });
-  }
-  shake = Math.max(shake, 4);
+  shake = Math.max(shake, 1.5);
 }
 
 function burstMonsterFragments(bullet, enemy, lethal = false) {
@@ -260,6 +295,8 @@ function burstMonsterFragments(bullet, enemy, lethal = false) {
     ? ["#ffcf75", "#f46c3c", "#a34572", "#4d3d5e", "#273443"]
     : enemy.kind === "monster2"
     ? ["#f094ed", "#cd4dc7", "#823980", "#5d2466", "#33223e"]
+    : enemy.kind === "monster4"
+    ? ["#ff9d65", "#dc593d", "#92372e", "#2ce4d7", "#34202d"]
     : ["#70ff37", "#c9ff55", "#34ba32", "#713aa0", "#2b1647"];
   const count = lethal ? 30 : 16;
   const spread = lethal ? Math.PI * 0.9 : Math.PI * 0.58;
@@ -318,13 +355,16 @@ function burstTurretFragments(bullet) {
 
 function burstCombatantExplosion(target, kind) {
   const isTurret = kind === "turret";
-  const isLarge = isTurret || kind === "monster2" || kind === "monster3";
+  const isLarge = isTurret || kind === "monster2" || kind === "monster3" || kind === "monster4";
   const centerX = target.x + target.width / 2;
   const centerY = target.y + target.height * 0.52;
   const color = kind === "monster1" ? "#99ff52"
+    : kind === "monster4" ? "#ff764c"
     : kind === "monster3" ? "#ffaf62" : "#ed81fa";
   const debrisColors = kind === "monster1"
     ? ["#358329", "#5bac35", "#6b396f", "#34233b"]
+    : kind === "monster4"
+      ? ["#b74431", "#df6848", "#753126", "#174e50", "#34232b"]
     : kind === "monster3"
       ? ["#ffb665", "#e97449", "#70435c", "#314458"]
       : isTurret
@@ -414,7 +454,8 @@ function burstCombatantExplosion(target, kind) {
         organicDebris: true,
         splatProgress: 0,
         organicVariant: chunk % 3,
-        shadowColor: kind === "monster1" ? "#203b24" : "#42203e",
+        shadowColor: kind === "monster1" ? "#203b24"
+          : kind === "monster4" ? "#3d201d" : "#42203e",
       } : {}),
     });
   }
@@ -964,7 +1005,10 @@ function updateBullets(dt) {
       hit = true;
       if (enemy.kind === "monster3") {
         if (typeof playMetalHitSound === "function") playMetalHitSound();
-      } else if (enemy.kind === "monster1" || enemy.kind === "monster2") {
+      } else if (
+        enemy.kind === "monster1" || enemy.kind === "monster2" ||
+        enemy.kind === "monster4"
+      ) {
         if (typeof playGunHitSound === "function") playGunHitSound();
       }
       applyEnemyBulletImpact(enemy, bullet);
@@ -973,7 +1017,10 @@ function updateBullets(dt) {
       shake = Math.max(shake, enemy.hp <= 0 ? 9 : 4.5);
 
       if (enemy.hp <= 0) {
-        if ((enemy.kind === "monster1" || enemy.kind === "monster2") &&
+        if ((
+          enemy.kind === "monster1" || enemy.kind === "monster2" ||
+          enemy.kind === "monster4"
+        ) &&
             typeof playMonsterDie01Sound === "function") {
           playMonsterDie01Sound();
         }

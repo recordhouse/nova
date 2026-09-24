@@ -44,9 +44,6 @@ function updateParticles(dt) {
     particle.y += particle.vy * dt;
     particle.vy += (particle.gravity ?? 600) * dt;
     particle.life -= dt;
-    if (particle.heartPickupShard) {
-      particle.angle += particle.angularVelocity * dt;
-    }
     if (particle.debris) {
       particle.angle += particle.angularVelocity * dt;
       if (particle.vy > 0) {

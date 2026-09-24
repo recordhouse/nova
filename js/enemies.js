@@ -122,7 +122,7 @@ function launchEnemyJump(
   burst(
     enemyCenterX,
     enemy.y + enemy.height,
-    "#79ff38",
+    enemy.kind === "monster4" ? "#ff7545" : "#79ff38",
     7,
     95,
   );
@@ -451,7 +451,7 @@ function updateJumpingEnemy(enemy, dt) {
   burst(
     enemy.x + enemy.width / 2,
     landing.surfaceY,
-    "#61e92f",
+    enemy.kind === "monster4" ? "#e95838" : "#61e92f",
     6,
     80,
   );
@@ -499,6 +499,9 @@ function fireMonster2Fireball(enemy) {
     riseAcceleration: enemy.fireballRiseAcceleration,
     phase: enemy.animationPhase + enemy.fireballsFired * 1.7,
   });
+  if (monster2MouthIsVisible(enemy) && typeof playMonsterFire02Sound === "function") {
+    playMonsterFire02Sound();
+  }
   enemy.fireballsFired += 1;
   enemy.fireRecoilTimer = Math.max(0, Math.min(0.12, 0.12 + enemy.fireballTimer));
 }
@@ -596,6 +599,13 @@ function fireMonster3Laser(enemy, playerHitbox) {
     maxRicochets: enemy.laserRicochets,
     ricochetColor: "#ffad68",
   });
+  const eyeIsNearScreen = (
+    eye.x >= cameraX - 80 && eye.x <= cameraX + WIDTH + 80 &&
+    eye.y >= cameraY - 80 && eye.y <= cameraY + HEIGHT + 80
+  );
+  if (eyeIsNearScreen && typeof playTurretLaserSound === "function") {
+    playTurretLaserSound();
+  }
   burst(eye.x, eye.y, "#ffe5a0", 10, 125);
 }
 
@@ -766,7 +776,7 @@ function updateEnemies(dt) {
     }
 
     if (
-      enemy.kind === "monster1" &&
+      (enemy.kind === "monster1" || enemy.kind === "monster4") &&
       (wasJumping || enemy.state === "jump") &&
       !enemy.jumpHit &&
       player.invincible <= 0 &&

@@ -39,11 +39,40 @@ const enemySprites = {
   monster1: loadImageAsset("./assets/images/monsters/monster_01.png?v=20260919-2"),
   monster2: loadImageAsset("./assets/images/monsters/monster_02.png"),
   monster3: loadImageAsset("./assets/images/monsters/monster_03.png"),
+  monster4: loadImageAsset("./assets/images/monsters/monster_04.png?v=20260923-1"),
 };
 
 const turretSprite = loadImageAsset("./assets/images/monsters/turret_01.png");
 
 const GameAudioContext = window.AudioContext ?? window.webkitAudioContext;
+const stage01Music = typeof Audio === "function"
+  ? new Audio("./assets/music/stage_01.mp3?v=20260924-1") : null;
+let stageMusicPaused = false;
+if (stage01Music) {
+  stage01Music.loop = true;
+  stage01Music.volume = 0.18;
+  stage01Music.preload = "auto";
+  stage01Music.playsInline = true;
+}
+
+function playCurrentStageMusic() {
+  if (
+    stageMusicPaused || CURRENT_STAGE !== 1 ||
+    !stage01Music || !stage01Music.paused
+  ) return;
+  const playback = stage01Music.play();
+  if (playback?.catch) playback.catch(() => {});
+}
+
+function setCurrentStageMusicPaused(paused) {
+  stageMusicPaused = Boolean(paused);
+  if (stageMusicPaused) {
+    stage01Music?.pause();
+    return;
+  }
+  playCurrentStageMusic();
+}
+
 function fetchSoundData(source) {
   return typeof fetch === "function"
     ? fetch(source)
@@ -53,11 +82,12 @@ function fetchSoundData(source) {
 }
 
 const playerGunSoundData = fetchSoundData("./assets/sound/gun.mp3");
-const playerGunImpactSoundData = fetchSoundData("./assets/sound/gun_impact.mp3");
-const gunHitSoundData = fetchSoundData("./assets/sound/gun_hit.mp3");
+const playerGunImpactSoundData = fetchSoundData("./assets/sound/gun_impact.mp3?v=20260924-1");
+const gunHitSoundData = fetchSoundData("./assets/sound/gun_hit.mp3?v=20260924-1");
 const metalHitSoundData = fetchSoundData("./assets/sound/metal.mp3");
 const turretLaserSoundData = fetchSoundData("./assets/sound/laser.mp3?v=20260922-2");
 const monsterDie01SoundData = fetchSoundData("./assets/sound/monster_die_01.mp3");
+const monsterFire02SoundData = fetchSoundData("./assets/sound/monster_fire_02.mp3?v=20260923-1");
 function createGameAudioContext() {
   if (!GameAudioContext) return null;
   try {
@@ -126,8 +156,10 @@ const gunHitSound = createPreparedGameSound(gunHitSoundData, 0.34);
 const metalHitSound = createPreparedGameSound(metalHitSoundData, 0.28);
 const turretLaserSound = createPreparedGameSound(turretLaserSoundData, 0.55);
 const monsterDie01Sound = createPreparedGameSound(monsterDie01SoundData, 0.38);
+const monsterFire02Sound = createPreparedGameSound(monsterFire02SoundData, 0.3);
 
 function prepareGameAudio() {
+  playCurrentStageMusic();
   if (!gameAudioContext) return null;
   if (gameAudioContext.state === "suspended") {
     gameAudioContext.resume().catch(() => {});
@@ -241,6 +273,10 @@ function playTurretLaserSound() {
 
 function playMonsterDie01Sound() {
   playPreparedGameSound(monsterDie01Sound);
+}
+
+function playMonsterFire02Sound() {
+  playPreparedGameSound(monsterFire02Sound);
 }
 
 // Mobile browsers require audio to be unlocked by a direct user gesture.

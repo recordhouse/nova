@@ -89,6 +89,7 @@ button {
 .test-resolution-button,
 .test-orientation-button,
 .test-map-button,
+.test-music-button,
 .test-invincibility-button,
 .test-area-button,
 .test-monster-spawn-button {
@@ -128,6 +129,7 @@ button {
 .test-resolution-button:active,
 .test-orientation-button:active,
 .test-map-button:active,
+.test-music-button:active,
 .test-invincibility-button:active,
 .test-area-button:active,
 .test-monster-spawn-button:active {
@@ -153,6 +155,18 @@ button {
   color: #fff1b8;
   border-color: rgb(255 205 91 / 88%);
   background: rgb(255 205 91 / 16%);
+}
+
+.test-music-button {
+  min-width: 60px;
+  color: #b8fff3;
+  border-color: rgb(92 230 204 / 78%);
+}
+
+.test-music-button[aria-pressed="true"] {
+  color: #8a9298;
+  border-color: rgb(115 123 129 / 54%);
+  background: rgb(13 18 22 / 32%);
 }
 
 .test-invincibility-button {
@@ -200,6 +214,11 @@ button {
 .test-monster-spawn-button.monster3 {
   color: #ffd2a1;
   border-color: rgb(255 157 84 / 78%);
+}
+
+.test-monster-spawn-button.monster4 {
+  color: #ffb18f;
+  border-color: rgb(255 102 67 / 82%);
 }
 
 .test-area-button[aria-pressed="false"] {

@@ -34,6 +34,11 @@ const player = {
   vy: 0,
   speed: PLAYER_RUN_SPEED,
   runSpeed: PLAYER_RUN_SPEED,
+  accelerationShieldStage: 0,
+  accelerationShieldCharges: 0,
+  accelerationShieldVisual: 0,
+  accelerationShieldHitTimer: 0,
+  accelerationShieldBlockTimer: 0,
   reversalDirection: 0,
   reversalSparkTimer: 0,
   recentRunDirection: 0,
@@ -78,6 +83,11 @@ function resetPlayerDownState() {
   player.hitKnockbackVelocity = 0;
   player.hitKnockbackTime = 0;
   player.runSpeed = player.speed;
+  player.accelerationShieldStage = 0;
+  player.accelerationShieldCharges = 0;
+  player.accelerationShieldVisual = 0;
+  player.accelerationShieldHitTimer = 0;
+  player.accelerationShieldBlockTimer = 0;
 }
 
 const bullets = [];

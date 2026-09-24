@@ -96,6 +96,41 @@ test("a sustained run builds speed to a cap and stopping resets the buildup", ()
   assert.equal(read(scope, "player.runSpeed"), startingSpeed);
 });
 
+test("stronger run acceleration unlocks two smooth shield charges, then resets on stopping", () => {
+  const { scope } = createGame();
+  read(scope, "fixtureRoad.end=10000; maxWorldX=10000; controls.right=true");
+  assert.equal(read(scope, "PLAYER_RUN_ACCELERATION"), 120);
+
+  let firstStageFrame = null;
+  let secondStageFrame = null;
+  let maximumSpeedFrame = null;
+  for (let frameIndex = 1; frameIndex <= 90; frameIndex += 1) {
+    scope.updatePlayer(frame);
+    const stage = read(scope, "player.accelerationShieldStage");
+    if (stage >= 1 && firstStageFrame === null) firstStageFrame = frameIndex;
+    if (stage >= 2 && secondStageFrame === null) secondStageFrame = frameIndex;
+    if (read(scope, "player.runSpeed") === read(scope, "PLAYER_RUN_MAX_SPEED")) {
+      maximumSpeedFrame = frameIndex;
+      break;
+    }
+  }
+
+  assert.ok(firstStageFrame > 0 && firstStageFrame <= 25);
+  assert.ok(secondStageFrame > firstStageFrame && secondStageFrame <= 52);
+  assert.ok(maximumSpeedFrame > secondStageFrame && maximumSpeedFrame <= 70);
+  assert.equal(read(scope, "player.accelerationShieldStage"), 2);
+  assert.equal(read(scope, "player.accelerationShieldCharges"), 2);
+  assert.ok(read(scope, "player.accelerationShieldVisual") > 1.7);
+
+  read(scope, "controls.right=false");
+  scope.updatePlayer(frame);
+  assert.equal(read(scope, "player.accelerationShieldStage"), 0);
+  assert.equal(read(scope, "player.accelerationShieldCharges"), 0);
+  assert.ok(read(scope, "player.accelerationShieldVisual") > 0, "shield fades instead of popping off");
+  for (let frameIndex = 0; frameIndex < 60; frameIndex += 1) scope.updatePlayer(frame);
+  assert.ok(read(scope, "player.accelerationShieldVisual") < 0.01);
+});
+
 test("a faster takeoff keeps its momentum and travels farther through the jump", () => {
   const { scope } = createGame();
   read(scope, "fixtureRoad.end=10000; maxWorldX=10000; controls.right=true");

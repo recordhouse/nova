@@ -2355,15 +2355,23 @@ function buildStage() {
           addEnemy(platform, monster2X, "monster2")
         ) continue;
       }
+      const groundMeleeWidth = Math.max(
+        MONSTER_TYPES.monster1.width,
+        MONSTER_TYPES.monster4.width,
+      );
+      const groundMeleeMinSpacing = Math.max(
+        ENEMY_GROUP_MIN_SPACING,
+        groundMeleeWidth + ENEMY_BODY_SEPARATION,
+      );
       const availableWidth = Math.max(
         0,
-        slotEnd - slotStart - MONSTER_TYPES.monster1.width,
+        slotEnd - slotStart - groundMeleeWidth,
       );
       const fittingGroupSize = Math.max(
         ENEMY_GROUP_MIN_SIZE,
         Math.min(
           ENEMY_GROUP_MAX_SIZE,
-          Math.floor(availableWidth / ENEMY_GROUP_MIN_SPACING) + 1,
+          Math.floor(availableWidth / groundMeleeMinSpacing) + 1,
         ),
       );
       const requestedGroupSize = ENEMY_GROUP_MIN_SIZE + Math.floor(
@@ -2377,15 +2385,15 @@ function buildStage() {
         fittingGroupSize,
         baseGroupSize + (mapRandom() < ENEMY_GROUP_EXTRA_MEMBER_CHANCE ? 1 : 0),
       );
-      const desiredSpacing = ENEMY_GROUP_MIN_SPACING + mapRandom() * (
-        ENEMY_GROUP_MAX_SPACING - ENEMY_GROUP_MIN_SPACING
+      const desiredSpacing = groundMeleeMinSpacing + mapRandom() * (
+        ENEMY_GROUP_MAX_SPACING - groundMeleeMinSpacing
       );
       const groupSpacing = groupSize > 1
         ? Math.min(desiredSpacing, availableWidth / (groupSize - 1))
         : 0;
       const groupWidth = groupSpacing * (groupSize - 1);
       const groupStart = slotStart + mapRandom() * Math.max(0, availableWidth - groupWidth);
-      const groupEnd = groupStart + groupWidth + MONSTER_TYPES.monster1.width;
+      const groupEnd = groupStart + groupWidth + groundMeleeWidth;
       if (
         turretX !== null &&
         groupStart < turretX + TURRET.width + 28 &&
@@ -2393,13 +2401,16 @@ function buildStage() {
       ) continue;
 
       for (let member = 0; member < groupSize; member += 1) {
-        const monster1X = groupStart + groupSpacing * member;
+        const monsterX = groupStart + groupSpacing * member;
+        const monsterKind = mapRandom() < MONSTER4_GROUP_SLOT_CHANCE
+          ? "monster4" : "monster1";
+        const monsterDefinition = MONSTER_TYPES[monsterKind];
         if (!stageSpawnIsInStartSafeZone(
           platform,
-          monster1X,
-          MONSTER_TYPES.monster1,
+          monsterX,
+          monsterDefinition,
         )) {
-          addEnemy(platform, monster1X, "monster1");
+          addEnemy(platform, monsterX, monsterKind);
         }
       }
     }
@@ -2583,7 +2594,9 @@ function spawnTestMonster(kind) {
   burst(
     enemy.x + enemy.width / 2,
     enemy.y + enemy.height / 2,
-    kind === "monster3" ? "#ff9c59" : kind === "monster2" ? "#dc55e9" : "#7cff48",
+    kind === "monster3" ? "#ff9c59"
+      : kind === "monster2" ? "#dc55e9"
+        : kind === "monster4" ? "#ff794f" : "#7cff48",
     15,
     145,
   );

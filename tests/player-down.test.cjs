@@ -134,6 +134,33 @@ test("standing, running, jumping, crouching and firing sprites share a lower anc
   }
 });
 
+test("a brief neutral frame during direction reversal keeps the running pose", () => {
+  const { scope, calls } = createGame();
+  const centerX = read(scope, "player.x + player.width / 2");
+
+  read(scope, `
+    player.vx=0;
+    player.reversalDirection=-1;
+  `);
+  scope.drawPlayerSprite(centerX);
+  assert.ok(body(calls).args[0].source.includes("/run.png?"));
+
+  calls.length = 0;
+  read(scope, `
+    player.reversalDirection=0;
+    player.reversalGraceTimer=0.08;
+    player.recentRunDirection=1;
+    player.recentRunSpeed=player.speed;
+  `);
+  scope.drawPlayerSprite(centerX);
+  assert.ok(body(calls).args[0].source.includes("/run.png?"));
+
+  calls.length = 0;
+  read(scope, "player.reversalGraceTimer=0");
+  scope.drawPlayerSprite(centerX);
+  assert.ok(body(calls).args[0].source.includes("/stand.png?"));
+});
+
 test("the projectile origin follows the lowered firing artwork", () => {
   const { scope } = createGame();
   read(scope, "controls.fire=true; player.fireBarrel=0");
