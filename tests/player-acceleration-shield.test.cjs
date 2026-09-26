@@ -113,7 +113,24 @@ test("acceleration shield ignores environmental damage", () => {
   assert.equal(read(scope, "player.downPhase"), "fall");
 });
 
-test("shield draws a dense purple X inside concentric circular gradients", () => {
+test("third acceleration-shield charge also absorbs one enemy attack", () => {
+  const { scope } = createGame();
+  read(scope, `
+    player.accelerationShieldStage=3;
+    player.accelerationShieldCharges=3;
+    player.accelerationShieldVisual=3;
+  `);
+  for (const kind of ["monster1", "monster2-fireball", "monster3-laser"]) {
+    assert.equal(scope.takePlayerDamage(1, { kind, x: 300, y: 450 }), true);
+    assert.equal(read(scope, "player.hp"), 3);
+    read(scope, "player.accelerationShieldBlockTimer=0");
+  }
+  assert.equal(read(scope, "player.accelerationShieldCharges"), 0);
+  assert.equal(scope.takePlayerDamage(1, { kind: "monster4", x: 300, y: 450 }), true);
+  assert.equal(read(scope, "player.hp"), 2);
+});
+
+test("shield smoothly expands from three cached purple dots to six and nine", () => {
   const { scope, calls, ctx } = createGame();
   const draw = (level, charges) => {
     calls.length = 0;
@@ -125,12 +142,14 @@ test("shield draws a dense purple X inside concentric circular gradients", () =>
     scope.drawPlayerAccelerationShield(false);
     scope.drawPlayerAccelerationShield(true);
     return {
-      circles: calls.filter((call) => call.operation === "arc").map((call) => call.args),
-      crossLines: calls.filter((call) => call.operation === "lineTo").length,
-      nodes: calls.filter((call) => call.operation === "fillRect").length,
-      colors: calls.filter((call) => call.operation === "colorStop")
-        .map((call) => call.args[1]),
-      blends: calls.filter((call) => ["fill", "stroke", "fillRect"].includes(
+      dots: calls.filter((call) => ["arc", "drawImage"].includes(call.operation)).length,
+      expensiveEffects: calls.filter((call) => [
+        "createRadialGradient",
+        "createLinearGradient",
+        "stroke",
+        "setLineDash",
+      ].includes(call.operation)).length,
+      blends: calls.filter((call) => ["fill", "drawImage"].includes(
         call.operation,
       )).map((call) => call.blend),
     };
@@ -138,12 +157,14 @@ test("shield draws a dense purple X inside concentric circular gradients", () =>
 
   const firstStage = draw(1, 1);
   const secondStage = draw(2, 2);
-  assert.equal(firstStage.circles.length, 4, "one field and three close rings");
-  assert.equal(secondStage.circles.length, 6, "one field and five close rings");
-  assert.ok(secondStage.crossLines > firstStage.crossLines);
-  assert.ok(secondStage.nodes > firstStage.nodes);
-  assert.ok(secondStage.colors.every((color) => !/255, 255, 255|100, 225, 255|68, 218, 255/.test(color)));
-  assert.ok(secondStage.blends.every((blend) => blend === "lighter"));
+  const thirdStage = draw(3, 3);
+  assert.equal(firstStage.dots, 3);
+  assert.equal(secondStage.dots, 6);
+  assert.equal(thirdStage.dots, 9);
+  assert.equal(firstStage.expensiveEffects, 0);
+  assert.equal(secondStage.expensiveEffects, 0);
+  assert.equal(thirdStage.expensiveEffects, 0);
+  assert.ok(thirdStage.blends.every((blend) => blend === "lighter"));
   assert.equal(ctx.globalAlpha, 1);
   assert.equal(ctx.globalCompositeOperation, "source-over");
 });

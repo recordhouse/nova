@@ -138,24 +138,27 @@ function emitPlayerRevival() {
   const hitbox = getPlayerHitbox();
   const centerX = player.x + player.width / 2;
   const centerY = hitbox.y + hitbox.height / 2;
-  const colors = ["#ae65ff", "#cb8aff", "#e0a9ff"];
-  for (let flame = 0; flame < PLAYER_REVIVAL_LIGHT_COUNT; flame += 1) {
-    const angle = flame * Math.PI * 2 / PLAYER_REVIVAL_LIGHT_COUNT +
-      (Math.random() - 0.5) * 0.045;
-    const speed = 420 + Math.random() * 120;
-    const life = 0.85 + Math.random() * 0.25;
+  for (let orb = 0; orb < PLAYER_REVIVAL_LIGHT_COUNT; orb += 1) {
+    const angle = orb * Math.PI * 2 / PLAYER_REVIVAL_LIGHT_COUNT +
+      (Math.random() - 0.5) * 0.08;
+    const radius = 12 + Math.random() * 5;
+    const life = 0.92 + Math.random() * 0.12;
     particles.push({
-      x: centerX + Math.cos(angle) * 16,
-      y: centerY + Math.sin(angle) * 16,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      gravity: 0,
+      x: centerX + Math.cos(angle) * radius,
+      y: centerY + Math.sin(angle) * radius,
+      originX: centerX,
+      originY: centerY,
+      angle,
+      radius,
+      angularVelocity: 5.4 + Math.random() * 1.4,
+      radialVelocity: 92 + Math.random() * 24,
+      radialAcceleration: 245 + Math.random() * 45,
       life,
       maxLife: life,
-      size: 2 + Math.random() * 1.2,
-      color: colors[flame % colors.length],
-      coreColor: "#fff1ff",
-      revivalFlame: true,
+      size: 18 + Math.random() * 5,
+      color: "#d996ff",
+      coreColor: "#f6ddff",
+      revivalOrb: true,
     });
   }
   const knockbackArea = { x: centerX, y: centerY, radius: PLAYER_REVIVAL_RADIUS };
@@ -313,7 +316,7 @@ function burstMonsterFragments(bullet, enemy, lethal = false) {
       life,
       maxLife: life,
       color: colors[Math.floor(Math.random() * colors.length)],
-      size: 2.5 + Math.random() * (lethal ? 6 : 4.5),
+      size: lethal ? 6 + Math.random() * 10 : 2.5 + Math.random() * 4.5,
       shard: true,
     });
   }
@@ -431,7 +434,9 @@ function burstCombatantExplosion(target, kind) {
   }
 
   for (let chunk = 0; chunk < debrisCount; chunk += 1) {
-    const size = ((isLarge ? 5 : 3.5) + Math.random() * (isLarge ? 7 : 5)) * 1.5;
+    const debrisScale = isTurret ? 1.5 : 2.5;
+    const size = ((isLarge ? 5 : 3.5) + Math.random() * (isLarge ? 7 : 5)) *
+      debrisScale;
     particles.push({
       x: target.x + target.width * (0.12 + Math.random() * 0.76),
       y: target.y + target.height * (0.35 + Math.random() * 0.5),

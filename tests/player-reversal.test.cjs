@@ -78,7 +78,7 @@ test("a running reversal briefly slides, brakes, then starts building speed the 
   assert.equal(read(scope, "player.reversalDirection"), 0);
 });
 
-test("a sustained run builds speed to a cap and stopping resets the buildup", () => {
+test("a sustained run builds speed to a cap and coasts to a stop", () => {
   const { scope } = createGame();
   read(scope, "fixtureRoad.end=10000; maxWorldX=10000; controls.right=true");
   scope.updatePlayer(frame);
@@ -90,25 +90,57 @@ test("a sustained run builds speed to a cap and stopping resets the buildup", ()
   assert.equal(read(scope, "player.vx"), maximumSpeed);
   assert.ok(maximumSpeed > startingSpeed);
 
+  const releaseX = read(scope, "player.x");
   read(scope, "controls.right=false");
   scope.updatePlayer(frame);
+  assert.ok(read(scope, "player.vx") > 0 && read(scope, "player.vx") < maximumSpeed);
+  assert.ok(read(scope, "player.x") > releaseX);
+  assert.equal(read(scope, "player.runSpeed"), startingSpeed);
+  assert.equal(read(scope, "particles.filter(p=>p.reversalSpark).length"), 2);
+  for (let i = 0; i < 30; i += 1) scope.updatePlayer(frame);
   assert.equal(read(scope, "player.vx"), 0);
+  assert.ok(read(scope, "player.x") - releaseX > 55, "maximum-speed momentum produces a visible skid");
   assert.equal(read(scope, "player.runSpeed"), startingSpeed);
 });
 
-test("stronger run acceleration unlocks two smooth shield charges, then resets on stopping", () => {
+test("the run-animation clock accelerates with movement and slows during a skid", () => {
+  const { scope } = createGame();
+  read(scope, "fixtureRoad.end=10000; maxWorldX=10000; controls.right=true");
+  scope.updatePlayer(frame);
+  const baseAdvance = read(scope, "player.runAnimationTime");
+  assert.ok(Math.abs(baseAdvance - frame) < 1e-9);
+
+  read(scope, "player.runAnimationTime=0; player.runSpeed=PLAYER_RUN_MAX_SPEED");
+  scope.updatePlayer(frame);
+  const maximumAdvance = read(scope, "player.runAnimationTime");
+  assert.ok(Math.abs(
+    maximumAdvance / baseAdvance -
+    read(scope, "PLAYER_RUN_MAX_SPEED / PLAYER_RUN_SPEED")
+  ) < 1e-9);
+
+  read(scope, "controls.right=false; player.runAnimationTime=0");
+  scope.updatePlayer(frame);
+  const skidAdvance = read(scope, "player.runAnimationTime");
+  assert.ok(skidAdvance > 0 && skidAdvance < maximumAdvance);
+  for (let i = 0; i < 30; i += 1) scope.updatePlayer(frame);
+  assert.equal(read(scope, "player.runAnimationTime"), 0);
+});
+
+test("stronger run acceleration unlocks three smooth shield charges, then resets on stopping", () => {
   const { scope } = createGame();
   read(scope, "fixtureRoad.end=10000; maxWorldX=10000; controls.right=true");
   assert.equal(read(scope, "PLAYER_RUN_ACCELERATION"), 120);
 
   let firstStageFrame = null;
   let secondStageFrame = null;
+  let thirdStageFrame = null;
   let maximumSpeedFrame = null;
-  for (let frameIndex = 1; frameIndex <= 90; frameIndex += 1) {
+  for (let frameIndex = 1; frameIndex <= 140; frameIndex += 1) {
     scope.updatePlayer(frame);
     const stage = read(scope, "player.accelerationShieldStage");
     if (stage >= 1 && firstStageFrame === null) firstStageFrame = frameIndex;
     if (stage >= 2 && secondStageFrame === null) secondStageFrame = frameIndex;
+    if (stage >= 3 && thirdStageFrame === null) thirdStageFrame = frameIndex;
     if (read(scope, "player.runSpeed") === read(scope, "PLAYER_RUN_MAX_SPEED")) {
       maximumSpeedFrame = frameIndex;
       break;
@@ -117,17 +149,18 @@ test("stronger run acceleration unlocks two smooth shield charges, then resets o
 
   assert.ok(firstStageFrame > 0 && firstStageFrame <= 25);
   assert.ok(secondStageFrame > firstStageFrame && secondStageFrame <= 52);
-  assert.ok(maximumSpeedFrame > secondStageFrame && maximumSpeedFrame <= 70);
-  assert.equal(read(scope, "player.accelerationShieldStage"), 2);
-  assert.equal(read(scope, "player.accelerationShieldCharges"), 2);
-  assert.ok(read(scope, "player.accelerationShieldVisual") > 1.7);
+  assert.ok(thirdStageFrame > secondStageFrame && thirdStageFrame <= 95);
+  assert.ok(maximumSpeedFrame > thirdStageFrame && maximumSpeedFrame <= 110);
+  assert.equal(read(scope, "player.accelerationShieldStage"), 3);
+  assert.equal(read(scope, "player.accelerationShieldCharges"), 3);
+  assert.ok(read(scope, "player.accelerationShieldVisual") > 2.5);
 
   read(scope, "controls.right=false");
   scope.updatePlayer(frame);
   assert.equal(read(scope, "player.accelerationShieldStage"), 0);
   assert.equal(read(scope, "player.accelerationShieldCharges"), 0);
   assert.ok(read(scope, "player.accelerationShieldVisual") > 0, "shield fades instead of popping off");
-  for (let frameIndex = 0; frameIndex < 60; frameIndex += 1) scope.updatePlayer(frame);
+  for (let frameIndex = 0; frameIndex < 70; frameIndex += 1) scope.updatePlayer(frame);
   assert.ok(read(scope, "player.accelerationShieldVisual") < 0.01);
 });
 
@@ -200,7 +233,7 @@ test("a jump pressed just before landing is buffered into the next grounded fram
   assert.ok(read(scope, "player.vy") < 0);
 });
 
-test("short electric sparks appear at the feet only while braking, with bounded count", () => {
+test("large electric sparks appear at the feet only while braking, with bounded count", () => {
   const { scope, calls, ctx } = createGame();
   read(scope, "controls.right=true");
   scope.updatePlayer(frame);
@@ -210,8 +243,9 @@ test("short electric sparks appear at the feet only while braking, with bounded 
   scope.updatePlayer(frame);
   const sparks = read(scope, "particles.filter(p=>p.reversalSpark)");
   assert.equal(sparks.length, 2);
-  assert.ok(sparks.every((spark) => spark.y >= 490 && spark.y <= 496));
-  assert.ok(sparks.every((spark) => spark.vx < 0 && spark.life <= 0.21));
+  assert.ok(sparks.every((spark) => spark.y >= 487 && spark.y <= 496));
+  assert.ok(sparks.every((spark) => spark.vx < 0 && spark.life <= 0.25));
+  assert.ok(sparks.every((spark) => spark.size >= 4.5 && spark.size <= 7.5));
 
   scope.drawParticles();
   assert.equal(calls.length, 8, "each spark is a short pixel zigzag with a bright tip");
@@ -233,14 +267,15 @@ test("a brief joystick dead-zone still becomes a running reversal", () => {
 
   read(scope, "controls.right=false");
   scope.updatePlayer(frame);
-  assert.equal(read(scope, "player.vx"), 0);
+  assert.ok(read(scope, "player.vx") > 0);
   read(scope, "controls.left=true");
   scope.updatePlayer(frame);
 
   assert.equal(read(scope, "player.reversalDirection"), -1);
   assert.ok(read(scope, "player.vx") > 0, "recent momentum is restored for the skid");
   assert.ok(read(scope, "player.x") > releaseX);
-  assert.equal(read(scope, "particles.filter(p=>p.reversalSpark).length"), 2);
+  assert.equal(read(scope, "particles.filter(p=>p.reversalSpark).length"), 4,
+    "the stop skid flows directly into the reversal spark");
 });
 
 test("overlapping opposite keys also pass through neutral into a reversal", () => {
@@ -249,26 +284,29 @@ test("overlapping opposite keys also pass through neutral into a reversal", () =
   scope.updatePlayer(frame);
   read(scope, "controls.left=true");
   scope.updatePlayer(frame);
-  assert.equal(read(scope, "player.vx"), 0);
+  assert.ok(read(scope, "player.vx") > 0 && read(scope, "player.vx") < read(scope, "player.speed"));
   read(scope, "controls.right=false");
   scope.updatePlayer(frame);
   assert.equal(read(scope, "player.reversalDirection"), -1);
   assert.ok(read(scope, "player.vx") > 0);
 });
 
-test("normal starting, a deliberate stop, and airborne reverse remain immediate and spark-free", () => {
+test("a deliberate stop skids while normal starting and airborne reverse stay spark-free", () => {
   const { scope } = createGame();
   const runSpeed = read(scope, "player.speed");
   read(scope, "controls.right=true");
   scope.updatePlayer(frame);
   read(scope, "controls.right=false");
-  for (let i = 0; i < 10; i += 1) scope.updatePlayer(frame);
+  scope.updatePlayer(frame);
+  assert.ok(read(scope, "player.vx") > 0);
+  assert.equal(read(scope, "particles.filter(p=>p.reversalSpark).length"), 2);
+  for (let i = 0; i < 30; i += 1) scope.updatePlayer(frame);
   assert.equal(read(scope, "player.vx"), 0);
   assert.equal(read(scope, "player.reversalGraceTimer"), 0);
   read(scope, "controls.left=true");
   scope.updatePlayer(frame);
   assert.equal(read(scope, "player.vx"), -runSpeed);
-  assert.equal(read(scope, "particles.length"), 0);
+  read(scope, "particles.length=0");
 
   read(scope, "player.grounded=false; player.platform=null; player.y=300; controls.left=false; controls.right=true");
   scope.updatePlayer(frame);

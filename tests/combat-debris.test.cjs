@@ -72,13 +72,14 @@ test("turret debris retains its enlarged metal chunks and one ground bounce", ()
   assert.equal(rectangles.length, 3, "metal rendering stays rectangular");
 });
 
-for (const kind of ["monster1", "monster2", "monster4"]) {
+for (const kind of ["monster1", "monster2", "monster3", "monster4"]) {
   test(`${kind} organic debris sticks, spreads, fades and expires`, () => {
     const { scope, rectangles } = createEffects();
     const debris = explode(scope, kind);
     assert.equal(debris.length, kind === "monster1" ? 12 : 20);
     for (const particle of debris) {
       assert.equal(particle.organicDebris, true);
+      assert.equal(particle.size, kind === "monster1" ? 15 : 21.25);
       scope.drawCombatDebris(particle);
     }
     for (let frame = 0; frame < 150; frame += 1) scope.updateParticles(1 / 60);
@@ -107,6 +108,20 @@ for (const kind of ["monster1", "monster2", "monster4"]) {
     assert.equal(scope.particles.length, 0);
   });
 }
+
+test("lethal monster-hit fragments are much larger than ordinary hit fragments", () => {
+  const { scope } = createEffects();
+  const bullet = { x: 300, y: 420, vx: 1000, vy: 0 };
+  const enemy = { kind: "monster1" };
+  scope.burstMonsterFragments(bullet, enemy, false);
+  const ordinarySizes = scope.particles.map((particle) => particle.size);
+  scope.particles.length = 0;
+  scope.burstMonsterFragments(bullet, enemy, true);
+  const lethalSizes = scope.particles.map((particle) => particle.size);
+  assert.equal(ordinarySizes.length, 16);
+  assert.equal(lethalSizes.length, 30);
+  assert.ok(Math.min(...lethalSizes) > Math.max(...ordinarySizes));
+});
 
 test("organic puddles follow a ramp's surface angle", () => {
   const { scope } = createEffects(0.2);

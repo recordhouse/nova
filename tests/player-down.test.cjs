@@ -161,6 +161,19 @@ test("a brief neutral frame during direction reversal keeps the running pose", (
   assert.ok(body(calls).args[0].source.includes("/stand.png?"));
 });
 
+test("the running sprite uses its speed-scaled animation clock", () => {
+  const { scope, calls } = createGame();
+  const centerX = read(scope, "player.x + player.width / 2");
+  read(scope, `
+    player.vx=player.speed;
+    player.runAnimationTime=1.1/playerSprites.run.fps;
+    gameTime=99;
+  `);
+  scope.drawPlayerSprite(centerX);
+  assert.ok(body(calls).args[0].source.includes("/run.png?"));
+  assert.equal(body(calls).args[1], 402, "the integrated run clock selects frame two");
+});
+
 test("the projectile origin follows the lowered firing artwork", () => {
   const { scope } = createGame();
   read(scope, "controls.fire=true; player.fireBarrel=0");
@@ -246,13 +259,13 @@ test("the final frame holds for two seconds before a single recovery with three-
   scope.updatePlayer(0.01);
   assert.equal(read(scope, "player.downPhase"), "");
   assert.ok(Math.abs(read(scope, "player.invincible") - 3) < 1e-9);
-  assert.equal(read(scope, "particles.filter(p=>p.revivalFlame).length"), 72);
-  assert.equal(read(scope, "particles.length"), 72, "recovery has no circular wave particle");
+  assert.equal(read(scope, "particles.filter(p=>p.revivalOrb).length"), 8);
+  assert.equal(read(scope, "particles.length"), 8, "recovery uses only a few glowing orbs");
   calls.length = 0;
   scope.drawPlayer();
   assert.ok(body(calls).args[0].source.includes("/stand.png?"));
   scope.updatePlayer(0.1);
-  assert.equal(read(scope, "particles.length"), 72, "recovery effects happen once, not every immune frame");
+  assert.equal(read(scope, "particles.length"), 8, "recovery effects happen once, not every immune frame");
   assert.equal(read(scope, "player.hp"), 2);
 });
 
@@ -500,40 +513,39 @@ test("airborne monsters are also knocked away instead of being snapped to the gr
   assert.ok(enemy.y + enemy.height < 500);
 });
 
-test("denser, thinner revival rays travel outward and fade gradually", () => {
+test("a small set of revival orbs spirals outward and fades gradually", () => {
   const { scope, calls, ctx } = createGame();
   scope.takePlayerDamage(1);
   recover(scope);
-  const flames = read(scope, "particles.filter(p=>p.revivalFlame)");
-  assert.equal(flames.length, 72);
-  assert.ok(flames.every((flame) => flame.size <= 3.2 && flame.maxLife >= 0.85));
-  assert.ok(flames.some((flame) => flame.vx < -400));
-  assert.ok(flames.some((flame) => flame.vx > 400));
-  assert.ok(flames.some((flame) => flame.vy < -400));
-  assert.ok(flames.some((flame) => flame.vy > 400));
-  const initialX = flames[0].x;
-  const initialY = flames[0].y;
+  const orbs = read(scope, "particles.filter(p=>p.revivalOrb)");
+  assert.equal(orbs.length, 8);
+  assert.ok(orbs.every((orb) => orb.size >= 18 && orb.size <= 23 && orb.maxLife >= 0.92));
+  assert.ok(orbs.every((orb) => orb.color === "#d996ff" && orb.coreColor === "#f6ddff"));
+  assert.ok(orbs.every((orb) => orb.angularVelocity > 5 && orb.radialVelocity > 90));
+  const initialX = orbs[0].x;
+  const initialY = orbs[0].y;
+  const initialAngle = orbs[0].angle;
+  const initialRadius = orbs[0].radius;
   scope.drawParticles();
-  assert.ok(calls.some((call) => call.color === "#cb8aff"));
-  assert.ok(calls.some((call) => call.color === "#fff1ff"));
-  assert.equal(calls.some((call) => call.operation === "arc"), false, "no circular revival ring is drawn");
-  assert.equal(read(scope, "particles.length"), 72, "rendering does not allocate more particles");
-  const rays = calls.filter((call) => call.operation === "fillRect");
-  assert.equal(rays.length, 72 * 2);
-  assert.ok(rays.every((call) => call.args[3] <= 1.6));
-  const initialAlpha = rays[0].alpha;
+  const circles = calls.filter((call) => call.operation === "arc");
+  assert.equal(circles.length, 8);
+  assert.equal(read(scope, "particles.length"), 8, "rendering does not allocate more particles");
+  const initialAlpha = calls.find((call) => call.operation === "fill").alpha;
+  assert.ok(initialAlpha >= 0.92, "the enlarged orbs start nearly opaque");
   calls.length = 0;
   scope.updateParticles(0.4);
   scope.drawParticles();
-  const middleAlpha = calls.find((call) => call.operation === "fillRect").alpha;
+  const middleAlpha = calls.find((call) => call.operation === "fill").alpha;
+  assert.ok(orbs[0].angle > initialAngle, "the points rotate around the player");
+  assert.ok(orbs[0].radius > initialRadius, "the spiral expands outwards");
   calls.length = 0;
   scope.updateParticles(0.4);
   scope.drawParticles();
-  const lateAlpha = calls.find((call) => call.operation === "fillRect").alpha;
+  const lateAlpha = calls.find((call) => call.operation === "fill").alpha;
   assert.ok(initialAlpha > middleAlpha && middleAlpha > lateAlpha && lateAlpha > 0);
-  assert.ok(Math.hypot(flames[0].x - initialX, flames[0].y - initialY) > 300);
+  assert.ok(Math.hypot(orbs[0].x - initialX, orbs[0].y - initialY) > 150);
   assert.equal(ctx.globalAlpha, 1);
-  assert.equal(read(scope, "particles.length"), 72, "the thin rays continue fading after 0.8 seconds");
+  assert.equal(read(scope, "particles.length"), 8, "the spiral remains visible after 0.8 seconds");
   scope.updateParticles(0.31);
   assert.equal(read(scope, "particles.length"), 0);
 });
@@ -592,7 +604,7 @@ test("lethal damage finishes the down motion, then shows game over without reviv
   assert.equal(read(scope, "player.downPhase"), "hold");
   scope.update(2);
   assert.equal(read(scope, "player.downPhase"), "defeated");
-  assert.equal(read(scope, "particles.filter(p=>p.revivalFlame).length"), 0);
+  assert.equal(read(scope, "particles.filter(p=>p.revivalOrb).length"), 0);
   scope.drawPlayer();
   assert.equal(body(calls).args[1], 1608);
   scope.drawHud();

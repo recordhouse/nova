@@ -1025,113 +1025,108 @@ function drawTerrain() {
   }
 }
 
+let playerShieldDotSprite;
+let playerRevivalOrbSprite;
+
+function getPlayerShieldDotSprite() {
+  if (playerShieldDotSprite !== undefined) return playerShieldDotSprite;
+  const cache = new Map();
+  playerShieldDotSprite = cachedCanvasSprite(cache, "purple-shield-dot", 30, 30, (context) => {
+    context.globalCompositeOperation = "lighter";
+    const glow = context.createRadialGradient(15, 15, 0, 15, 15, 14);
+    glow.addColorStop(0, "rgba(229, 190, 255, 1)");
+    glow.addColorStop(0.2, "rgba(188, 104, 255, 0.98)");
+    glow.addColorStop(0.52, "rgba(143, 61, 246, 0.54)");
+    glow.addColorStop(1, "rgba(94, 25, 190, 0)");
+    context.fillStyle = glow;
+    context.beginPath();
+    context.arc(15, 15, 14, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = "#dca9ff";
+    context.beginPath();
+    context.arc(15, 15, 2.3, 0, Math.PI * 2);
+    context.fill();
+  }) ?? null;
+  return playerShieldDotSprite;
+}
+
+function getPlayerRevivalOrbSprite() {
+  if (playerRevivalOrbSprite !== undefined) return playerRevivalOrbSprite;
+  const cache = new Map();
+  playerRevivalOrbSprite = cachedCanvasSprite(cache, "bright-revival-orb", 30, 30, (context) => {
+    context.globalCompositeOperation = "lighter";
+    const glow = context.createRadialGradient(15, 15, 0, 15, 15, 14.5);
+    glow.addColorStop(0, "rgba(250, 226, 255, 1)");
+    glow.addColorStop(0.18, "rgba(226, 157, 255, 1)");
+    glow.addColorStop(0.5, "rgba(190, 89, 255, 0.88)");
+    glow.addColorStop(0.8, "rgba(146, 56, 255, 0.46)");
+    glow.addColorStop(1, "rgba(105, 31, 217, 0)");
+    context.fillStyle = glow;
+    context.beginPath();
+    context.arc(15, 15, 14.5, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = "#f6ddff";
+    context.beginPath();
+    context.arc(15, 15, 2.8, 0, Math.PI * 2);
+    context.fill();
+  }) ?? null;
+  return playerRevivalOrbSprite;
+}
+
 function drawPlayerAccelerationShield(frontLayer) {
-  const visualLevel = Math.max(0, Math.min(2, player.accelerationShieldVisual));
+  const visualLevel = Math.max(0, Math.min(3, player.accelerationShieldVisual));
   const hitProgress = Math.max(0, Math.min(
     1,
     player.accelerationShieldHitTimer / PLAYER_ACCELERATION_SHIELD_HIT_DURATION,
   ));
-  if (visualLevel < 0.015 && hitProgress <= 0) return;
+  if (!frontLayer || (visualLevel < 0.015 && hitProgress <= 0)) return;
 
   const hitbox = getPlayerHitbox();
   const centerX = hitbox.x + hitbox.width / 2;
   const centerY = hitbox.y + hitbox.height / 2 - 2;
-  const secondStage = Math.max(0, visualLevel - 1);
-  const pulse = 0.5 + Math.sin(gameTime * (5.5 + secondStage * 2.5)) * 0.5;
-  const radius = 78 + secondStage * 7 + pulse * 1.5 + hitProgress * 9;
-  const stageColor = secondStage > 0.08 ? "#c16fff" : "#9858ff";
+  const smoothVisibility = (value) => value * value * (3 - 2 * value);
+  const firstStage = smoothVisibility(Math.min(1, visualLevel));
+  const secondStage = smoothVisibility(Math.min(1, Math.max(0, visualLevel - 1)));
+  const thirdStage = smoothVisibility(Math.max(0, visualLevel - 2));
+  const radiusX = 56 + secondStage * 5 + thirdStage * 4 + hitProgress * 4;
+  const radiusY = 80 + secondStage * 5 + thirdStage * 4 + hitProgress * 6;
+  const rotation = gameTime * (0.46 + secondStage * 0.12 + thirdStage * 0.1);
+  const dotSprite = getPlayerShieldDotSprite();
 
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  if (!frontLayer) {
-    ctx.translate(centerX, centerY);
-    const field = ctx.createRadialGradient(0, 0, radius * 0.12, 0, 0, radius);
-    field.addColorStop(0, "rgba(193, 111, 255, 0.025)");
-    field.addColorStop(0.58, "rgba(154, 70, 255, 0.07)");
-    field.addColorStop(0.84, "rgba(126, 45, 239, 0.12)");
-    field.addColorStop(1, "rgba(94, 25, 190, 0)");
-    ctx.globalAlpha = Math.min(0.78, 0.3 + visualLevel * 0.16 + hitProgress * 0.3);
-    ctx.fillStyle = field;
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    return;
-  }
+  ctx.translate(centerX, centerY);
+  for (let sector = 0; sector < 3; sector += 1) {
+    const sectorAngle = -Math.PI / 2 + sector * Math.PI * 2 / 3;
+    for (let tier = 0; tier < 3; tier += 1) {
+      const visibility = tier === 0 ? firstStage : tier === 1 ? secondStage : thirdStage;
+      if (visibility < 0.015) continue;
 
-  ctx.translate(pixelSnap(centerX, 1), pixelSnap(centerY, 1));
-  ctx.shadowColor = stageColor;
-  ctx.shadowBlur = 7 + secondStage * 6 + hitProgress * 10;
-
-  const ringGradient = ctx.createLinearGradient(-radius, -radius, radius, radius);
-  ringGradient.addColorStop(0, "rgba(113, 42, 232, 0.46)");
-  ringGradient.addColorStop(0.48, "rgba(218, 159, 255, 0.98)");
-  ringGradient.addColorStop(1, "rgba(143, 55, 255, 0.7)");
-  ctx.strokeStyle = ringGradient;
-  const ringCount = secondStage > 0.02 ? 5 : 3;
-  for (let ring = 0; ring < ringCount; ring += 1) {
-    const ringRadius = radius - ring * 3.7;
-    ctx.globalAlpha = Math.min(
-      1,
-      (0.4 + visualLevel * 0.18 + hitProgress * 0.4) * (1 - ring * 0.1),
-    );
-    ctx.lineWidth = 0.8 + (ring === 0 ? secondStage * 0.55 + hitProgress : 0);
-    ctx.setLineDash(ring % 2 === 0 ? [4, 3] : [2, 4]);
-    ctx.lineDashOffset = gameTime * (ring % 2 === 0 ? -34 : 27) + ring * 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  const crossGradient = ctx.createLinearGradient(-radius * 0.7, 0, radius * 0.7, 0);
-  crossGradient.addColorStop(0, "rgba(105, 34, 220, 0.16)");
-  crossGradient.addColorStop(0.5, "rgba(205, 132, 255, 0.66)");
-  crossGradient.addColorStop(1, "rgba(105, 34, 220, 0.16)");
-  ctx.strokeStyle = crossGradient;
-  ctx.shadowBlur = 4 + secondStage * 4;
-  ctx.lineWidth = 0.85 + secondStage * 0.3;
-  ctx.setLineDash([3, 3]);
-  const crossOffsets = secondStage > 0.02 ? [-8, -4, 0, 4, 8] : [-4, 0, 4];
-  const crossSpan = radius * 0.66;
-  for (let index = 0; index < crossOffsets.length; index += 1) {
-    const offset = crossOffsets[index];
-    ctx.globalAlpha = Math.min(
-      0.74,
-      0.25 + visualLevel * 0.12 + hitProgress * 0.24 - Math.abs(offset) * 0.008,
-    );
-    ctx.lineDashOffset = gameTime * (index % 2 === 0 ? -24 : 24) + index;
-    ctx.beginPath();
-    ctx.moveTo(-crossSpan, -crossSpan + offset);
-    ctx.lineTo(crossSpan, crossSpan + offset);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(-crossSpan, crossSpan + offset);
-    ctx.lineTo(crossSpan, -crossSpan + offset);
-    ctx.stroke();
-  }
-
-  ctx.setLineDash([]);
-  ctx.shadowBlur = 5 + secondStage * 4;
-  ctx.fillStyle = "#b86cff";
-  const nodeCount = secondStage > 0.02 ? 32 : 24;
-  for (let node = 0; node < nodeCount; node += 1) {
-    const angle = node * Math.PI * 2 / nodeCount + gameTime * 0.18;
-    const nodeRadius = radius - 1.5;
-    const x = Math.cos(angle) * nodeRadius;
-    const y = Math.sin(angle) * nodeRadius;
-    const brightNode = node % 4 === 0;
-    const size = brightNode ? 2.4 : 1.4;
-    ctx.globalAlpha = brightNode ? 0.72 : 0.38 + secondStage * 0.14;
-    ctx.fillRect(pixelSnap(x - size / 2, 1), pixelSnap(y - size / 2, 1), size, size);
-  }
-
-  for (let charge = 0; charge < player.accelerationShieldCharges; charge += 1) {
-    const angle = -Math.PI / 2 + (charge === 0 ? -0.2 : 0.2);
-    const x = Math.cos(angle) * (radius - 10);
-    const y = Math.sin(angle) * (radius - 10);
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = "#e0b7ff";
-    ctx.fillRect(pixelSnap(x - 2, 1), pixelSnap(y - 2, 1), 5, 5);
+      const angle = rotation + (tier === 0
+        ? sectorAngle
+        : tier === 1
+          ? sectorAngle + secondStage * Math.PI / 3 - thirdStage * Math.PI / 9
+          : sectorAngle + Math.PI / 3 + thirdStage * Math.PI / 9);
+      const radialProgress = 0.82 + visibility * 0.18;
+      const x = Math.cos(angle) * radiusX * radialProgress;
+      const y = Math.sin(angle) * radiusY * radialProgress;
+      const dot = sector * 3 + tier;
+      const pulse = 0.5 + Math.sin(gameTime * 5.2 + dot * 1.7) * 0.5;
+      const size = (13 + thirdStage * 0.8 + pulse * 2 + hitProgress * 5) *
+        (0.58 + visibility * 0.42);
+      ctx.globalAlpha = Math.min(
+        1,
+        visibility * (0.7 + pulse * 0.22 + hitProgress * 0.28),
+      );
+      if (dotSprite) {
+        ctx.drawImage(dotSprite, x - size, y - size, size * 2, size * 2);
+      } else {
+        ctx.fillStyle = "#b86cff";
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(1.5, size * 0.28), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
   ctx.restore();
 }
@@ -1285,7 +1280,9 @@ function drawPlayerSprite(centerX) {
         ? Math.floor(player.fallAnimationTime * sprite.fps) % sprite.frames.length
         : isJumping
           ? Math.min(sprite.frames.length - 1, Math.floor(jumpProgress * sprite.frames.length))
-          : Math.floor(gameTime * sprite.fps) % sprite.frames.length;
+          : sprite === playerSprites.run
+            ? Math.floor(player.runAnimationTime * sprite.fps) % sprite.frames.length
+            : Math.floor(gameTime * sprite.fps) % sprite.frames.length;
   const source = sprite.frames[frame];
   const spriteScale = sprite === playerSprites.down
     ? PLAYER_DOWN_SPRITE_SCALE
@@ -2349,45 +2346,45 @@ function drawParticles() {
         );
       }
       ctx.restore();
-    } else if (particle.revivalFlame) {
+    } else if (particle.revivalOrb) {
       const remaining = Math.max(0, particle.life / particle.maxLife);
       const progress = 1 - remaining;
-      const length = particle.size * (4.6 + progress * 1.4);
-      const thickness = Math.max(1, particle.size * 0.5);
+      const pulse = 0.5 + Math.sin(gameTime * 8 + particle.angle * 2) * 0.5;
+      const size = particle.size * (0.88 + progress * 0.38 + pulse * 0.14);
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = Math.pow(remaining, 1.3);
-      ctx.translate(pixelSnap(particle.x, 1), pixelSnap(particle.y, 1));
-      ctx.rotate(Math.atan2(particle.vy, particle.vx));
-      const raySprite = lightRaySprite(particle, "revival");
-      if (raySprite) {
-        const scale = length / 16;
-        ctx.drawImage(raySprite, -20 * scale, -12 * scale, 40 * scale, 24 * scale);
+      ctx.globalAlpha = Math.pow(remaining, 0.78) * (0.92 + pulse * 0.08);
+      const dotSprite = getPlayerRevivalOrbSprite();
+      if (dotSprite) {
+        ctx.drawImage(
+          dotSprite,
+          particle.x - size,
+          particle.y - size,
+          size * 2,
+          size * 2,
+        );
       } else {
-        ctx.shadowColor = particle.color;
-        ctx.shadowBlur = 5 * remaining;
         ctx.fillStyle = particle.color;
-        ctx.fillRect(-length * 0.65, -thickness / 2, length, thickness);
-        ctx.shadowBlur = 0;
-        ctx.globalAlpha *= 0.75;
-        ctx.fillStyle = particle.coreColor;
-        ctx.fillRect(-length * 0.32, -0.5, length * 0.48, 1);
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, Math.max(3, size * 0.34), 0, Math.PI * 2);
+        ctx.fill();
       }
       ctx.restore();
     } else if (particle.reversalSpark) {
       const sparkSize = Math.max(2, pixelSnap(particle.size, 1));
+      const sparkThickness = Math.max(3, pixelSnap(sparkSize * 0.48, 1));
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       ctx.shadowColor = particle.color;
-      ctx.shadowBlur = 5;
+      ctx.shadowBlur = 10;
       ctx.translate(pixelSnap(particle.x, 1), pixelSnap(particle.y, 1));
       ctx.fillStyle = particle.color;
-      ctx.fillRect(-sparkSize * 2, 0, sparkSize * 2, 2);
-      ctx.fillRect(0, -sparkSize, 2, sparkSize + 2);
-      ctx.fillRect(2, -sparkSize, sparkSize * 2, 2);
+      ctx.fillRect(-sparkSize * 2.4, 0, sparkSize * 2.4, sparkThickness);
+      ctx.fillRect(0, -sparkSize * 1.25, sparkThickness, sparkSize * 1.25 + sparkThickness);
+      ctx.fillRect(sparkThickness, -sparkSize * 1.25, sparkSize * 2.4, sparkThickness);
       ctx.shadowBlur = 0;
       ctx.fillStyle = "#fff0ff";
-      ctx.fillRect(0, -sparkSize, 2, 2);
+      ctx.fillRect(0, -sparkSize * 1.25, sparkThickness, sparkThickness);
       ctx.restore();
     } else if (particle.flameSpark) {
       ctx.save();

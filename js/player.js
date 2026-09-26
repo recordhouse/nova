@@ -91,6 +91,7 @@ function playerAccelerationProgress() {
 }
 
 function accelerationShieldStageForProgress(progress) {
+  if (progress >= PLAYER_ACCELERATION_SHIELD_STAGE_3_PROGRESS) return 3;
   if (progress >= PLAYER_ACCELERATION_SHIELD_STAGE_2_PROGRESS) return 2;
   if (progress >= PLAYER_ACCELERATION_SHIELD_STAGE_1_PROGRESS) return 1;
   return 0;
@@ -120,7 +121,7 @@ function updatePlayerAccelerationShield(dt) {
     player.accelerationShieldCharges = 0;
   } else if (stage > player.accelerationShieldStage) {
     player.accelerationShieldCharges = Math.min(
-      2,
+      3,
       player.accelerationShieldCharges + stage - player.accelerationShieldStage,
     );
     player.accelerationShieldStage = stage;
@@ -136,8 +137,15 @@ function updatePlayerAccelerationShield(dt) {
     PLAYER_ACCELERATION_SHIELD_STAGE_2_PROGRESS,
     progress,
   );
-  const targetVisual = player.accelerationShieldCharges > 0
-    ? stageOneVisual + stageTwoVisual : 0;
+  const stageThreeVisual = smoothShieldStep(
+    PLAYER_ACCELERATION_SHIELD_STAGE_3_PROGRESS * 0.86,
+    PLAYER_ACCELERATION_SHIELD_STAGE_3_PROGRESS,
+    progress,
+  );
+  const targetVisual = Math.min(
+    player.accelerationShieldCharges,
+    stageOneVisual + stageTwoVisual + stageThreeVisual,
+  );
   const blend = 1 - Math.exp(-PLAYER_ACCELERATION_SHIELD_VISUAL_SPEED * dt);
   player.accelerationShieldVisual += (
     targetVisual - player.accelerationShieldVisual
@@ -148,7 +156,10 @@ function updatePlayerAccelerationShield(dt) {
 }
 
 function emitPlayerReversalSparks(dt, brakingDirection) {
-  if (!brakingDirection || !player.grounded) return;
+  if (!brakingDirection || !player.grounded) {
+    player.reversalSparkTimer = 0;
+    return;
+  }
   player.reversalSparkTimer -= dt;
   if (player.reversalSparkTimer > 0) return;
   player.reversalSparkTimer = PLAYER_REVERSAL_SPARK_INTERVAL;
@@ -156,20 +167,36 @@ function emitPlayerReversalSparks(dt, brakingDirection) {
   const footX = player.x + player.width / 2;
   const footY = player.y + player.height - 4;
   for (let spark = 0; spark < 2; spark += 1) {
-    const life = 0.1 + Math.random() * 0.11;
+    const life = 0.14 + Math.random() * 0.11;
     particles.push({
-      x: footX + (Math.random() - 0.5) * player.width * 0.75,
-      y: footY - Math.random() * 4,
-      vx: -brakingDirection * (65 + Math.random() * 80),
-      vy: -35 - Math.random() * 65,
+      x: footX + (Math.random() - 0.5) * player.width * 0.9,
+      y: footY - Math.random() * 7,
+      vx: -brakingDirection * (95 + Math.random() * 95),
+      vy: -50 - Math.random() * 80,
       gravity: 420,
       life,
       maxLife: life,
-      size: 2 + Math.random() * 2,
+      size: 4.5 + Math.random() * 3,
       color: spark === 0 ? "#b45cff" : "#e7cbff",
       reversalSpark: true,
     });
   }
+}
+
+function updatePlayerRunAnimation(dt) {
+  const running = (
+    !playerIsDown() && player.grounded && !player.crouching && !controls.fire &&
+    Math.abs(player.vx) > 1
+  );
+  if (!running) {
+    player.runAnimationTime = 0;
+    return;
+  }
+  const speedRatio = Math.min(
+    PLAYER_RUN_MAX_SPEED / PLAYER_RUN_SPEED,
+    Math.abs(player.vx) / PLAYER_RUN_SPEED,
+  );
+  player.runAnimationTime = (player.runAnimationTime + dt * speedRatio) % 1000;
 }
 
 function updatePlayer(dt) {
@@ -226,6 +253,10 @@ function updatePlayer(dt) {
     ? 0
     : horizontalInput;
   const canReverseOnGround = player.grounded && !canStartJump && move !== 0;
+  const canStopSkid = (
+    player.grounded && !canStartJump && !downForThisFrame &&
+    !player.crouching && !controls.fire && horizontalInput === 0
+  );
   player.reversalGraceTimer = Math.max(0, player.reversalGraceTimer - dt);
   if (player.reversalGraceTimer === 0) {
     player.recentRunDirection = 0;
@@ -234,7 +265,6 @@ function updatePlayer(dt) {
   if (!canReverseOnGround ||
       (player.reversalDirection !== 0 && player.reversalDirection !== move)) {
     player.reversalDirection = 0;
-    player.reversalSparkTimer = 0;
   }
   const reversingCurrentVelocity = (
     Math.sign(player.vx) === -move &&
@@ -282,6 +312,11 @@ function updatePlayer(dt) {
           currentRunSpeed + PLAYER_RUN_ACCELERATION * dt,
         );
       }
+    } else if (canStopSkid && Math.abs(player.vx) > 1) {
+      const previousVx = player.vx;
+      player.vx = approachPlayerSpeed(previousVx, 0, PLAYER_STOP_BRAKE * dt);
+      brakingDirection = Math.sign(previousVx);
+      player.runSpeed = player.speed;
     } else {
       player.vx = 0;
       player.runSpeed = player.speed;
@@ -424,6 +459,7 @@ function updatePlayer(dt) {
     }
   }
 
+  updatePlayerRunAnimation(dt);
   emitPlayerReversalSparks(dt, brakingDirection);
 
   const firing = !downForThisFrame && controls.fire;

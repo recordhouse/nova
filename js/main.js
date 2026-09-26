@@ -22,6 +22,17 @@ function particleGroundCollision(particle, previousX, previousY) {
 function updateParticles(dt) {
   for (let i = particles.length - 1; i >= 0; i -= 1) {
     const particle = particles[i];
+    if (particle.revivalOrb) {
+      particle.angularVelocity *= Math.exp(-0.85 * dt);
+      particle.angle += particle.angularVelocity * dt;
+      particle.radialVelocity += particle.radialAcceleration * dt;
+      particle.radius += particle.radialVelocity * dt;
+      particle.x = particle.originX + Math.cos(particle.angle) * particle.radius;
+      particle.y = particle.originY + Math.sin(particle.angle) * particle.radius;
+      particle.life -= dt;
+      if (particle.life <= 0) particles.splice(i, 1);
+      continue;
+    }
     if (particle.groundFlame) {
       particle.flamePhase += dt * particle.flickerSpeed;
       particle.life -= dt;

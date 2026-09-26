@@ -148,20 +148,23 @@ test("HUD pixel glyphs and hearts reuse their small prerendered sprites", () => 
   assert.equal(calls.filter((call) => call.operation === "drawImage").length, 18);
 });
 
-test("revival and impact rays reuse glow sprites and skip offscreen particles", () => {
+test("revival orbs and impact rays reuse glow sprites and skip offscreen particles", () => {
   const { scope, calls } = createDisplay();
   let created = 0;
   scope.document.createElement = () => {
     created += 1;
-    return { getContext: () => ({ scale() {}, translate() {}, fillRect() {} }) };
+    return { getContext: () => ({
+      scale() {}, translate() {}, fillRect() {}, beginPath() {}, arc() {}, fill() {},
+      createRadialGradient: () => ({ addColorStop() {} }),
+    }) };
   };
   read(scope, `particles.push(
-    {x:100,y:100,vx:400,vy:0,life:0.9,maxLife:1,size:3,
-      color:'#cb8aff',coreColor:'#fff1ff',revivalFlame:true},
+    {x:100,y:100,angle:0,life:0.9,maxLife:1,size:12,
+      color:'#b86cff',coreColor:'#dca9ff',revivalOrb:true},
     {x:130,y:100,vx:400,vy:0,life:0.3,maxLife:0.5,size:3,
       color:'#d99bff',coreColor:'#fff8ff',impactRay:true},
-    {x:10000,y:100,vx:400,vy:0,life:0.9,maxLife:1,size:3,
-      color:'#ae65ff',coreColor:'#fff1ff',revivalFlame:true}
+    {x:10000,y:100,angle:0,life:0.9,maxLife:1,size:12,
+      color:'#b86cff',coreColor:'#dca9ff',revivalOrb:true}
   )`);
   scope.drawParticles();
   assert.equal(created, 2);

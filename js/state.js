@@ -34,6 +34,7 @@ const player = {
   vy: 0,
   speed: PLAYER_RUN_SPEED,
   runSpeed: PLAYER_RUN_SPEED,
+  runAnimationTime: 0,
   accelerationShieldStage: 0,
   accelerationShieldCharges: 0,
   accelerationShieldVisual: 0,
@@ -83,6 +84,7 @@ function resetPlayerDownState() {
   player.hitKnockbackVelocity = 0;
   player.hitKnockbackTime = 0;
   player.runSpeed = player.speed;
+  player.runAnimationTime = 0;
   player.accelerationShieldStage = 0;
   player.accelerationShieldCharges = 0;
   player.accelerationShieldVisual = 0;
