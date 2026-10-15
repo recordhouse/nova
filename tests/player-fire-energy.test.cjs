@@ -9,6 +9,9 @@ const vm = require("node:vm");
 function createGame() {
   const calls = [];
   const soundCalls = [];
+  const videoCalls = [];
+  const runVideoCalls = [];
+  const standVideoCalls = [];
   const stack = [];
   const ctx = new Proxy({ globalAlpha: 1 }, {
     get(target, key) {
@@ -30,6 +33,12 @@ function createGame() {
     window: { location: { search: "" }, innerWidth: 720, innerHeight: 1280,
       matchMedia: () => ({ matches: false }) },
     playPlayerGunSound: () => soundCalls.push("gun"),
+    playPlayerGunVideo: () => videoCalls.push("play"),
+    stopPlayerGunVideo: () => videoCalls.push("stop"),
+    playPlayerRunVideo: () => runVideoCalls.push("play"),
+    stopPlayerRunVideo: () => runVideoCalls.push("stop"),
+    playPlayerStandVideo: () => standVideoCalls.push("play"),
+    stopPlayerStandVideo: () => standVideoCalls.push("stop"),
     playerSprites: {
       stand: { loaded: true, image: { naturalWidth: 400, naturalHeight: 500 }, fps: 1,
         frames: [{ x: 0, y: 0, width: 400, height: 500 }] },
@@ -47,7 +56,7 @@ function createGame() {
     player.grounded=true; player.platform=fixtureRoad;
     minWorldX=0; maxWorldX=2000;
   `, scope);
-  return { scope, calls, soundCalls };
+  return { scope, calls, soundCalls, videoCalls, runVideoCalls, standVideoCalls };
 }
 
 function read(scope, source) { return vm.runInContext(source, scope); }
@@ -97,13 +106,88 @@ test("energy recharges while idle and resets full without affecting down protect
   assert.equal(read(scope, "player.fireEnergy"), 100);
 });
 
-test("each successful player shot plays the gun sound once", () => {
-  const { scope, soundCalls } = createGame();
+test("the gun video follows held firing instead of individual bullets", () => {
+  const { scope, soundCalls, videoCalls } = createGame();
   assert.equal(scope.shootPlayer(), true);
   assert.equal(soundCalls.length, 1);
-  read(scope, "player.fireEnergy=0");
-  assert.equal(scope.shootPlayer(), false);
-  assert.equal(soundCalls.length, 1);
+  assert.deepEqual(videoCalls, [], "an isolated bullet does not leave the cut-in running");
+
+  read(scope, "controls.fire=true");
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(videoCalls, ["play"]);
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(videoCalls, ["play"], "holding fire does not restart the video");
+
+  read(scope, "controls.fire=false");
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(videoCalls, ["play", "stop"]);
+
+  read(scope, "player.fireEnergy=0; player.fireTimer=0; controls.fire=true");
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(videoCalls, ["play", "stop"],
+    "an empty weapon does not show the firing video");
+});
+
+test("the run video continues through jumps and also starts on a standing jump", () => {
+  const { scope, runVideoCalls } = createGame();
+  read(scope, "controls.right=true");
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(runVideoCalls, ["play"]);
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(runVideoCalls, ["play"], "continuous running does not restart it");
+
+  read(scope, "controls.jump=true; jumpQueued=true");
+  scope.updatePlayer(1 / 60);
+  assert.equal(read(scope, "player.grounded"), false);
+  assert.deepEqual(runVideoCalls, ["play"], "jumping does not stop the run video");
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(runVideoCalls, ["play"], "air time does not restart the video");
+
+  read(scope, `
+    controls.right=false; controls.jump=false; jumpQueued=false;
+    player.grounded=true; player.platform=platforms[0]; player.vx=0; player.vy=0;
+    player.y=platforms[0].y-player.height;
+  `);
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(runVideoCalls, ["play", "stop"]);
+
+  read(scope, "controls.jump=true; jumpQueued=true");
+  scope.updatePlayer(1 / 60);
+  assert.equal(read(scope, "player.grounded"), false);
+  assert.deepEqual(runVideoCalls, ["play", "stop", "play"],
+    "a jump from standing also starts the run video");
+});
+
+test("the stand video plays while the grounded player is idle or crouching", () => {
+  const { scope, videoCalls, runVideoCalls, standVideoCalls } = createGame();
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(standVideoCalls, ["play"]);
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(standVideoCalls, ["play"], "remaining idle does not restart it");
+
+  read(scope, "controls.down=true");
+  scope.updatePlayer(1 / 60);
+  assert.equal(read(scope, "player.crouching"), true);
+  assert.deepEqual(standVideoCalls, ["play"], "crouching keeps the stand video active");
+  read(scope, "controls.down=false");
+
+  read(scope, "controls.right=true");
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(standVideoCalls, ["play", "stop"]);
+  assert.deepEqual(runVideoCalls, ["play"]);
+
+  read(scope, `
+    controls.right=false; player.vx=0; player.runSpeed=player.speed;
+    player.reversalDirection=0; player.reversalGraceTimer=0;
+  `);
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(runVideoCalls, ["play", "stop"]);
+  assert.deepEqual(standVideoCalls, ["play", "stop", "play"]);
+
+  read(scope, "controls.fire=true");
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(standVideoCalls, ["play", "stop", "play", "stop"]);
+  assert.deepEqual(videoCalls, ["play"], "the firing video takes priority over stand");
 });
 
 test("purple gauge tracks the drawn sprite and never blinks with temporary immunity", () => {

@@ -112,3 +112,27 @@ test("a player's bullet computes hitboxes only for enemies at its horizontal pos
   assert.equal(read(scope, "hitboxCalls"), 1);
   assert.equal(read(scope, "bullets.length"), 1);
 });
+
+test("repeated road queries reuse spatial buckets instead of scanning distant roads", () => {
+  const scope = createGame();
+  read(scope, `
+    platforms.length=0;
+    platforms.push({id:1,kind:'flat',start:0,end:300,y:500});
+    for(let index=0;index<800;index++) {
+      platforms.push({id:index+2,kind:'flat',start:5000+index*200,
+        end:5120+index*200,y:500});
+    }
+    platformsBetween(80,160);
+    globalThis.farRoadReads=0;
+    Object.defineProperty(platforms[400],'start',{
+      configurable:true,
+      get(){ farRoadReads++; return 5000+399*200; }
+    });
+  `);
+
+  assert.deepEqual(Array.from(scope.platformsBetween(80, 160), (road) => road.id), [1]);
+  assert.equal(read(scope, "farRoadReads"), 0);
+  read(scope, "platforms.unshift({id:999,kind:'flat',start:300,end:384,y:500})");
+  assert.equal(scope.platformsAt(384).some((road) => road.id === 999), false);
+  assert.equal(scope.platformsBetween(384, 390).some((road) => road.id === 999), true);
+});

@@ -74,7 +74,7 @@ test("both monsters use the player's layered pixel gauge shape, centered over th
   }
 });
 
-test("monster HP changes the pixel fill from green to yellow to red without changing the turret bar", () => {
+test("monster and turret HP use the same green, yellow and red pixel-gauge style", () => {
   const { scope, calls } = createGame();
   for (const [hp, hue, width] of [[10, 120, 60], [6, 60, 36], [3, 0, 18]]) {
     scope.monster2.hp = hp;
@@ -87,10 +87,24 @@ test("monster HP changes the pixel fill from green to yellow to red without chan
   scope.monster1.hp = 1;
   assert.equal(gaugeRects(scope, calls, scope.monster1)[3].color, "hsl(60, 92%, 52%)");
 
-  calls.length = 0;
-  scope.drawTurret({ x: 1000, y: 344, width: 108, height: 156, hp: 15, maxHp: 15,
-    facing: 1, active: false, fireTimer: 4, burstShotsRemaining: 0, recoilTimer: 0, hitTimer: 0 });
-  assert.ok(calls.some((call) => typeof call.color === "string" && call.color.startsWith("hsl(")));
+  const turret = { x: 1000, y: 344, width: 108, height: 156, hp: 15, maxHp: 15,
+    facing: 1, active: false, fireTimer: 4, burstShotsRemaining: 0, recoilTimer: 0,
+    hitTimer: 0 };
+  for (const [hp, hue] of [[15, 120], [8, 60], [4, 0]]) {
+    turret.hp = hp;
+    calls.length = 0;
+    scope.drawTurret(turret);
+    const spriteIndex = calls.findIndex((call) => call.operation === "drawImage");
+    const rects = calls.slice(spriteIndex + 1)
+      .filter((call) => call.operation === "fillRect");
+    assert.equal(rects.length, 5);
+    assert.equal(rects[0].color, "rgba(4, 7, 10, 0.88)");
+    assert.equal(rects[1].color, "rgba(220, 231, 239, 0.6)");
+    assert.equal(rects[2].color, "rgba(33, 38, 43, 0.94)");
+    assert.equal(rects[3].color, `hsl(${hue}, 92%, 52%)`);
+    assert.equal(rects[4].color, `hsl(${hue}, 92%, 76%)`);
+    assert.deepEqual(rects[2].args.slice(2), [72, 8]);
+  }
 });
 
 test("monster gauges stay above the animated sprite during jumps and charge-up", () => {

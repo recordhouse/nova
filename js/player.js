@@ -49,10 +49,24 @@ function updateElectricWires() {
         feature.centerX + feature.width < hitbox.x - ELECTRIC_WIRE_RADIUS ||
         feature.centerX - feature.width > hitbox.x + hitbox.width + ELECTRIC_WIRE_RADIUS
       ) continue;
-      if (!electricWireHitsRect(electricWirePoints(platform, feature), hitbox)) continue;
-      takePlayerDamage(ELECTRIC_WIRE_DAMAGE);
-      shake = Math.max(shake, 8);
-      burst(hitbox.x + hitbox.width / 2, hitbox.y + hitbox.height / 2, "#e7fdff", 14, 170);
+      const wirePoints = electricWirePoints(platform, feature);
+      if (!electricWireHitsRect(wirePoints, hitbox)) continue;
+      const playerCenterX = hitbox.x + hitbox.width / 2;
+      const contactPoint = wirePoints.reduce((nearest, point) =>
+        Math.abs(point.x - playerCenterX) < Math.abs(nearest.x - playerCenterX)
+          ? point
+          : nearest);
+      const damageApplied = takePlayerDamage(ELECTRIC_WIRE_DAMAGE, {
+        kind: "electric-wire",
+        x: contactPoint.x,
+        y: contactPoint.y,
+        width: 0,
+        height: 0,
+      });
+      if (damageApplied) {
+        shake = Math.max(shake, 8);
+        burst(hitbox.x + hitbox.width / 2, hitbox.y + hitbox.height / 2, "#e7fdff", 14, 170);
+      }
       return;
     }
   }
@@ -69,13 +83,16 @@ function updatePlayerDown(dt) {
   player.downTime = totalDuration;
   if (player.hp <= 0 || gameOver) {
     player.downPhase = "defeated";
+    if (typeof stopPlayerDownVideo === "function") stopPlayerDownVideo();
     return;
   }
   resetPlayerDownState();
+  if (typeof stopPlayerDownVideo === "function") stopPlayerDownVideo();
   player.invincible = Math.max(0, PLAYER_REVIVAL_INVINCIBILITY - remainingDt);
   player.jumpAnimationTime = 0;
   player.deepFalling = false;
   player.fallAnimationTime = 0;
+  if (typeof playResurrectionSound === "function") playResurrectionSound();
   emitPlayerRevival();
 }
 
@@ -185,7 +202,7 @@ function emitPlayerReversalSparks(dt, brakingDirection) {
 
 function updatePlayerRunAnimation(dt) {
   const running = (
-    !playerIsDown() && player.grounded && !player.crouching && !controls.fire &&
+    !playerIsDown() && player.grounded && !player.crouching &&
     Math.abs(player.vx) > 1
   );
   if (!running) {
@@ -197,6 +214,39 @@ function updatePlayerRunAnimation(dt) {
     Math.abs(player.vx) / PLAYER_RUN_SPEED,
   );
   player.runAnimationTime = (player.runAnimationTime + dt * speedRatio) % 1000;
+}
+
+function syncPlayerGunVideoPlayback(firing) {
+  const shouldPlay = Boolean(firing);
+  if (player.fireVideoActive === shouldPlay) return;
+  player.fireVideoActive = shouldPlay;
+  if (shouldPlay) {
+    if (typeof playPlayerGunVideo === "function") playPlayerGunVideo();
+  } else if (typeof stopPlayerGunVideo === "function") {
+    stopPlayerGunVideo();
+  }
+}
+
+function syncPlayerRunVideoPlayback(running) {
+  const shouldPlay = Boolean(running);
+  if (player.runVideoActive === shouldPlay) return;
+  player.runVideoActive = shouldPlay;
+  if (shouldPlay) {
+    if (typeof playPlayerRunVideo === "function") playPlayerRunVideo();
+  } else if (typeof stopPlayerRunVideo === "function") {
+    stopPlayerRunVideo();
+  }
+}
+
+function syncPlayerStandVideoPlayback(standing) {
+  const shouldPlay = Boolean(standing);
+  if (player.standVideoActive === shouldPlay) return;
+  player.standVideoActive = shouldPlay;
+  if (shouldPlay) {
+    if (typeof playPlayerStandVideo === "function") playPlayerStandVideo();
+  } else if (typeof stopPlayerStandVideo === "function") {
+    stopPlayerStandVideo();
+  }
 }
 
 function updatePlayer(dt) {
@@ -249,15 +299,25 @@ function updatePlayer(dt) {
     (player.grounded || canUseCoyoteJump || player.airJumpAvailable)
   );
   const horizontalInput = downForThisFrame ? 0 : Number(controls.right) - Number(controls.left);
-  const move = player.crouching || controls.fire
+  const groundFireAction = (
+    !downForThisFrame && controls.fire && player.grounded &&
+    !PLAYER_RUNNING_FIRE_ENABLED
+  );
+  const move = player.crouching || groundFireAction
     ? 0
     : horizontalInput;
   const canReverseOnGround = player.grounded && !canStartJump && move !== 0;
   const canStopSkid = (
     player.grounded && !canStartJump && !downForThisFrame &&
-    !player.crouching && !controls.fire && horizontalInput === 0
+    !player.crouching && !groundFireAction && horizontalInput === 0
   );
   player.reversalGraceTimer = Math.max(0, player.reversalGraceTimer - dt);
+  if (groundFireAction) {
+    player.reversalDirection = 0;
+    player.recentRunDirection = 0;
+    player.recentRunSpeed = 0;
+    player.reversalGraceTimer = 0;
+  }
   if (player.reversalGraceTimer === 0) {
     player.recentRunDirection = 0;
     player.recentRunSpeed = 0;
@@ -291,7 +351,10 @@ function updatePlayer(dt) {
   if (knockbackDt > 0) {
     player.vx = dt > 0 ? hitKnockbackDistance / dt : 0;
   } else if (player.grounded) {
-    if (player.reversalDirection === move && canReverseOnGround) {
+    if (groundFireAction) {
+      player.vx = 0;
+      player.runSpeed = player.speed;
+    } else if (player.reversalDirection === move && canReverseOnGround) {
       const previousVx = player.vx;
       const braking = Math.sign(previousVx) === -move;
       const acceleration = braking ? PLAYER_REVERSAL_BRAKE : PLAYER_REVERSAL_ACCELERATION;
@@ -321,7 +384,7 @@ function updatePlayer(dt) {
       player.vx = 0;
       player.runSpeed = player.speed;
     }
-  } else if (!controls.fire && move !== 0 && Math.sign(player.vx) !== move) {
+  } else if (move !== 0 && Math.sign(player.vx) !== move) {
     // Keep accumulated takeoff speed in the air; only an intentional turn replaces it.
     player.runSpeed = player.speed;
     player.vx = move * player.speed;
@@ -335,7 +398,7 @@ function updatePlayer(dt) {
     player.recentRunSpeed = Math.abs(player.vx);
     player.reversalGraceTimer = PLAYER_REVERSAL_INPUT_GRACE;
   } else if (
-    downForThisFrame || canStartJump || player.crouching || controls.fire || !player.grounded
+    downForThisFrame || canStartJump || player.crouching || !player.grounded
   ) {
     player.recentRunDirection = 0;
     player.recentRunSpeed = 0;
@@ -462,7 +525,7 @@ function updatePlayer(dt) {
   updatePlayerRunAnimation(dt);
   emitPlayerReversalSparks(dt, brakingDirection);
 
-  const firing = !downForThisFrame && controls.fire;
+  const firing = !downForThisFrame && controls.fire && playerCanFire();
   const startedFiring = firing && !player.fireWasActive;
   if (startedFiring) {
     player.fireBarrel = 0;
@@ -472,6 +535,15 @@ function updatePlayer(dt) {
   player.fireTimer = Math.max(0, player.fireTimer - dt);
   const firingPose = firing && (
     player.fireEnergy >= PLAYER_FIRE_ENERGY_PER_SHOT || player.fireTimer > 0
+  );
+  const runVideoPose = !firingPose && !downForThisFrame && (
+    playerIsRunningOnGround() || !player.grounded
+  );
+  syncPlayerGunVideoPlayback(firingPose);
+  syncPlayerRunVideoPlayback(runVideoPose);
+  syncPlayerStandVideoPlayback(
+    !firingPose && !runVideoPose && !downForThisFrame &&
+    player.grounded,
   );
   player.fireAnimationTime = firingPose ? player.fireAnimationTime + dt : 0;
   if (firing && player.fireTimer <= 0 && player.fireEnergy >= PLAYER_FIRE_ENERGY_PER_SHOT) {
@@ -494,5 +566,10 @@ function updatePlayer(dt) {
   const targetCameraY = playerFeetY - BASE_GROUND_Y;
   cameraY += (targetCameraY - cameraY) * Math.min(1, dt * 4.2);
 
-  if (player.y > lowestPlatformY + 430) gameOver = true;
+  if (player.y > lowestPlatformY + 430) {
+    gameOver = true;
+    syncPlayerGunVideoPlayback(false);
+    syncPlayerRunVideoPlayback(false);
+    syncPlayerStandVideoPlayback(false);
+  }
 }

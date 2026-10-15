@@ -49,6 +49,21 @@ function enemySpritePose(enemy, x = enemy.x, y = enemy.y) {
       scaleY *= 1 + recoil * 0.07;
     }
   }
+  if (enemy.kind === "monster4") {
+    if (enemy.state === "spear-charge") {
+      const progress = 1 - Math.max(0,
+        enemy.stateTimer / enemy.spearChargeDuration,
+      );
+      scaleX *= 1.02 + progress * 0.16;
+      scaleY *= 0.98 - progress * 0.14;
+    } else if (enemy.state === "spear-recover") {
+      const recoil = Math.max(0,
+        enemy.stateTimer / enemy.spearRecoveryDuration,
+      );
+      scaleX *= 1 + recoil * 0.22;
+      scaleY *= 1 - recoil * 0.1;
+    }
+  }
   return {
     centerX: Math.round((x + enemy.width / 2) / 2) * 2,
     feetY: Math.round((y + enemy.height - bob) / 2) * 2,
@@ -538,22 +553,22 @@ function updateMonster2(enemy, dt, playerHitbox, playerCenterX, playerFeetY) {
 
   if (enemy.state === "inhale") {
     enemy.stateTimer -= dt;
-    if (enemy.stateTimer > 0) return;
+    if (enemy.stateTimer > 0) return false;
     const remainingDt = Math.max(0, -enemy.stateTimer);
     enemy.state = "shoot";
     enemy.stateTimer = (enemy.fireballCount - 1) * enemy.fireballInterval + enemy.fireballRecovery;
     enemy.fireballsFired = 0;
     enemy.fireballTimer = 0;
     updateMonster2Volley(enemy, remainingDt);
-    return;
+    return false;
   }
 
   if (enemy.state === "shoot") {
     updateMonster2Volley(enemy, dt);
-    return;
+    return false;
   }
 
-  if (knockedBack) return;
+  if (knockedBack) return false;
 
   enemy.ambientFireTimer = Math.max(0, enemy.ambientFireTimer - dt);
   if (Math.abs(distance) > 1) enemy.facing = Math.sign(distance);
@@ -564,7 +579,7 @@ function updateMonster2(enemy, dt, playerHitbox, playerCenterX, playerFeetY) {
     enemy.attackDirection = enemy.facing;
     const origin = monster2AttackOrigin(enemy);
     if (monster2MouthIsVisible(enemy)) burst(origin.x, origin.y, "#b348db", 7, 65);
-    return;
+    return true;
   }
 
   if (
@@ -573,6 +588,7 @@ function updateMonster2(enemy, dt, playerHitbox, playerCenterX, playerFeetY) {
   ) {
     moveEnemyAlongGround(enemy, Math.sign(distance) || enemy.facing, dt);
   }
+  return false;
 }
 
 function monster3EyeOrigin(enemy) {
@@ -580,6 +596,80 @@ function monster3EyeOrigin(enemy) {
     x: enemy.x + enemy.width / 2 + enemy.facing * 19,
     y: enemy.y + enemy.height - 98,
   };
+}
+
+function monster4SpearOrigin(enemy) {
+  const direction = (
+    enemy.state === "spear-charge" || enemy.state === "spear-recover"
+      ? enemy.attackDirection
+      : enemy.facing
+  ) || -1;
+  return {
+    x: enemy.x + enemy.width / 2 + direction * enemy.spearForwardOffset,
+    y: enemy.y + enemy.height - enemy.spearHeight,
+  };
+}
+
+function fireMonster4Spear(enemy, playerHitbox) {
+  const targetX = playerHitbox.x + playerHitbox.width / 2;
+  const targetY = playerHitbox.y + playerHitbox.height / 2;
+  const enemyCenterX = enemy.x + enemy.width / 2;
+  enemy.facing = Math.sign(targetX - enemyCenterX) || enemy.facing || -1;
+  enemy.attackDirection = enemy.facing;
+  const origin = monster4SpearOrigin(enemy);
+  const distance = Math.max(1, Math.hypot(targetX - origin.x, targetY - origin.y));
+  const directionX = (targetX - origin.x) / distance;
+  const directionY = (targetY - origin.y) / distance;
+  enemyBullets.push({
+    kind: "monster4-crescent",
+    x: origin.x + directionX * 18,
+    y: origin.y + directionY * 18,
+    vx: directionX * enemy.spearSpeed,
+    vy: directionY * enemy.spearSpeed,
+    radius: enemy.spearRadius,
+    remainingRange: enemy.spearTravelRange,
+    initialRange: enemy.spearTravelRange,
+    ricochets: 0,
+    maxRicochets: 0,
+    ricochetColor: "#ff4e55",
+    phase: enemy.animationPhase,
+  });
+  burst(origin.x, origin.y, "#ff4e55", 9, 145);
+  shake = Math.max(shake, 4);
+}
+
+function updateMonster4SpearAttack(enemy, dt, playerHitbox, playerCenterX) {
+  if (enemy.state === "spear-charge") {
+    enemy.stateTimer -= dt;
+    if (enemy.stateTimer > 0) return true;
+    fireMonster4Spear(enemy, playerHitbox);
+    enemy.state = "spear-recover";
+    enemy.stateTimer = enemy.spearRecoveryDuration;
+    enemy.attackTimer = enemy.spearAttackCooldown * (0.88 + Math.random() * 0.24);
+    return true;
+  }
+  if (enemy.state === "spear-recover") {
+    enemy.stateTimer -= dt;
+    if (enemy.stateTimer <= 0) {
+      enemy.state = "chase";
+      enemy.stateTimer = 0;
+    }
+    return true;
+  }
+  if (enemy.state !== "chase" || enemy.attackTimer > 0) return false;
+
+  const origin = monster4SpearOrigin(enemy);
+  const playerCenterY = playerHitbox.y + playerHitbox.height / 2;
+  if (
+    Math.abs(playerCenterX - origin.x) > enemy.spearAttackRange ||
+    Math.abs(playerCenterY - origin.y) > enemy.spearAttackVerticalRange
+  ) return false;
+
+  enemy.facing = Math.sign(playerCenterX - enemy.x - enemy.width / 2) || enemy.facing;
+  enemy.attackDirection = enemy.facing;
+  enemy.state = "spear-charge";
+  enemy.stateTimer = enemy.spearChargeDuration;
+  return true;
 }
 
 function fireMonster3Laser(enemy, playerHitbox) {
@@ -636,13 +726,13 @@ function updateMonster3(enemy, dt, playerHitbox, playerCenterX) {
 
   if (enemy.state === "charge") {
     enemy.stateTimer -= dt;
-    if (enemy.stateTimer > 0) return;
+    if (enemy.stateTimer > 0) return false;
     fireMonster3Laser(enemy, playerHitbox);
     enemy.state = "hover";
     enemy.stateTimer = 0;
     enemy.attackTimer = enemy.attackCooldownMin +
       Math.random() * (enemy.attackCooldownMax - enemy.attackCooldownMin);
-    return;
+    return false;
   }
 
   const eye = monster3EyeOrigin(enemy);
@@ -655,13 +745,65 @@ function updateMonster3(enemy, dt, playerHitbox, playerCenterX) {
     enemy.facing = Math.sign(playerCenterX - enemy.x - enemy.width / 2) || enemy.facing;
     enemy.state = "charge";
     enemy.stateTimer = enemy.chargeDuration;
+    return true;
   }
+  return false;
+}
+
+function hostileAttackVideoIsVisible(hostile) {
+  const margin = 100;
+  const centerX = hostile.x + hostile.width / 2;
+  const centerY = hostile.y + hostile.height / 2;
+  return (
+    centerX >= cameraX - margin && centerX <= cameraX + WIDTH + margin &&
+    centerY >= cameraY - margin && centerY <= cameraY + HEIGHT + margin
+  );
+}
+
+function hostileAttackVideoDistance(hostile, playerCenterX, playerCenterY) {
+  return Math.hypot(
+    hostile.x + hostile.width / 2 - playerCenterX,
+    hostile.y + hostile.height / 2 - playerCenterY,
+  );
+}
+
+function damagePlayerOnHostileContact(hostile, playerHitbox, hostileHitbox = hostile) {
+  if (
+    (hostile.contactDamageTimer ?? 0) > 0 ||
+    !overlapsRects(hostileHitbox, playerHitbox)
+  ) return false;
+  const shieldChargesBeforeContact = player.accelerationShieldCharges;
+  const ramDirection = playerShieldRamDirection(hostile);
+  if (!takePlayerDamage(HOSTILE_CONTACT_DAMAGE, hostile)) return false;
+  hostile.contactDamageTimer = HOSTILE_CONTACT_COOLDOWN;
+  if (
+    ramDirection !== 0 &&
+    player.accelerationShieldCharges === shieldChargesBeforeContact - 1
+  ) {
+    damageEnemyWithPlayerShieldRam(hostile, ramDirection);
+  }
+  if (hostile.state === "jump") hostile.jumpHit = true;
+  return true;
 }
 
 function updateEnemies(dt) {
   const playerHitbox = getPlayerHitbox();
   const playerCenterX = playerHitbox.x + playerHitbox.width / 2;
+  const playerCenterY = playerHitbox.y + playerHitbox.height / 2;
   const playerFeetY = player.y + player.height;
+  let attackVideoCandidate = null;
+  let attackVideoDistance = Infinity;
+  const considerAttackVideo = (enemy) => {
+    if (!hostileAttackVideoIsVisible(enemy)) return;
+    const distance = hostileAttackVideoDistance(
+      enemy,
+      playerCenterX,
+      playerCenterY,
+    );
+    if (distance >= attackVideoDistance) return;
+    attackVideoCandidate = enemy;
+    attackVideoDistance = distance;
+  };
 
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
@@ -669,14 +811,27 @@ function updateEnemies(dt) {
     enemy.attackTimer = Math.max(0, enemy.attackTimer - dt);
     enemy.jumpCooldown = Math.max(0, enemy.jumpCooldown - dt);
     enemy.hitTimer = Math.max(0, enemy.hitTimer - dt);
+    enemy.contactDamageTimer = Math.max(0, (enemy.contactDamageTimer ?? 0) - dt);
     if (enemy.hitTimer <= 0) {
       if (enemy.revivalKnockback) enemy.hitKnockbackVelocity = 0;
       enemy.revivalKnockback = false;
     }
     enemy.moving = false;
+    if (
+      hostileAttackVideoIsVisible(enemy) &&
+      typeof queueEnemyIntroductionVideo === "function"
+    ) {
+      queueEnemyIntroductionVideo(
+        enemy.kind,
+        hostileAttackVideoDistance(enemy, playerCenterX, playerCenterY),
+      );
+    }
 
     if (enemy.kind === "monster3") {
-      updateMonster3(enemy, dt, playerHitbox, playerCenterX);
+      if (updateMonster3(enemy, dt, playerHitbox, playerCenterX)) {
+        considerAttackVideo(enemy);
+      }
+      damagePlayerOnHostileContact(enemy, playerHitbox, getEnemyHitbox(enemy));
       continue;
     }
 
@@ -689,7 +844,15 @@ function updateEnemies(dt) {
     const surfaceY = enemySurfaceY(enemy);
     const playerVerticalDistance = playerFeetY - surfaceY;
     if (enemy.kind === "monster2") {
-      updateMonster2(enemy, dt, playerHitbox, playerCenterX, playerFeetY);
+      const attackStarted = updateMonster2(
+        enemy,
+        dt,
+        playerHitbox,
+        playerCenterX,
+        playerFeetY,
+      );
+      if (attackStarted && monster2MouthIsVisible(enemy)) considerAttackVideo(enemy);
+      damagePlayerOnHostileContact(enemy, playerHitbox, getEnemyHitbox(enemy));
       continue;
     }
     const withinJumpHeight = (
@@ -704,10 +867,20 @@ function updateEnemies(dt) {
     if (Math.abs(distance) > 1) enemy.facing = Math.sign(distance);
 
     const contactDistance = (enemy.width + playerHitbox.width) / 2 - 4;
-    const wasJumping = enemy.state === "jump";
-
     if (enemy.hitTimer > 0 && enemy.state !== "jump") {
       updateEnemyHitReaction(enemy, dt);
+      damagePlayerOnHostileContact(enemy, playerHitbox, getEnemyHitbox(enemy));
+      continue;
+    }
+
+    const attackStateBeforeUpdate = enemy.state;
+    if (enemy.kind === "monster4" &&
+        updateMonster4SpearAttack(enemy, dt, playerHitbox, playerCenterX)) {
+      if (
+        attackStateBeforeUpdate !== "spear-charge" &&
+        enemy.state === "spear-charge"
+      ) considerAttackVideo(enemy);
+      damagePlayerOnHostileContact(enemy, playerHitbox, getEnemyHitbox(enemy));
       continue;
     }
 
@@ -776,17 +949,18 @@ function updateEnemies(dt) {
     }
 
     if (
-      (enemy.kind === "monster1" || enemy.kind === "monster4") &&
-      (wasJumping || enemy.state === "jump") &&
-      !enemy.jumpHit &&
-      player.invincible <= 0 &&
-      enemy.attackTimer <= 0 &&
-      overlapsRects(getEnemyHitbox(enemy), playerHitbox) &&
-      takePlayerDamage(1, enemy)
-    ) {
-      enemy.attackTimer = enemy.attackCooldown;
-      enemy.jumpHit = true;
-    }
+      attackStateBeforeUpdate !== "windup" &&
+      enemy.state === "windup" &&
+      (enemy.kind === "monster1" || enemy.kind === "monster4")
+    ) considerAttackVideo(enemy);
+
+    damagePlayerOnHostileContact(enemy, playerHitbox, getEnemyHitbox(enemy));
+  }
+  if (
+    attackVideoCandidate &&
+    typeof playEnemyAttackVideo === "function"
+  ) {
+    playEnemyAttackVideo(attackVideoCandidate.kind, gameTime, attackVideoCandidate);
   }
 }
 
@@ -844,6 +1018,8 @@ function updateTurrets(dt) {
   const playerHitbox = getPlayerHitbox();
   const playerCenterX = playerHitbox.x + playerHitbox.width / 2;
   const playerCenterY = playerHitbox.y + playerHitbox.height / 2;
+  let attackVideoCandidate = null;
+  let attackVideoDistance = Infinity;
 
   for (const turret of turrets) {
     if (!turret.alive) continue;
@@ -854,6 +1030,20 @@ function updateTurrets(dt) {
     );
     turret.hitTimer = Math.max(0, turret.hitTimer - dt);
     turret.recoilTimer = Math.max(0, turret.recoilTimer - dt);
+    turret.contactDamageTimer = Math.max(
+      0,
+      (turret.contactDamageTimer ?? 0) - dt,
+    );
+    if (
+      hostileAttackVideoIsVisible(turret) &&
+      typeof queueEnemyIntroductionVideo === "function"
+    ) {
+      queueEnemyIntroductionVideo(
+        "turret",
+        hostileAttackVideoDistance(turret, playerCenterX, playerCenterY),
+      );
+    }
+    damagePlayerOnHostileContact(turret, playerHitbox);
     const playerInRange = (
       Math.abs(playerCenterX - turretCenterX) <= TURRET.activationRangeX &&
       Math.abs(playerCenterY - turretCenterY) <= TURRET.activationRangeY
@@ -865,6 +1055,20 @@ function updateTurrets(dt) {
 
     turret.fireTimer -= dt;
     if (turret.burstShotsRemaining === 0 && turret.fireTimer <= TURRET.chargeDuration) {
+      if (!turret.attackVideoPrimed) {
+        turret.attackVideoPrimed = true;
+        if (hostileAttackVideoIsVisible(turret)) {
+          const distance = hostileAttackVideoDistance(
+            turret,
+            playerCenterX,
+            playerCenterY,
+          );
+          if (distance < attackVideoDistance) {
+            attackVideoCandidate = turret;
+            attackVideoDistance = distance;
+          }
+        }
+      }
       turret.chargeParticleTimer -= dt;
       if (turret.chargeParticleTimer <= 0) {
         const muzzle = turretMuzzlePosition(turret);
@@ -900,7 +1104,14 @@ function updateTurrets(dt) {
     }
     turret.fireTimer = turret.burstShotsRemaining > 0
       ? TURRET.burstShotInterval : TURRET.fireInterval;
+    if (turret.burstShotsRemaining === 0) turret.attackVideoPrimed = false;
     turret.chargeParticleTimer = 0;
+  }
+  if (
+    attackVideoCandidate &&
+    typeof playEnemyAttackVideo === "function"
+  ) {
+    playEnemyAttackVideo("turret", gameTime, attackVideoCandidate);
   }
 }
 

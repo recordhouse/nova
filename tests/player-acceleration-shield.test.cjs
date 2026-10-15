@@ -33,6 +33,7 @@ function createGame() {
         args,
         alpha: target.globalAlpha,
         blend: target.globalCompositeOperation,
+        lineWidth: target.lineWidth,
       });
     },
   });
@@ -84,6 +85,7 @@ test("two acceleration-shield charges each absorb one enemy attack", () => {
   assert.equal(read(scope, "player.downPhase"), "");
   assert.equal(read(scope, "player.accelerationShieldCharges"), 1);
   assert.ok(read(scope, "player.accelerationShieldHitTimer") > 0);
+  assert.equal(read(scope, "player.accelerationShieldHitDirection"), -1);
   assert.ok(read(scope, "particles.length") >= 18);
   assert.equal(read(scope, "particles[0].color"), "#aa63ff");
 
@@ -130,6 +132,58 @@ test("third acceleration-shield charge also absorbs one enemy attack", () => {
   assert.equal(read(scope, "player.hp"), 2);
 });
 
+test("every spent shield charge breaks its three orbit dots into visible shards", () => {
+  const { scope, calls, ctx } = createGame();
+  read(scope, `
+    player.accelerationShieldStage=3;
+    player.accelerationShieldCharges=3;
+    player.accelerationShieldVisual=3;
+  `);
+
+  for (const expectedTier of [3, 2, 1]) {
+    const particleStart = read(scope, "particles.length");
+    assert.equal(scope.takePlayerDamage(1, {
+      kind: "monster3-laser",
+      x: 300,
+      y: 450,
+    }), true);
+    assert.equal(
+      read(scope, `particles.slice(${particleStart}).filter(
+        (particle)=>particle.shieldBreakFlash
+      ).length`),
+      1,
+    );
+    assert.equal(
+      read(scope, `particles.slice(${particleStart}).find(
+        (particle)=>particle.shieldBreakFlash
+      ).shieldTier`),
+      expectedTier,
+    );
+    assert.equal(
+      read(scope, `particles.slice(${particleStart}).filter(
+        (particle)=>particle.shieldBreakShard
+      ).length`),
+      3 * read(scope, "PLAYER_ACCELERATION_SHIELD_BREAK_SHARDS_PER_DOT"),
+    );
+    assert.equal(
+      read(scope, `new Set(particles.slice(${particleStart}).filter(
+        (particle)=>particle.shieldBreakShard
+      ).map((particle)=>particle.x+":"+particle.y)).size`),
+      3,
+      "each of the disappearing orbit dots shatters at its own position",
+    );
+    read(scope, "player.accelerationShieldBlockTimer=0");
+  }
+
+  calls.length = 0;
+  scope.drawParticles();
+  assert.ok(calls.filter((call) => call.operation === "ellipse").length >= 18);
+  assert.ok(calls.filter((call) => call.operation === "stroke").length >= 18);
+  assert.ok(calls.some((call) => call.operation === "closePath"));
+  assert.equal(ctx.globalAlpha, 1);
+  assert.equal(ctx.globalCompositeOperation, "source-over");
+});
+
 test("shield smoothly expands from three cached purple dots to six and nine", () => {
   const { scope, calls, ctx } = createGame();
   const draw = (level, charges) => {
@@ -165,6 +219,31 @@ test("shield smoothly expands from three cached purple dots to six and nine", ()
   assert.equal(secondStage.expensiveEffects, 0);
   assert.equal(thirdStage.expensiveEffects, 0);
   assert.ok(thirdStage.blends.every((blend) => blend === "lighter"));
+  assert.equal(ctx.globalAlpha, 1);
+  assert.equal(ctx.globalCompositeOperation, "source-over");
+});
+
+test("a blocked hit briefly ripples through the inside of the shield", () => {
+  const { scope, calls, ctx } = createGame();
+  read(scope, `
+    player.accelerationShieldVisual=2;
+    player.accelerationShieldCharges=1;
+    player.accelerationShieldHitTimer=PLAYER_ACCELERATION_SHIELD_HIT_DURATION;
+    player.accelerationShieldHitDirection=1;
+  `);
+
+  calls.length = 0;
+  scope.drawPlayerAccelerationShield(false);
+  assert.ok(calls.some((call) => call.operation === "createRadialGradient"));
+  assert.ok(calls.some((call) => call.operation === "clip"));
+  assert.ok(calls.some((call) => call.operation === "fillRect"));
+
+  calls.length = 0;
+  scope.drawPlayerAccelerationShield(true);
+  assert.ok(calls.filter((call) => call.operation === "ellipse").length >= 4);
+  const impactWaves = calls.filter((call) => call.operation === "stroke");
+  assert.equal(impactWaves.length, 3);
+  assert.ok(impactWaves.every((wave) => wave.lineWidth <= 1.2));
   assert.equal(ctx.globalAlpha, 1);
   assert.equal(ctx.globalCompositeOperation, "source-over");
 });

@@ -5,16 +5,209 @@
 function sourceIsEnemyAttack(source) {
   return [
     "monster1",
+    "monster2",
+    "monster3",
     "monster4",
+    "monster4-crescent",
     "monster2-fireball",
     "monster3-laser",
     "turret-laser",
+    "turret",
     "boss-laser",
     "boss",
   ].includes(source?.kind);
 }
 
-function emitPlayerShieldBlock(source) {
+function sourceConsumesPlayerShield(source) {
+  return sourceIsEnemyAttack(source) || source?.kind === "electric-wire";
+}
+
+function playerImpactAccent(sourceKind) {
+  return sourceKind === "monster1" ? "#b0ff73"
+    : sourceKind === "monster2" ? "#ffae68"
+    : sourceKind === "monster3" ? "#ffd58d"
+    : sourceKind === "monster4" ? "#ff9f68"
+    : sourceKind === "monster4-crescent" ? "#ff4168"
+    : sourceKind === "monster2-fireball" ? "#ffae68"
+      : sourceKind === "monster3-laser" ? "#ffd58d"
+        : sourceKind === "turret-laser" || sourceKind === "turret"
+          ? "#ff83b9" : "#ff8edb";
+}
+
+function addPlayerScore(amount) {
+  if (!Number.isFinite(amount) || amount <= 0) return;
+  const continuingDigitalTransition = Number.isFinite(player.scoreGainStartedAt) &&
+    gameTime - player.scoreGainStartedAt < HUD_SCORE_DIGITAL_DURATION;
+  player.score += amount;
+  addUltimateMeterScore(amount);
+  player.scoreGainAmount = amount + (
+    continuingDigitalTransition ? player.scoreGainAmount : 0
+  );
+  player.scoreGainStartedAt = gameTime;
+}
+
+function updateUltimateControlButton() {
+  if (!ultimateControlButton) return;
+  const charges = Math.max(0, Math.min(
+    PLAYER_MAX_ULTIMATE_CHARGES,
+    player.ultimateCharges ?? 0,
+  ));
+  const ready = charges > 0;
+  ultimateControlButton.classList.toggle("ready", ready);
+  ultimateControlButton.dataset.charges = String(charges);
+  ultimateControlButton.setAttribute("aria-disabled", String(!ready));
+  ultimateControlButton.setAttribute("aria-label", `필살기, 충전 ${charges}개`);
+}
+
+function addUltimateMeterScore(amount) {
+  if (player.ultimateCharges >= PLAYER_MAX_ULTIMATE_CHARGES) return;
+  player.ultimateMeterScore = Math.max(0, player.ultimateMeterScore ?? 0) + amount;
+  while (
+    player.ultimateMeterScore >= ULTIMATE_SCORE_PER_CHARGE &&
+    player.ultimateCharges < PLAYER_MAX_ULTIMATE_CHARGES
+  ) {
+    player.ultimateMeterScore -= ULTIMATE_SCORE_PER_CHARGE;
+    player.ultimateCharges += 1;
+    player.ultimateChargeStartedAt = gameTime;
+  }
+  if (player.ultimateCharges >= PLAYER_MAX_ULTIMATE_CHARGES) {
+    player.ultimateMeterScore = 0;
+  }
+  updateUltimateControlButton();
+}
+
+function resolveEnemyDeath(enemy, playDeathSound = false) {
+  if (!enemy?.alive || enemy.deathResolved) return false;
+  enemy.deathResolved = true;
+  enemy.hp = 0;
+  enemy.alive = false;
+  const isCrimsonMonster1 = enemy.kind === "monster1" && enemy.crimsonVariant;
+  if (isCrimsonMonster1 && typeof playMonsterDie04Sound === "function") {
+    playMonsterDie04Sound();
+  } else if (
+    playDeathSound &&
+    (enemy.kind === "monster1" || enemy.kind === "monster2" ||
+      enemy.kind === "monster4") &&
+    typeof playMonsterDie01Sound === "function"
+  ) {
+    playMonsterDie01Sound();
+  }
+  addPlayerScore(enemy.score);
+  burstCombatantExplosion(enemy, enemy.kind);
+  if (isCrimsonMonster1) {
+    emitCrimsonMonsterExplosion(enemy);
+  }
+  return true;
+}
+
+function playerShieldRamDirection(enemy) {
+  if (
+    !enemy?.alive || !MONSTER_TYPES[enemy.kind] ||
+    player.accelerationShieldCharges <= 0 || !playerIsRunningOnGround()
+  ) return 0;
+  const direction = Math.sign(player.vx);
+  const playerCenterX = player.x + player.width / 2;
+  const enemyCenterX = enemy.x + enemy.width / 2;
+  const directionToEnemy = Math.sign(enemyCenterX - playerCenterX) || direction;
+  return direction !== 0 && direction === directionToEnemy ? direction : 0;
+}
+
+function damageEnemyWithPlayerShieldRam(enemy, direction) {
+  if (!enemy?.alive || !MONSTER_TYPES[enemy.kind] || !direction) return false;
+  const hitbox = getEnemyHitbox(enemy);
+  const impact = {
+    x: direction > 0 ? hitbox.x : hitbox.x + hitbox.width,
+    y: hitbox.y + hitbox.height * 0.52,
+    vx: direction * PLAYER_SHIELD_RAM_KNOCKBACK_SPEED,
+    vy: 0,
+  };
+  enemy.hp = Math.max(0, enemy.hp - PLAYER_SHIELD_RAM_DAMAGE);
+  burstMonsterFragments(impact, enemy, enemy.hp <= 0);
+  emitPlayerShieldRamImpact(impact, direction);
+  shake = Math.max(shake, enemy.hp <= 0 ? 12 : 8);
+
+  if (enemy.hp <= 0) {
+    resolveEnemyDeath(enemy, true);
+    return true;
+  }
+
+  enemy.hitDirection = direction;
+  enemy.hitTimer = Math.max(enemy.hitTimer, PLAYER_SHIELD_RAM_KNOCKBACK_DURATION);
+  enemy.hitKnockbackVelocity = direction * PLAYER_SHIELD_RAM_KNOCKBACK_SPEED;
+  enemy.revivalKnockback = true;
+  if (enemy.state === "jump") {
+    enemy.jumpVx = direction * PLAYER_SHIELD_RAM_KNOCKBACK_SPEED;
+    enemy.jumpHit = true;
+  } else {
+    enemy.state = enemy.kind === "monster3" ? "hover" : "chase";
+    enemy.stateTimer = 0;
+  }
+  enemy.attackTimer = Math.max(enemy.attackTimer, 0.55);
+  return true;
+}
+
+function emitPlayerShieldBreak(centerX, centerY, direction, brokenTier, color) {
+  if (typeof playShieldSound === "function") playShieldSound();
+  const tier = Math.max(1, Math.min(3, brokenTier));
+  const secondStage = tier >= 2 ? 1 : 0;
+  const thirdStage = tier >= 3 ? 1 : 0;
+  const radiusX = 56 + secondStage * 5 + thirdStage * 4;
+  const radiusY = 80 + secondStage * 5 + thirdStage * 4;
+  const rotation = gameTime * (0.46 + secondStage * 0.12 + thirdStage * 0.1);
+  const tierAngleOffset = tier === 1
+    ? 0
+    : tier === 2
+      ? Math.PI / 3
+      : Math.PI / 3 + Math.PI / 9;
+
+  particles.push({
+    x: centerX,
+    y: centerY,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life: PLAYER_ACCELERATION_SHIELD_BREAK_DURATION,
+    maxLife: PLAYER_ACCELERATION_SHIELD_BREAK_DURATION,
+    color,
+    coreColor: "#fff1ff",
+    direction,
+    shieldTier: tier,
+    shieldBreakFlash: true,
+  });
+
+  for (let sector = 0; sector < 3; sector += 1) {
+    const orbitAngle = rotation - Math.PI / 2 +
+      sector * Math.PI * 2 / 3 + tierAngleOffset;
+    const originX = centerX + Math.cos(orbitAngle) * radiusX;
+    const originY = centerY + Math.sin(orbitAngle) * radiusY;
+    for (
+      let shard = 0;
+      shard < PLAYER_ACCELERATION_SHIELD_BREAK_SHARDS_PER_DOT;
+      shard += 1
+    ) {
+      const angle = orbitAngle + (Math.random() - 0.5) * 0.72;
+      const speed = 150 + tier * 22 + Math.random() * 105;
+      const life = 0.28 + Math.random() * 0.18;
+      particles.push({
+        x: originX,
+        y: originY,
+        vx: Math.cos(angle) * speed - direction * (12 + Math.random() * 18),
+        vy: Math.sin(angle) * speed,
+        gravity: 0,
+        life,
+        maxLife: life,
+        color: shard % 2 === 0 ? color : "#d99bff",
+        coreColor: "#fff4ff",
+        size: 2.8 + Math.random() * 2.7,
+        angle: angle + (Math.random() - 0.5) * 0.7,
+        angularVelocity: (Math.random() - 0.5) * 18,
+        shieldBreakShard: true,
+      });
+    }
+  }
+}
+
+function emitPlayerShieldBlock(source, brokenTier) {
   const hitbox = getPlayerHitbox();
   const centerX = hitbox.x + hitbox.width / 2;
   const centerY = hitbox.y + hitbox.height / 2;
@@ -22,43 +215,47 @@ function emitPlayerShieldBlock(source) {
   const direction = Math.sign(sourceCenterX - centerX) || player.facing;
   const color = player.accelerationShieldCharges > 0 ? "#aa63ff" : "#d2a0ff";
   player.accelerationShieldHitTimer = PLAYER_ACCELERATION_SHIELD_HIT_DURATION;
+  player.accelerationShieldHitDirection = direction;
   player.accelerationShieldBlockTimer = PLAYER_ACCELERATION_SHIELD_BLOCK_GRACE;
   burst(
     centerX + direction * Math.min(42, hitbox.width * 0.62),
     centerY,
     color,
-    18,
+    8,
     230,
   );
+  emitPlayerShieldBreak(centerX, centerY - 2, direction, brokenTier, color);
   shake = Math.max(shake, 8);
 }
 
 function absorbEnemyAttackWithPlayerShield(source) {
   if (
-    !sourceIsEnemyAttack(source) ||
+    !sourceConsumesPlayerShield(source) ||
     player.accelerationShieldCharges <= 0
   ) return false;
+  const brokenTier = player.accelerationShieldCharges;
   player.accelerationShieldCharges -= 1;
-  emitPlayerShieldBlock(source);
+  emitPlayerShieldBlock(source, brokenTier);
   return true;
 }
 
 function takePlayerDamage(amount, source = null) {
   if (gameOver || player.hp <= 0 || player.invincible > 0 || playerIsDown() ||
       (TEST_MODE && testInvincibility)) return false;
-  if (sourceIsEnemyAttack(source) && player.accelerationShieldBlockTimer > 0) {
+  if (sourceConsumesPlayerShield(source) && player.accelerationShieldBlockTimer > 0) {
     return false;
   }
   if (absorbEnemyAttackWithPlayerShield(source)) return true;
   const hitbox = getPlayerHitbox();
   const playerCenterX = hitbox.x + hitbox.width / 2;
-  const sourceCenterX = source && Number.isFinite(source.x)
-    ? source.x + (source.width ?? 0) / 2
+  const impactSource = source?.kind === "electric-wire" ? null : source;
+  const sourceCenterX = impactSource && Number.isFinite(impactSource.x)
+    ? impactSource.x + (impactSource.width ?? 0) / 2
     : playerCenterX;
-  const knockbackDirection = source
-    ? Math.sign(playerCenterX - sourceCenterX) || Math.sign(source.vx ?? 0) || -player.facing
+  const knockbackDirection = impactSource
+    ? Math.sign(playerCenterX - sourceCenterX) || Math.sign(impactSource.vx ?? 0) || -player.facing
     : 0;
-  if (source) emitPlayerHitImpact(source);
+  if (impactSource) emitPlayerHitImpact(impactSource);
   player.hp = Math.max(0, player.hp - amount);
   player.downPhase = "fall";
   player.downTime = 0;
@@ -76,15 +273,46 @@ function takePlayerDamage(amount, source = null) {
   player.accelerationShieldCharges = 0;
   player.accelerationShieldVisual = 0;
   player.accelerationShieldHitTimer = 0;
+  player.accelerationShieldHitDirection = 0;
   player.accelerationShieldBlockTimer = 0;
   player.jumpBufferTimer = 0;
   player.coyoteTime = 0;
   player.crouching = false;
   player.fireAnimationTime = 0;
   player.fireWasActive = false;
+  if (typeof syncPlayerGunVideoPlayback === "function") {
+    syncPlayerGunVideoPlayback(false);
+  }
+  if (typeof syncPlayerRunVideoPlayback === "function") {
+    syncPlayerRunVideoPlayback(false);
+  }
+  if (typeof syncPlayerStandVideoPlayback === "function") {
+    syncPlayerStandVideoPlayback(false);
+  }
+  if (typeof playPlayerDownVideo === "function") {
+    playPlayerDownVideo();
+  }
   jumpQueued = false;
   if (player.hp <= 0) gameOver = true;
   return true;
+}
+
+function emitPlayerShieldRamImpact(impact, direction) {
+  const life = 0.36;
+  particles.push({
+    x: impact.x + direction * 3,
+    y: impact.y,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life,
+    maxLife: life,
+    direction,
+    phase: Math.random() * Math.PI * 2,
+    color: "#b86cff",
+    coreColor: "#f8eaff",
+    shieldRamImpact: true,
+  });
 }
 
 function emitPlayerHitImpact(source) {
@@ -92,11 +320,7 @@ function emitPlayerHitImpact(source) {
   const centerX = hitbox.x + hitbox.width / 2;
   const centerY = hitbox.y + hitbox.height / 2;
   const sourceKind = source.kind ?? "boss";
-  const accent = sourceKind === "monster1" ? "#b0ff73"
-    : sourceKind === "monster4" ? "#ff9f68"
-    : sourceKind === "monster2-fireball" ? "#ffae68"
-      : sourceKind === "monster3-laser" ? "#ffd58d"
-        : sourceKind === "turret-laser" ? "#ff83b9" : "#ff8edb";
+  const accent = playerImpactAccent(sourceKind);
   const fromX = source.x + (source.width ?? 0) / 2;
   const fromY = source.y + (source.height ?? 0) / 2;
   const pushAngle = Math.atan2(centerY - fromY, centerX - fromX);
@@ -155,7 +379,8 @@ function emitPlayerRevival() {
       radialAcceleration: 245 + Math.random() * 45,
       life,
       maxLife: life,
-      size: 18 + Math.random() * 5,
+      size: PLAYER_REVIVAL_ORB_SIZE_MIN +
+        Math.random() * PLAYER_REVIVAL_ORB_SIZE_VARIANCE,
       color: "#d996ff",
       coreColor: "#f6ddff",
       revivalOrb: true,
@@ -177,9 +402,7 @@ function emitPlayerRevival() {
     enemy.hp = Math.max(0, enemy.hp - PLAYER_REVIVAL_DAMAGE);
     burstMonsterFragments(impact, enemy, enemy.hp <= 0);
     if (enemy.hp <= 0) {
-      enemy.alive = false;
-      player.score += enemy.score;
-      burstCombatantExplosion(enemy, enemy.kind);
+      resolveEnemyDeath(enemy);
       continue;
     }
     enemy.hitDirection = direction;
@@ -210,7 +433,7 @@ function emitPlayerRevival() {
     burstTurretFragments(impact);
     if (turret.hp <= 0) {
       turret.alive = false;
-      player.score += TURRET.score;
+      addPlayerScore(TURRET.score);
       burstCombatantExplosion(turret, "turret");
     }
   }
@@ -227,7 +450,7 @@ function emitPlayerRevival() {
     );
     if (boss.hp <= 0) {
       boss.alive = false;
-      player.score += MID_BOSS.score;
+      addPlayerScore(MID_BOSS.score);
       shake = Math.max(shake, 16);
     }
   }
@@ -254,7 +477,7 @@ function burst(x, y, color, count = 10, force = 220) {
 function emitHeartPickupBurst(heart) {
   const centerX = heart.x;
   const centerY = heart.y + Math.sin(gameTime * 2.1 + (heart.phase ?? 0)) * 9;
-  const glowLife = 0.58;
+  const glowLife = 0.34;
   particles.push({
     x: centerX,
     y: centerY,
@@ -263,38 +486,32 @@ function emitHeartPickupBurst(heart) {
     gravity: 0,
     life: glowLife,
     maxLife: glowLife,
-    size: 68,
+    size: 48,
     color: "#ff6f9f",
     heartPickupGlow: true,
   });
-
-  const cloudColors = ["#fff6fa", "#ffdce8", "#ffb9d0"];
-  for (let cloud = 0; cloud < 16; cloud += 1) {
-    const angle = cloud * Math.PI * 2 / 16 + (Math.random() - 0.5) * 0.32;
-    const distance = 9 + Math.random() * 22;
-    const speed = 16 + Math.random() * 30;
-    const life = 0.68 + Math.random() * 0.42;
-    particles.push({
-      x: centerX + Math.cos(angle) * distance,
-      y: centerY + Math.sin(angle) * distance * 0.62,
-      vx: Math.cos(angle) * speed,
-      vy: -18 - Math.random() * 28 + Math.sin(angle) * 7,
-      gravity: -4,
-      life,
-      maxLife: life,
-      size: 15 + Math.random() * 13,
-      phase: Math.random() * Math.PI * 2,
-      color: cloudColors[cloud % cloudColors.length],
-      heartPickupCloud: true,
-    });
-  }
-  shake = Math.max(shake, 1.5);
+  const popLife = 0.42;
+  particles.push({
+    x: centerX,
+    y: centerY,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life: popLife,
+    maxLife: popLife,
+    size: HEART_ITEM_DRAW_SCALE,
+    color: "#ff779f",
+    heartPickupPop: true,
+  });
+  shake = Math.max(shake, 1.4);
 }
 
 function burstMonsterFragments(bullet, enemy, lethal = false) {
   const bulletSpeed = Math.max(1, Math.hypot(bullet.vx, bullet.vy));
   const baseAngle = Math.atan2(bullet.vy, bullet.vx);
-  const colors = enemy.kind === "monster3"
+  const colors = enemy.kind === "monster1" && enemy.crimsonVariant
+    ? ["#ff3048", "#ff7180", "#bb1732", "#69162b", "#321522"]
+    : enemy.kind === "monster3"
     ? ["#ffcf75", "#f46c3c", "#a34572", "#4d3d5e", "#273443"]
     : enemy.kind === "monster2"
     ? ["#f094ed", "#cd4dc7", "#823980", "#5d2466", "#33223e"]
@@ -358,13 +575,18 @@ function burstTurretFragments(bullet) {
 
 function burstCombatantExplosion(target, kind) {
   const isTurret = kind === "turret";
-  const isLarge = isTurret || kind === "monster2" || kind === "monster3" || kind === "monster4";
+  const isCrimson = kind === "monster1" && target.crimsonVariant;
+  const isLarge = isCrimson || isTurret || kind === "monster2" ||
+    kind === "monster3" || kind === "monster4";
   const centerX = target.x + target.width / 2;
   const centerY = target.y + target.height * 0.52;
-  const color = kind === "monster1" ? "#99ff52"
+  const color = isCrimson ? "#ff3048"
+    : kind === "monster1" ? "#99ff52"
     : kind === "monster4" ? "#ff764c"
     : kind === "monster3" ? "#ffaf62" : "#ed81fa";
-  const debrisColors = kind === "monster1"
+  const debrisColors = isCrimson
+    ? ["#ff3348", "#c71935", "#74182c", "#391827"]
+    : kind === "monster1"
     ? ["#358329", "#5bac35", "#6b396f", "#34233b"]
     : kind === "monster4"
       ? ["#b74431", "#df6848", "#753126", "#174e50", "#34232b"]
@@ -374,20 +596,22 @@ function burstCombatantExplosion(target, kind) {
       ? ["#687388", "#8f9bae", "#673677", "#3c2947", "#35414d"]
       : ["#af4aaa", "#77327a", "#58305e", "#3c2646"];
   const flashLife = isLarge ? 0.38 : 0.3;
-  particles.push({
-    x: centerX,
-    y: centerY,
-    vx: 0,
-    vy: 0,
-    gravity: 0,
-    life: flashLife,
-    maxLife: flashLife,
-    color,
-    size: isLarge ? 82 : 54,
-    explosionFlash: true,
-  });
+  if (!isCrimson) {
+    particles.push({
+      x: centerX,
+      y: centerY,
+      vx: 0,
+      vy: 0,
+      gravity: 0,
+      life: flashLife,
+      maxLife: flashLife,
+      color,
+      size: isLarge ? 82 : 54,
+      explosionFlash: true,
+    });
+  }
 
-  const sparkCount = isLarge ? 34 : 24;
+  const sparkCount = isCrimson ? 46 : isLarge ? 34 : 24;
   for (let spark = 0; spark < sparkCount; spark += 1) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 110 + Math.random() * (isLarge ? 410 : 310);
@@ -423,7 +647,7 @@ function burstCombatantExplosion(target, kind) {
     });
   }
 
-  const debrisCount = isTurret ? 24 : isLarge ? 20 : 12;
+  const debrisCount = isCrimson ? 30 : isTurret ? 24 : isLarge ? 20 : 12;
   let excess = particles.filter((particle) => particle.debris).length +
     debrisCount - COMBAT_DEBRIS_LIMIT;
   for (let i = 0; i < particles.length && excess > 0;) {
@@ -455,16 +679,79 @@ function burstCombatantExplosion(target, kind) {
       angularVelocity: (Math.random() - 0.5) * 14,
       debrisBounces: 0,
       debris: true,
+      surfacePlatform: target.platform ?? null,
       ...(!isTurret ? {
         organicDebris: true,
         splatProgress: 0,
         organicVariant: chunk % 3,
-        shadowColor: kind === "monster1" ? "#203b24"
+        shadowColor: isCrimson ? "#4b101e"
+          : kind === "monster1" ? "#203b24"
           : kind === "monster4" ? "#3d201d" : "#42203e",
       } : {}),
     });
   }
   shake = Math.max(shake, isLarge ? 13 : 8);
+}
+
+function emitCrimsonMonsterExplosion(source) {
+  if (source.crimsonExplosionTriggered) return;
+  source.crimsonExplosionTriggered = true;
+  const centerX = source.x + source.width / 2;
+  const centerY = source.y + source.height * 0.52;
+  const life = 0.5;
+  particles.push({
+    x: centerX,
+    y: centerY,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life,
+    maxLife: life,
+    size: 176,
+    phase: source.animationPhase ?? 0,
+    color: "#ff3048",
+    crimsonGrenadeBlast: true,
+  });
+  shake = Math.max(shake, 22);
+
+  const damageArea = {
+    x: centerX,
+    y: centerY,
+    radius: MONSTER1_CRIMSON_EXPLOSION_RADIUS,
+  };
+  for (const enemy of enemies) {
+    if (
+      !enemy.alive || enemy === source || !MONSTER_TYPES[enemy.kind] ||
+      !overlapsCircleRect(damageArea, getEnemyHitbox(enemy))
+    ) continue;
+    const enemyCenterX = enemy.x + enemy.width / 2;
+    const direction = Math.sign(enemyCenterX - centerX) || enemy.facing || 1;
+    const impact = {
+      x: enemyCenterX,
+      y: enemy.y + enemy.height / 2,
+      vx: direction * MONSTER1_CRIMSON_KNOCKBACK_SPEED,
+      vy: -180,
+    };
+    enemy.hp = Math.max(0, enemy.hp - MONSTER1_CRIMSON_EXPLOSION_DAMAGE);
+    burstMonsterFragments(impact, enemy, enemy.hp <= 0);
+    if (enemy.hp <= 0) {
+      resolveEnemyDeath(enemy);
+      continue;
+    }
+
+    enemy.hitDirection = direction;
+    enemy.hitTimer = PLAYER_REVIVAL_KNOCKBACK_DURATION;
+    enemy.hitKnockbackVelocity = direction * MONSTER1_CRIMSON_KNOCKBACK_SPEED;
+    enemy.revivalKnockback = true;
+    if (enemy.state === "jump") {
+      enemy.jumpVx = direction * MONSTER1_CRIMSON_KNOCKBACK_SPEED;
+      enemy.jumpHit = true;
+    } else {
+      enemy.state = enemy.kind === "monster3" ? "hover" : "chase";
+      enemy.stateTimer = 0;
+    }
+    enemy.attackTimer = Math.max(enemy.attackTimer, 0.65);
+  }
 }
 
 function applyEnemyBulletImpact(enemy, bullet) {
@@ -493,16 +780,22 @@ function applyEnemyBulletImpact(enemy, bullet) {
 }
 
 function shootPlayer() {
-  if (playerIsDown() || gameOver || player.fireEnergy < PLAYER_FIRE_ENERGY_PER_SHOT) return false;
+  if (
+    playerIsDown() || gameOver || !playerCanFire() ||
+    player.fireEnergy < PLAYER_FIRE_ENERGY_PER_SHOT
+  ) return false;
   const direction = playerFireDirection();
   const isHighAim = playerIsAimingHigh();
   const isCrouchFiring = player.crouching && player.grounded;
   const isAirFiring = !player.grounded;
+  const isRunFiring = playerUsesRunningFirePose();
   const firingSpriteScale = isCrouchFiring
     ? PLAYER_BLAST_SIT_SPRITE_SCALE
     : isAirFiring
       ? PLAYER_JUMP_SPRITE_SCALE
-      : PLAYER_BLAST_SPRITE_SCALE;
+      : isRunFiring
+        ? PLAYER_BLAST_RUN_SPRITE_SCALE
+        : PLAYER_BLAST_SPRITE_SCALE;
   const firedUpperBarrel = player.fireBarrel === 0;
   if (firedUpperBarrel || !player.fireImpactGroup) {
     player.fireImpactGroup = { playedRicochetMask: 0 };
@@ -576,11 +869,34 @@ function playerFireDirection() {
   };
 }
 
+function playerIsRunningOnGround() {
+  if (!player.grounded || player.crouching) return false;
+  const reversingOrBridgingInput = (
+    player.reversalDirection !== 0 ||
+    (
+      player.reversalGraceTimer > 0 &&
+      player.recentRunDirection !== 0 &&
+      player.recentRunSpeed >= PLAYER_REVERSAL_MIN_SPEED
+    )
+  );
+  return Math.abs(player.vx) > 1 || reversingOrBridgingInput;
+}
+
+function playerUsesRunningFirePose() {
+  return PLAYER_RUNNING_FIRE_ENABLED && controls.fire &&
+    !playerIsDown() && playerIsRunningOnGround();
+}
+
+function playerCanFire() {
+  return PLAYER_RUNNING_FIRE_ENABLED || !playerIsRunningOnGround();
+}
+
 function playerIsAimingHigh() {
   return (
     controls.fire &&
     controls.up &&
-    !(player.crouching && player.grounded)
+    !(player.crouching && player.grounded) &&
+    !playerIsRunningOnGround()
   );
 }
 
@@ -620,7 +936,10 @@ function projectilePlatformCandidates(bullet, reachX, reachY = reachX) {
   const bottom = bullet.y + reachY + bullet.radius;
   const candidates = [];
 
-  for (const platform of platforms) {
+  const nearbyPlatforms = typeof platformsBetween === "function"
+    ? platformsBetween(left, right)
+    : platforms;
+  for (const platform of nearbyPlatforms) {
     if (platform.start > right || platform.end < left) continue;
     let surfaceTop;
     let surfaceBottom;
@@ -1018,20 +1337,18 @@ function updateBullets(dt) {
       }
       applyEnemyBulletImpact(enemy, bullet);
       burstMonsterFragments(bullet, enemy, enemy.hp <= 0);
-      burst(bullet.x, bullet.y, "#baff63", 5, 125);
+      burst(
+        bullet.x,
+        bullet.y,
+        enemy.kind === "monster1" && enemy.crimsonVariant
+          ? "#ff4058" : "#baff63",
+        5,
+        125,
+      );
       shake = Math.max(shake, enemy.hp <= 0 ? 9 : 4.5);
 
       if (enemy.hp <= 0) {
-        if ((
-          enemy.kind === "monster1" || enemy.kind === "monster2" ||
-          enemy.kind === "monster4"
-        ) &&
-            typeof playMonsterDie01Sound === "function") {
-          playMonsterDie01Sound();
-        }
-        enemy.alive = false;
-        player.score += enemy.score;
-        burstCombatantExplosion(enemy, enemy.kind);
+        resolveEnemyDeath(enemy, true);
       }
       break;
     }
@@ -1047,7 +1364,7 @@ function updateBullets(dt) {
         shake = Math.max(shake, turret.hp <= 0 ? 11 : 5);
         if (turret.hp <= 0) {
           turret.alive = false;
-          player.score += TURRET.score;
+          addPlayerScore(TURRET.score);
           burstCombatantExplosion(turret, "turret");
         }
         break;
@@ -1062,7 +1379,7 @@ function updateBullets(dt) {
         burst(bullet.x, bullet.y, "#ff8bf2", 9, 185);
         if (boss.hp <= 0) {
           boss.alive = false;
-          player.score += MID_BOSS.score;
+          addPlayerScore(MID_BOSS.score);
           shake = 16;
           burst(
             boss.x + boss.width / 2,
@@ -1094,6 +1411,9 @@ function updateBullets(dt) {
       if (!moveMonster2Fireball(bullet, dt)) enemyBullets.splice(i, 1);
       continue;
     }
+    if (bullet.kind === "monster4-crescent") {
+      bullet.remainingRange -= Math.hypot(bullet.vx, bullet.vy) * dt;
+    }
     if (!moveRicochetingBullet(bullet, dt, bullet.ricochetColor ?? "#ff6b42")) {
       enemyBullets.splice(i, 1);
       continue;
@@ -1103,6 +1423,11 @@ function updateBullets(dt) {
       player.invincible <= 0 && overlapsCircleRect(bullet, getPlayerHitbox()) &&
       takePlayerDamage(1, bullet)
     ) {
+      enemyBullets.splice(i, 1);
+      continue;
+    }
+
+    if (bullet.kind === "monster4-crescent" && bullet.remainingRange <= 0) {
       enemyBullets.splice(i, 1);
       continue;
     }

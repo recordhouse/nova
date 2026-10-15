@@ -1033,18 +1033,17 @@ function getPlayerShieldDotSprite() {
   const cache = new Map();
   playerShieldDotSprite = cachedCanvasSprite(cache, "purple-shield-dot", 30, 30, (context) => {
     context.globalCompositeOperation = "lighter";
-    const glow = context.createRadialGradient(15, 15, 0, 15, 15, 14);
-    glow.addColorStop(0, "rgba(229, 190, 255, 1)");
-    glow.addColorStop(0.2, "rgba(188, 104, 255, 0.98)");
-    glow.addColorStop(0.52, "rgba(143, 61, 246, 0.54)");
-    glow.addColorStop(1, "rgba(94, 25, 190, 0)");
-    context.fillStyle = glow;
+    context.fillStyle = "rgba(128, 42, 232, 0.82)";
     context.beginPath();
-    context.arc(15, 15, 14, 0, Math.PI * 2);
+    context.arc(15, 15, 10.5, 0, Math.PI * 2);
     context.fill();
-    context.fillStyle = "#dca9ff";
+    context.fillStyle = "#c174ff";
     context.beginPath();
-    context.arc(15, 15, 2.3, 0, Math.PI * 2);
+    context.arc(15, 15, 6.4, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = "#f6e5ff";
+    context.beginPath();
+    context.arc(15, 15, 3.1, 0, Math.PI * 2);
     context.fill();
   }) ?? null;
   return playerShieldDotSprite;
@@ -1055,22 +1054,83 @@ function getPlayerRevivalOrbSprite() {
   const cache = new Map();
   playerRevivalOrbSprite = cachedCanvasSprite(cache, "bright-revival-orb", 30, 30, (context) => {
     context.globalCompositeOperation = "lighter";
-    const glow = context.createRadialGradient(15, 15, 0, 15, 15, 14.5);
-    glow.addColorStop(0, "rgba(250, 226, 255, 1)");
-    glow.addColorStop(0.18, "rgba(226, 157, 255, 1)");
-    glow.addColorStop(0.5, "rgba(190, 89, 255, 0.88)");
-    glow.addColorStop(0.8, "rgba(146, 56, 255, 0.46)");
-    glow.addColorStop(1, "rgba(105, 31, 217, 0)");
-    context.fillStyle = glow;
+    context.fillStyle = "rgba(159, 60, 244, 0.88)";
     context.beginPath();
-    context.arc(15, 15, 14.5, 0, Math.PI * 2);
+    context.arc(15, 15, 11, 0, Math.PI * 2);
     context.fill();
-    context.fillStyle = "#f6ddff";
+    context.fillStyle = "#df9cff";
     context.beginPath();
-    context.arc(15, 15, 2.8, 0, Math.PI * 2);
+    context.arc(15, 15, 7, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = "#fff4ff";
+    context.beginPath();
+    context.arc(15, 15, 3.4, 0, Math.PI * 2);
     context.fill();
   }) ?? null;
   return playerRevivalOrbSprite;
+}
+
+function drawPlayerShieldInteriorImpact(
+  centerX,
+  centerY,
+  radiusX,
+  radiusY,
+  hitProgress,
+  frontLayer,
+) {
+  if (hitProgress <= 0) return;
+  const direction = player.accelerationShieldHitDirection || -player.facing || -1;
+  const travel = 1 - hitProgress;
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, radiusX * 0.84, radiusY * 0.84, 0, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.globalCompositeOperation = "lighter";
+
+  if (!frontLayer) {
+    const impactX = direction * radiusX * (0.46 - travel * 0.28);
+    const glow = ctx.createRadialGradient(
+      impactX,
+      0,
+      2,
+      impactX * 0.35,
+      0,
+      Math.max(radiusX, radiusY) * 0.9,
+    );
+    glow.addColorStop(0, "rgba(241, 216, 255, 0.78)");
+    glow.addColorStop(0.28, "rgba(181, 103, 255, 0.38)");
+    glow.addColorStop(0.68, "rgba(122, 55, 231, 0.12)");
+    glow.addColorStop(1, "rgba(84, 24, 176, 0)");
+    ctx.globalAlpha = Math.pow(hitProgress, 0.72) * 0.58;
+    ctx.fillStyle = glow;
+    ctx.fillRect(-radiusX, -radiusY, radiusX * 2, radiusY * 2);
+    ctx.restore();
+    return;
+  }
+
+  ctx.scale(direction, 1);
+  ctx.lineCap = "round";
+  for (let wave = 0; wave < 3; wave += 1) {
+    const waveX = radiusX * (0.46 - travel * 0.62) - wave * 8;
+    ctx.globalAlpha = Math.max(0,
+      Math.pow(hitProgress, 0.85) * (0.32 - wave * 0.065),
+    );
+    ctx.strokeStyle = wave === 0 ? "#f0d3ff" : "#ad65ff";
+    ctx.lineWidth = wave === 0 ? 1.2 : 0.8;
+    ctx.beginPath();
+    ctx.ellipse(
+      waveX,
+      0,
+      radiusX * (0.2 + wave * 0.08),
+      radiusY * (0.48 + wave * 0.07),
+      0,
+      -Math.PI / 2,
+      Math.PI / 2,
+    );
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawPlayerAccelerationShield(frontLayer) {
@@ -1079,7 +1139,7 @@ function drawPlayerAccelerationShield(frontLayer) {
     1,
     player.accelerationShieldHitTimer / PLAYER_ACCELERATION_SHIELD_HIT_DURATION,
   ));
-  if (!frontLayer || (visualLevel < 0.015 && hitProgress <= 0)) return;
+  if (visualLevel < 0.015 && hitProgress <= 0) return;
 
   const hitbox = getPlayerHitbox();
   const centerX = hitbox.x + hitbox.width / 2;
@@ -1092,6 +1152,16 @@ function drawPlayerAccelerationShield(frontLayer) {
   const radiusY = 80 + secondStage * 5 + thirdStage * 4 + hitProgress * 6;
   const rotation = gameTime * (0.46 + secondStage * 0.12 + thirdStage * 0.1);
   const dotSprite = getPlayerShieldDotSprite();
+
+  drawPlayerShieldInteriorImpact(
+    centerX,
+    centerY,
+    radiusX,
+    radiusY,
+    hitProgress,
+    frontLayer,
+  );
+  if (!frontLayer) return;
 
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
@@ -1116,7 +1186,7 @@ function drawPlayerAccelerationShield(frontLayer) {
         (0.58 + visibility * 0.42);
       ctx.globalAlpha = Math.min(
         1,
-        visibility * (0.7 + pulse * 0.22 + hitProgress * 0.28),
+        visibility * (0.82 + pulse * 0.18 + hitProgress * 0.24),
       );
       if (dotSprite) {
         ctx.drawImage(dotSprite, x - size, y - size, size * 2, size * 2);
@@ -1206,6 +1276,20 @@ function drawMonsterHealthGauge(enemy, pose) {
   );
 }
 
+function drawTurretHealthGauge(turret, visualBottomY) {
+  const ratio = Math.max(0, Math.min(1,
+    turret.hp / Math.max(1, turret.maxHp),
+  ));
+  const colorStage = ratio > 0.6 ? 2 : ratio > 0.3 ? 1 : 0;
+  drawPixelGauge(
+    turret.x + turret.width / 2,
+    visualBottomY - TURRET.spriteHeight + TURRET.spriteBottomOffset - 13,
+    Math.max(58, Math.min(72, TURRET.spriteWidth * 0.72)),
+    ratio,
+    MONSTER_GAUGE_STYLES[colorStage],
+  );
+}
+
 function drawPlayerPhysicsDebug() {
   if (!TEST_MODE || !showPlayerArea) return;
   const hitbox = getPlayerHitbox();
@@ -1220,22 +1304,15 @@ function drawPlayerPhysicsDebug() {
 
 function drawPlayerSprite(centerX) {
   const isDownPose = Boolean(player.downPhase);
-  const isReversingOrBridgingInput = player.grounded && (
-    player.reversalDirection !== 0 ||
-    (
-      player.reversalGraceTimer > 0 &&
-      player.recentRunDirection !== 0 &&
-      player.recentRunSpeed >= PLAYER_REVERSAL_MIN_SPEED
-    )
-  );
-  const isRunning = Math.abs(player.vx) > 1 || isReversingOrBridgingInput;
+  const isRunning = playerIsRunningOnGround();
   const isJumping = !player.grounded;
   const isDeepFalling = isJumping && player.deepFalling;
-  const isFiring = controls.fire && (
+  const isFiring = controls.fire && playerCanFire() && (
     player.fireEnergy >= PLAYER_FIRE_ENERGY_PER_SHOT || player.fireTimer > 0
   );
   const isCrouching = player.crouching && player.grounded;
   const isAimingHigh = playerIsAimingHigh();
+  const isRunningFirePose = isFiring && playerUsesRunningFirePose();
   const sprite = isDownPose
     ? playerSprites.down
     : isCrouching && isFiring
@@ -1245,9 +1322,11 @@ function drawPlayerSprite(centerX) {
         : isFiring
           ? isJumping
             ? playerSprites.blastJump
-            : isAimingHigh
-              ? playerSprites.blastHigh
-              : playerSprites.blast
+            : isRunningFirePose
+              ? playerSprites.blastRun
+              : isAimingHigh
+                ? playerSprites.blastHigh
+                : playerSprites.blast
           : isDeepFalling
             ? playerSprites.getOff
             : isJumping
@@ -1274,15 +1353,17 @@ function drawPlayerSprite(centerX) {
   const jumpProgress = Math.min(1, player.jumpAnimationTime / JUMP_ANIMATION_DURATION);
   const frame = isDownPose
     ? Math.min(sprite.frames.length - 1, Math.floor(player.downTime * sprite.fps))
-    : isFiring
-      ? Math.floor(player.fireAnimationTime * sprite.fps) % sprite.frames.length
-      : isDeepFalling
-        ? Math.floor(player.fallAnimationTime * sprite.fps) % sprite.frames.length
-        : isJumping
-          ? Math.min(sprite.frames.length - 1, Math.floor(jumpProgress * sprite.frames.length))
-          : sprite === playerSprites.run
-            ? Math.floor(player.runAnimationTime * sprite.fps) % sprite.frames.length
-            : Math.floor(gameTime * sprite.fps) % sprite.frames.length;
+    : sprite === playerSprites.blastRun
+      ? Math.floor(player.runAnimationTime * sprite.fps) % sprite.frames.length
+      : isFiring
+        ? Math.floor(player.fireAnimationTime * sprite.fps) % sprite.frames.length
+        : isDeepFalling
+          ? Math.floor(player.fallAnimationTime * sprite.fps) % sprite.frames.length
+          : isJumping
+            ? Math.min(sprite.frames.length - 1, Math.floor(jumpProgress * sprite.frames.length))
+            : sprite === playerSprites.run
+              ? Math.floor(player.runAnimationTime * sprite.fps) % sprite.frames.length
+              : Math.floor(gameTime * sprite.fps) % sprite.frames.length;
   const source = sprite.frames[frame];
   const spriteScale = sprite === playerSprites.down
     ? PLAYER_DOWN_SPRITE_SCALE
@@ -1290,19 +1371,21 @@ function drawPlayerSprite(centerX) {
       ? PLAYER_STAND_SPRITE_SCALE
       : sprite === playerSprites.blastHigh
         ? PLAYER_BLAST_HIGH_SPRITE_SCALE
-        : sprite === playerSprites.blastJump
-          ? PLAYER_JUMP_SPRITE_SCALE
-          : sprite === playerSprites.blast
-            ? PLAYER_BLAST_SPRITE_SCALE
-            : sprite === playerSprites.sit
-              ? PLAYER_SIT_SPRITE_SCALE
-              : sprite === playerSprites.blastSit
-                ? PLAYER_BLAST_SIT_SPRITE_SCALE
-                : sprite === playerSprites.getOff
-                  ? PLAYER_GET_OFF_SPRITE_SCALE
-                  : sprite === playerSprites.jump
-                    ? PLAYER_JUMP_SPRITE_SCALE
-                    : 1;
+        : sprite === playerSprites.blastRun
+          ? PLAYER_BLAST_RUN_SPRITE_SCALE
+          : sprite === playerSprites.blastJump
+            ? PLAYER_JUMP_SPRITE_SCALE
+            : sprite === playerSprites.blast
+              ? PLAYER_BLAST_SPRITE_SCALE
+              : sprite === playerSprites.sit
+                ? PLAYER_SIT_SPRITE_SCALE
+                : sprite === playerSprites.blastSit
+                  ? PLAYER_BLAST_SIT_SPRITE_SCALE
+                  : sprite === playerSprites.getOff
+                    ? PLAYER_GET_OFF_SPRITE_SCALE
+                    : sprite === playerSprites.jump
+                      ? PLAYER_JUMP_SPRITE_SCALE
+                      : 1;
   const drawHeight = PLAYER_SPRITE_DRAW_HEIGHT * spriteScale;
   const drawWidth = source.width * (drawHeight / source.height);
   const feetY = spriteFeetY;
@@ -1325,26 +1408,6 @@ function drawPlayerSprite(centerX) {
   );
   ctx.restore();
   return feetY - drawHeight;
-}
-
-function drawCombatantHealthBar(centerX, topY, width, hp, maxHp) {
-  const ratio = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
-  const colorHue = Math.round(ratio * 120);
-  const height = 7;
-  const left = pixelSnap(centerX - width / 2, 1);
-  const barTop = pixelSnap(topY, 1);
-
-  ctx.save();
-  ctx.fillStyle = "rgba(4, 7, 10, 0.88)";
-  ctx.fillRect(left - 2, barTop - 2, width + 4, height + 4);
-  ctx.fillStyle = "rgba(33, 38, 43, 0.94)";
-  ctx.fillRect(left, barTop, width, height);
-  ctx.fillStyle = `hsl(${colorHue}, 92%, 52%)`;
-  ctx.fillRect(left, barTop, pixelSnap(width * ratio, 1), height);
-  ctx.strokeStyle = "rgba(220, 231, 239, 0.6)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(left - 0.5, barTop - 0.5, width + 1, height + 1);
-  ctx.restore();
 }
 
 function drawCombatantPhysicsDebug(target, color) {
@@ -1466,6 +1529,24 @@ function drawEnemyAwarenessDebug(enemy) {
     enemy.jumpAttackRange * 2,
     enemy.jumpAttackVerticalRange * 2,
   );
+  if (enemy.kind === "monster4") {
+    const origin = monster4SpearOrigin(enemy);
+    ctx.setLineDash([8, 5]);
+    ctx.fillStyle = "rgba(255, 47, 63, 0.035)";
+    ctx.strokeStyle = "rgba(255, 79, 88, 0.3)";
+    ctx.fillRect(
+      origin.x - enemy.spearAttackRange,
+      origin.y - enemy.spearAttackVerticalRange,
+      enemy.spearAttackRange * 2,
+      enemy.spearAttackVerticalRange * 2,
+    );
+    ctx.strokeRect(
+      origin.x - enemy.spearAttackRange,
+      origin.y - enemy.spearAttackVerticalRange,
+      enemy.spearAttackRange * 2,
+      enemy.spearAttackVerticalRange * 2,
+    );
+  }
   ctx.restore();
 }
 
@@ -1573,6 +1654,57 @@ function drawMonster3Charge(enemy) {
   ctx.restore();
 }
 
+function traceMonster4Crescent(context, radius) {
+  const cutoutRadius = radius * 0.74;
+  const cutoutX = -radius * 0.36;
+  context.beginPath();
+  context.arc(0, 0, radius, 0, Math.PI * 2);
+  context.moveTo(cutoutX + cutoutRadius, 0);
+  context.arc(cutoutX, 0, cutoutRadius, 0, Math.PI * 2);
+}
+
+function drawMonster4SpearCharge(enemy) {
+  if (enemy.kind !== "monster4" || enemy.state !== "spear-charge") return;
+  const origin = monster4SpearOrigin(enemy);
+  const direction = enemy.attackDirection || enemy.facing || -1;
+  const progress = Math.max(0, Math.min(1,
+    1 - enemy.stateTimer / enemy.spearChargeDuration,
+  ));
+  const pulse = 0.82 + Math.sin(gameTime * 24 + enemy.animationPhase) * 0.18;
+  ctx.save();
+  ctx.translate(pixelSnap(origin.x), pixelSnap(origin.y));
+  ctx.scale(direction, 1);
+  ctx.globalCompositeOperation = "lighter";
+  ctx.lineCap = "square";
+  for (let shard = 0; shard < 6; shard += 1) {
+    const phase = (gameTime * 3.2 + shard / 6 + enemy.animationPhase) % 1;
+    const distance = 62 - phase * (38 + progress * 20);
+    const y = (shard - 2.5) * (7 - progress * 2) * (1 - phase * 0.5);
+    ctx.globalAlpha = 0.34 + progress * 0.42 + phase * 0.18;
+    ctx.strokeStyle = shard % 2 === 0 ? "#ff3049" : "#ff8c72";
+    ctx.lineWidth = shard % 2 === 0 ? 3 : 2;
+    ctx.beginPath();
+    ctx.moveTo(pixelSnap(distance + 13), pixelSnap(y));
+    ctx.lineTo(pixelSnap(distance), pixelSnap(y * 0.58));
+    ctx.stroke();
+  }
+  const crescentRadius = 6 + progress * 12;
+  ctx.globalAlpha = (0.45 + progress * 0.5) * pulse;
+  ctx.shadowColor = "#ff233f";
+  ctx.shadowBlur = 8 + progress * 12;
+  ctx.fillStyle = "#ff334f";
+  traceMonster4Crescent(ctx, crescentRadius);
+  ctx.fill("evenodd");
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = Math.min(1, 0.62 + progress * 0.38);
+  ctx.strokeStyle = "#fff1df";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "#ffb1b9";
+  ctx.fillRect(crescentRadius * 0.42, -2, 4, 4);
+  ctx.restore();
+}
+
 function drawEnemy(enemy) {
   const sprite = enemySprites[enemy.kind];
   const isMonster2 = enemy.kind === "monster2";
@@ -1587,9 +1719,10 @@ function drawEnemy(enemy) {
   );
   ctx.translate(pose.hitOffsetX, 0);
   if (!isMonster3 && !isMonster4) {
-    ctx.fillStyle = "rgba(72, 255, 48, 0.08)";
+    const groundGlow = enemy.crimsonVariant ? "255, 42, 65" : "72, 255, 48";
+    ctx.fillStyle = `rgba(${groundGlow}, 0.08)`;
     ctx.fillRect(-pixelSnap(enemy.width * 0.55), -6, pixelSnap(enemy.width * 1.1), 6);
-    ctx.fillStyle = "rgba(72, 255, 48, 0.18)";
+    ctx.fillStyle = `rgba(${groundGlow}, 0.18)`;
     ctx.fillRect(-pixelSnap(enemy.width * 0.42), -4, pixelSnap(enemy.width * 0.84), 4);
   }
   const spriteDirection = enemy.facing * (enemy.spriteFacing ?? 1);
@@ -1597,7 +1730,17 @@ function drawEnemy(enemy) {
 
   if (sprite?.loaded && sprite.image.naturalWidth && sprite.image.naturalHeight) {
     ctx.imageSmoothingEnabled = false;
-    if (pose.hitPulse > 0) ctx.filter = "brightness(1.65) saturate(1.35)";
+    if (isMonster4 && enemy.state === "spear-charge") {
+      const chargeProgress = Math.max(0, Math.min(1,
+        1 - enemy.stateTimer / enemy.spearChargeDuration,
+      ));
+      const pulse = 0.95 + Math.sin(gameTime * 24) * 0.08;
+      ctx.filter = `sepia(1) saturate(${4 + chargeProgress * 5}) hue-rotate(310deg) brightness(${pulse + chargeProgress * 0.32})`;
+    } else if (enemy.crimsonVariant) {
+      ctx.filter = `sepia(1) saturate(7) hue-rotate(315deg) contrast(1.16) brightness(${pose.hitPulse > 0 ? 1.48 : 0.92})`;
+    } else if (pose.hitPulse > 0) {
+      ctx.filter = "brightness(1.65) saturate(1.35)";
+    }
     ctx.drawImage(
       sprite.image,
       -enemy.spriteWidth / 2,
@@ -1608,14 +1751,15 @@ function drawEnemy(enemy) {
   } else {
     ctx.fillStyle = "#21123c";
     ctx.fillRect(-enemy.width / 2, -enemy.height, enemy.width, enemy.height);
-    ctx.fillStyle = "#34d728";
+    ctx.fillStyle = enemy.crimsonVariant ? "#d51d37" : "#34d728";
     ctx.fillRect(-enemy.width * 0.35, -enemy.height * 0.76, enemy.width * 0.7, enemy.height * 0.52);
-    ctx.fillStyle = "#b7ff6a";
+    ctx.fillStyle = enemy.crimsonVariant ? "#ff8a91" : "#b7ff6a";
     ctx.fillRect(-8, -enemy.height * 0.68, 16, 12);
   }
   ctx.restore();
   if (isMonster2) drawMonster2Attack(enemy);
   if (isMonster3) drawMonster3Charge(enemy);
+  if (isMonster4) drawMonster4SpearCharge(enemy);
   drawMonsterHealthGauge(enemy, pose);
 }
 
@@ -1704,13 +1848,7 @@ function drawTurret(turret) {
   drawTurretDamageCracks(turret);
   ctx.restore();
 
-  drawCombatantHealthBar(
-    turret.x + turret.width / 2,
-    visualBottomY - TURRET.spriteHeight + TURRET.spriteBottomOffset - 13,
-    Math.max(58, Math.min(72, TURRET.spriteWidth * 0.72)),
-    turret.hp,
-    turret.maxHp,
-  );
+  drawTurretHealthGauge(turret, visualBottomY);
 
   if (charge <= 0) return;
   const muzzle = turretMuzzlePosition(turret);
@@ -1858,6 +1996,40 @@ function drawMonster2Fireball(bullet) {
   ctx.restore();
 }
 
+function drawMonster4Crescent(bullet) {
+  const travelProgress = Math.max(0, Math.min(1,
+    1 - bullet.remainingRange / Math.max(1, bullet.initialRange),
+  ));
+  const pulse = 0.94 + Math.sin(gameTime * 28 + (bullet.phase ?? 0)) * 0.06;
+  const fade = Math.pow(1 - travelProgress, 0.28);
+  const radius = 24 * pulse;
+  ctx.save();
+  ctx.translate(pixelSnap(bullet.x), pixelSnap(bullet.y));
+  ctx.rotate(Math.atan2(bullet.vy, bullet.vx));
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = fade;
+  ctx.shadowColor = "#ff244d";
+  ctx.shadowBlur = 11;
+  ctx.fillStyle = "#ff3158";
+  traceMonster4Crescent(ctx, radius);
+  ctx.fill("evenodd");
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#ff91a7";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.fillStyle = "#ffe5df";
+  ctx.fillRect(pixelSnap(radius * 0.56), -8, 5, 4);
+  ctx.fillRect(pixelSnap(radius * 0.72), -2, 6, 4);
+  ctx.fillRect(pixelSnap(radius * 0.56), 6, 5, 4);
+  ctx.globalAlpha = fade * 0.62;
+  ctx.fillStyle = "#ff4968";
+  ctx.fillRect(-radius - 9, -8, 6, 4);
+  ctx.fillRect(-radius - 15, -1, 8, 3);
+  ctx.fillRect(-radius - 8, 6, 5, 4);
+  ctx.restore();
+}
+
 function paintPlayerProjectile(context, shimmer = 1) {
   context.lineCap = "round";
   context.shadowColor = "#b35cff";
@@ -1898,12 +2070,14 @@ let playerProjectileSpriteAttempted = false;
 
 function cachedCanvasSprite(cache, key, width, height, paint) {
   if (cache.has(key)) return cache.get(key);
+  const backingWidth = Math.ceil(width * 2);
+  const backingHeight = Math.ceil(height * 2);
   const sprite = typeof OffscreenCanvas === "function"
-    ? new OffscreenCanvas(width * 2, height * 2)
+    ? new OffscreenCanvas(backingWidth, backingHeight)
     : typeof document !== "undefined" ? document.createElement?.("canvas") : null;
   if (!sprite) return null;
-  sprite.width = width * 2;
-  sprite.height = height * 2;
+  sprite.width = backingWidth;
+  sprite.height = backingHeight;
   const spriteContext = sprite.getContext?.("2d");
   if (!spriteContext) return null;
   spriteContext.scale(2, 2);
@@ -1959,6 +2133,10 @@ function drawProjectiles() {
     ) continue;
     if (bullet.kind === "monster2-fireball") {
       drawMonster2Fireball(bullet);
+      continue;
+    }
+    if (bullet.kind === "monster4-crescent") {
+      drawMonster4Crescent(bullet);
       continue;
     }
     if (bullet.kind === "monster3-laser") {
@@ -2093,6 +2271,113 @@ function drawCombatExplosionFlash(particle) {
   ctx.restore();
 }
 
+function crimsonGrenadeNoise(seed) {
+  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+const crimsonGrenadeGlowSpriteCache = new Map();
+
+function crimsonGrenadeGlowSprite() {
+  return cachedCanvasSprite(
+    crimsonGrenadeGlowSpriteCache,
+    "crimson-grenade-glow",
+    128,
+    128,
+    (spriteContext) => {
+      const glow = spriteContext.createRadialGradient(64, 64, 2, 64, 64, 60);
+      glow.addColorStop(0, "rgba(255, 245, 196, 0.98)");
+      glow.addColorStop(0.2, "rgba(255, 119, 42, 0.82)");
+      glow.addColorStop(0.5, "rgba(239, 38, 54, 0.46)");
+      glow.addColorStop(1, "rgba(104, 8, 28, 0)");
+      spriteContext.fillStyle = glow;
+      spriteContext.fillRect(4, 4, 120, 120);
+    },
+  );
+}
+
+function drawCrimsonGrenadeBlast(particle) {
+  const remaining = Math.max(0, particle.life / particle.maxLife);
+  const progress = 1 - remaining;
+  const eased = 1 - (1 - progress) ** 2.4;
+  const phase = particle.phase ?? 0;
+  const spread = particle.size * (0.08 + eased * 0.68);
+  const coreSize = particle.size * (0.08 + Math.pow(remaining, 0.65) * 0.2);
+  ctx.save();
+  ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = Math.pow(remaining, 0.68) * 0.96;
+  const glowSprite = crimsonGrenadeGlowSprite();
+  if (glowSprite) {
+    const glowSize = Math.max(coreSize * 3.8, spread * 1.72);
+    ctx.globalAlpha = Math.pow(remaining, 0.74) * 0.9;
+    ctx.drawImage(
+      glowSprite,
+      -glowSize / 2,
+      -glowSize / 2,
+      glowSize,
+      glowSize,
+    );
+    ctx.globalAlpha = Math.pow(remaining, 0.68) * 0.96;
+  }
+
+  const coreBlocks = [
+    [-0.56, -0.28, 1.12, 0.56, "#fff3bd"],
+    [-0.32, -0.68, 0.62, 1.34, "#ffc247"],
+    [-0.78, -0.1, 0.34, 0.48, "#ff642e"],
+    [0.43, -0.32, 0.46, 0.58, "#ff642e"],
+    [-0.18, -0.86, 0.42, 0.3, "#ff8d32"],
+    [-0.3, 0.54, 0.58, 0.35, "#e9263d"],
+  ];
+  for (const [x, y, width, height, color] of coreBlocks) {
+    ctx.fillStyle = color;
+    ctx.fillRect(
+      pixelSnap(x * coreSize),
+      pixelSnap(y * coreSize),
+      Math.max(2, pixelSnap(width * coreSize)),
+      Math.max(2, pixelSnap(height * coreSize)),
+    );
+  }
+
+  for (let ray = 0; ray < 18; ray += 1) {
+    const seed = phase * 91.7 + ray * 7.31;
+    const angle = crimsonGrenadeNoise(seed) * Math.PI * 2;
+    const reachNoise = crimsonGrenadeNoise(seed + 3.7);
+    const lengthNoise = crimsonGrenadeNoise(seed + 8.9);
+    const reach = spread * (0.42 + reachNoise * 0.72);
+    const length = particle.size * (0.055 + lengthNoise * 0.15) *
+      (0.45 + Math.pow(remaining, 0.4) * 0.75);
+    const thickness = Math.max(2, pixelSnap(2 + remaining * (2 + reachNoise * 3)));
+    ctx.save();
+    ctx.rotate(angle);
+    ctx.fillStyle = ray % 5 === 0 ? "#fff3bd"
+      : ray % 2 === 0 ? "#ff642e" : "#e9263d";
+    ctx.fillRect(pixelSnap(reach), -thickness / 2, Math.max(3, pixelSnap(length)), thickness);
+    const shardGap = 5 + crimsonGrenadeNoise(seed + 11.2) * 14;
+    const shardSize = Math.max(2, pixelSnap(thickness * (0.55 + lengthNoise * 0.5)));
+    ctx.fillStyle = ray % 3 === 0 ? "#ffc247" : "#ff3048";
+    ctx.fillRect(
+      pixelSnap(reach + length + shardGap),
+      pixelSnap((reachNoise - 0.5) * 9),
+      Math.max(2, pixelSnap(shardSize * (1.3 + lengthNoise))),
+      shardSize,
+    );
+    ctx.restore();
+  }
+
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = Math.pow(remaining, 1.2) * 0.48;
+  for (let smoke = 0; smoke < 7; smoke += 1) {
+    const seed = phase * 47.3 + smoke * 9.17;
+    const offsetX = (crimsonGrenadeNoise(seed) - 0.5) * spread * 0.8;
+    const offsetY = -spread * (0.12 + crimsonGrenadeNoise(seed + 4.1) * 0.58);
+    const size = Math.max(3, pixelSnap(5 + crimsonGrenadeNoise(seed + 8.4) * 12));
+    ctx.fillStyle = smoke % 2 === 0 ? "#551d2b" : "#76252c";
+    ctx.fillRect(pixelSnap(offsetX), pixelSnap(offsetY), size, Math.max(3, pixelSnap(size * 0.68)));
+  }
+  ctx.restore();
+}
+
 function drawPlayerImpactFlash(particle) {
   const remaining = Math.max(0, particle.life / particle.maxLife);
   const progress = 1 - remaining;
@@ -2114,21 +2399,74 @@ function drawPlayerImpactFlash(particle) {
     ctx.rotate(spoke * Math.PI / 8);
     ctx.fillStyle = spoke % 2 === 0 ? "#fff5ec" : particle.color;
     const length = 18 + (spoke % 3) * 7;
-    const thickness = spoke % 2 === 0 ? 4 : 3;
+    const thickness = spoke % 2 === 0 ? 2 : 1.25;
     ctx.fillRect(pixelSnap(reach * 0.28), -thickness / 2, length, thickness);
-    ctx.fillRect(pixelSnap(reach * 0.84), -1, 7, 2);
+    ctx.fillRect(pixelSnap(reach * 0.84), -0.5, 7, 1);
     ctx.restore();
   }
+  ctx.restore();
+}
+
+function drawPlayerShieldRamImpact(particle) {
+  const remaining = Math.max(0, particle.life / particle.maxLife);
+  const progress = 1 - remaining;
+  const eased = 1 - (1 - progress) ** 2;
+  const direction = particle.direction || 1;
+  ctx.save();
+  ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
+  ctx.scale(direction, 1);
+  ctx.globalCompositeOperation = "lighter";
+  ctx.lineCap = "round";
+
+  for (let wave = 0; wave < 3; wave += 1) {
+    ctx.globalAlpha = Math.pow(remaining, 0.9) * (0.9 - wave * 0.2);
+    ctx.strokeStyle = wave === 0 ? particle.coreColor : particle.color;
+    ctx.lineWidth = wave === 0 ? 1.35 : 0.9;
+    ctx.beginPath();
+    ctx.ellipse(
+      4 + eased * (25 + wave * 8),
+      0,
+      9 + eased * 15 + wave * 4,
+      25 + eased * 13 + wave * 6,
+      0,
+      -Math.PI / 2,
+      Math.PI / 2,
+    );
+    ctx.stroke();
+  }
+
+  for (let streak = 0; streak < 8; streak += 1) {
+    const spread = (streak - 3.5) / 3.5;
+    const angle = spread * 0.72 + Math.sin(particle.phase + streak * 1.7) * 0.035;
+    const reach = 7 + eased * (32 + Math.abs(spread) * 11) + streak % 2 * 4;
+    const length = (10 + (streak % 3) * 4) * (0.55 + remaining * 0.45);
+    ctx.save();
+    ctx.rotate(angle);
+    ctx.globalAlpha = Math.pow(remaining, 1.12) * (0.82 - Math.abs(spread) * 0.18);
+    ctx.fillStyle = streak % 3 === 0 ? particle.coreColor : particle.color;
+    ctx.fillRect(reach, -0.5, length, 1);
+    ctx.restore();
+  }
+
+  ctx.globalAlpha = Math.pow(remaining, 1.4);
+  ctx.fillStyle = particle.coreColor;
+  ctx.beginPath();
+  ctx.moveTo(-3, 0);
+  ctx.lineTo(1, -7 * remaining);
+  ctx.lineTo(5 + eased * 5, 0);
+  ctx.lineTo(1, 7 * remaining);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
 }
 
 function drawHeartPickupGlow(particle) {
   const remaining = Math.max(0, particle.life / particle.maxLife);
   const progress = 1 - remaining;
-  const radius = particle.size * (0.46 + progress * 0.42);
+  const radius = particle.size * (0.3 + progress * 0.75);
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  ctx.globalAlpha = Math.pow(remaining, 1.25) * 0.72;
+  ctx.globalAlpha = Math.pow(remaining, 1.15) * 0.7;
   const halo = ctx.createRadialGradient(
     particle.x,
     particle.y,
@@ -2137,41 +2475,51 @@ function drawHeartPickupGlow(particle) {
     particle.y,
     radius,
   );
-  halo.addColorStop(0, "rgba(255, 255, 255, 0.92)");
-  halo.addColorStop(0.3, "rgba(255, 218, 231, 0.72)");
-  halo.addColorStop(0.7, "rgba(255, 111, 159, 0.3)");
+  halo.addColorStop(0, "rgba(255, 255, 255, 0.94)");
+  halo.addColorStop(0.26, "rgba(255, 218, 231, 0.72)");
+  halo.addColorStop(0.7, "rgba(255, 111, 159, 0.28)");
   halo.addColorStop(1, "rgba(255, 86, 142, 0)");
   ctx.fillStyle = halo;
   ctx.beginPath();
   ctx.arc(particle.x, particle.y, radius, 0, Math.PI * 2);
   ctx.fill();
 
+  ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
+  ctx.fillStyle = "#fff0f6";
+  for (let ray = 0; ray < 8; ray += 1) {
+    ctx.save();
+    ctx.rotate(Math.PI / 8 + ray * Math.PI / 4);
+    const reach = 7 + progress * 34;
+    const length = 10 - progress * 6;
+    ctx.globalAlpha = Math.pow(remaining, 1.25) * 0.84;
+    ctx.fillRect(pixelSnap(reach), -1, pixelSnap(length), 2);
+    ctx.fillStyle = ray % 2 === 0 ? "#ff91b1" : "#fff0f6";
+    ctx.fillRect(pixelSnap(reach + length + 4), -2, 3, 3);
+    ctx.restore();
+  }
+
   ctx.restore();
 }
 
-function drawHeartPickupCloud(particle) {
+function drawHeartPickupPop(particle) {
   const remaining = Math.max(0, particle.life / particle.maxLife);
   const progress = 1 - remaining;
-  const appear = Math.min(1, progress * 7);
-  const puffSize = particle.size * (0.52 + Math.sin(progress * Math.PI) * 0.48);
-  const wobble = Math.sin(gameTime * 5 + particle.phase) * 2.5;
+  const expansion = 0.9 + Math.sin(
+    Math.min(1, progress * 1.65) * Math.PI / 2,
+  ) * 0.65;
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  ctx.globalAlpha = appear * Math.pow(remaining, 1.25) * 0.66;
-  ctx.translate(pixelSnap(particle.x + wobble, 1), pixelSnap(particle.y, 1));
-  ctx.shadowColor = particle.color;
-  ctx.shadowBlur = 10 * remaining;
-  ctx.fillStyle = particle.color;
-  ctx.beginPath();
-  ctx.arc(-puffSize * 0.28, 0, puffSize * 0.43, 0, Math.PI * 2);
-  ctx.arc(puffSize * 0.25, -puffSize * 0.08, puffSize * 0.48, 0, Math.PI * 2);
-  ctx.arc(0, puffSize * 0.2, puffSize * 0.52, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha *= 0.48;
-  ctx.fillStyle = "#ffffff";
-  ctx.beginPath();
-  ctx.arc(-puffSize * 0.08, -puffSize * 0.12, puffSize * 0.25, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.globalAlpha = Math.pow(remaining, 0.65);
+  ctx.shadowColor = "#ff719b";
+  ctx.shadowBlur = 24 * remaining;
+  ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
+  ctx.scale(expansion, expansion);
+  drawPixelHeart(
+    -3.5 * particle.size,
+    -3 * particle.size,
+    1,
+    particle.size,
+  );
   ctx.restore();
 }
 
@@ -2254,30 +2602,109 @@ function lightRaySprite(particle, kind) {
       spriteContext.fillStyle = particle.coreColor;
       spriteContext.fillRect(-5.12, -0.5, 7.68, 1);
     } else {
-      spriteContext.fillRect(-6.6, -1.44, 12.3, 2.88);
+      spriteContext.fillRect(-6.6, -0.72, 12.3, 1.44);
       spriteContext.shadowBlur = 0;
       spriteContext.fillStyle = particle.coreColor;
-      spriteContext.fillRect(-1.95, -1, 4.8, 2);
+      spriteContext.fillRect(-1.95, -0.45, 4.8, 0.9);
     }
   });
 }
 
+function drawPlayerShieldBreakFlash(particle) {
+  const remaining = Math.max(0, particle.life / particle.maxLife);
+  const progress = 1 - remaining;
+  const tier = Math.max(1, Math.min(3, particle.shieldTier ?? 1));
+  const radiusX = 56 + (tier - 1) * 5;
+  const radiusY = 80 + (tier - 1) * 5;
+  const direction = particle.direction || 1;
+  ctx.save();
+  ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = Math.pow(remaining, 0.72);
+  ctx.lineCap = "square";
+  ctx.strokeStyle = particle.color;
+  ctx.lineWidth = Math.max(0.75, 1.7 - progress * 0.85);
+
+  for (let fragment = 0; fragment < 6; fragment += 1) {
+    const angle = -Math.PI / 2 + fragment * Math.PI / 3 +
+      (fragment % 2 === 0 ? progress * 0.13 : -progress * 0.1);
+    const halfArc = 0.18 + (fragment % 3) * 0.025;
+    ctx.beginPath();
+    ctx.ellipse(
+      0,
+      0,
+      radiusX * (1 + progress * 0.24),
+      radiusY * (1 + progress * 0.24),
+      0,
+      angle - halfArc,
+      angle + halfArc,
+    );
+    ctx.stroke();
+  }
+
+  ctx.translate(direction * radiusX * (0.68 + progress * 0.18), 0);
+  ctx.rotate(direction * (progress - 0.5) * 0.18);
+  ctx.fillStyle = particle.coreColor;
+  for (let crack = -1; crack <= 1; crack += 1) {
+    const length = 18 + (crack + 1) * 5 + progress * 14;
+    ctx.save();
+    ctx.rotate(crack * 0.34);
+    ctx.fillRect(0, -0.45, length, 0.9);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawPlayerShieldBreakShard(particle) {
+  const remaining = Math.max(0, particle.life / particle.maxLife);
+  const length = particle.size * (1.4 + remaining * 1.25);
+  const thickness = Math.max(0.8, particle.size * 0.48);
+  ctx.save();
+  ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
+  ctx.rotate(particle.angle);
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = Math.pow(remaining, 0.82);
+  ctx.shadowColor = particle.color;
+  ctx.shadowBlur = 8 * remaining;
+  ctx.fillStyle = particle.color;
+  ctx.beginPath();
+  ctx.moveTo(-length, 0);
+  ctx.lineTo(0, -thickness);
+  ctx.lineTo(length * 0.7, 0);
+  ctx.lineTo(0, thickness);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = particle.coreColor;
+  ctx.fillRect(-length * 0.38, -0.4, length * 0.72, 0.8);
+  ctx.restore();
+}
+
 function drawParticles() {
   for (const particle of particles) {
+    const cullMargin = particle.crimsonGrenadeBlast ? particle.size + 48 : 120;
     if (
-      particle.x < cameraX - 120 || particle.x > cameraX + WIDTH + 120 ||
-      particle.y < cameraY - 120 || particle.y > cameraY + HEIGHT + 120
+      particle.x < cameraX - cullMargin ||
+      particle.x > cameraX + WIDTH + cullMargin ||
+      particle.y < cameraY - cullMargin ||
+      particle.y > cameraY + HEIGHT + cullMargin
     ) continue;
     ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife);
     ctx.fillStyle = particle.color;
     if (particle.debris) {
       drawCombatDebris(particle);
+    } else if (particle.shieldRamImpact) {
+      drawPlayerShieldRamImpact(particle);
     } else if (particle.impactFlash) {
       drawPlayerImpactFlash(particle);
     } else if (particle.heartPickupGlow) {
       drawHeartPickupGlow(particle);
-    } else if (particle.heartPickupCloud) {
-      drawHeartPickupCloud(particle);
+    } else if (particle.heartPickupPop) {
+      drawHeartPickupPop(particle);
+    } else if (particle.shieldBreakFlash) {
+      drawPlayerShieldBreakFlash(particle);
+    } else if (particle.shieldBreakShard) {
+      drawPlayerShieldBreakShard(particle);
     } else if (particle.impactRay) {
       const remaining = Math.max(0, particle.life / particle.maxLife);
       ctx.save();
@@ -2293,13 +2720,15 @@ function drawParticles() {
         ctx.shadowColor = particle.color;
         ctx.shadowBlur = 9 * remaining;
         ctx.fillStyle = particle.color;
-        ctx.fillRect(-particle.size * 2.2, -particle.size * 0.48,
-          particle.size * 4.1, Math.max(2, particle.size * 0.96));
+        ctx.fillRect(-particle.size * 2.2, -particle.size * 0.24,
+          particle.size * 4.1, Math.max(1, particle.size * 0.48));
         ctx.shadowBlur = 0;
         ctx.fillStyle = particle.coreColor;
-        ctx.fillRect(-particle.size * 0.65, -1, particle.size * 1.6, 2);
+        ctx.fillRect(-particle.size * 0.65, -0.5, particle.size * 1.6, 1);
       }
       ctx.restore();
+    } else if (particle.crimsonGrenadeBlast) {
+      drawCrimsonGrenadeBlast(particle);
     } else if (particle.explosionFlash) {
       drawCombatExplosionFlash(particle);
     } else if (particle.explosionSmoke) {
@@ -2350,10 +2779,10 @@ function drawParticles() {
       const remaining = Math.max(0, particle.life / particle.maxLife);
       const progress = 1 - remaining;
       const pulse = 0.5 + Math.sin(gameTime * 8 + particle.angle * 2) * 0.5;
-      const size = particle.size * (0.88 + progress * 0.38 + pulse * 0.14);
+      const size = particle.size * (0.84 + progress * 0.22 + pulse * 0.1);
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = Math.pow(remaining, 0.78) * (0.92 + pulse * 0.08);
+      ctx.globalAlpha = Math.pow(remaining, 0.58) * (0.97 + pulse * 0.03);
       const dotSprite = getPlayerRevivalOrbSprite();
       if (dotSprite) {
         ctx.drawImage(
@@ -2366,7 +2795,7 @@ function drawParticles() {
       } else {
         ctx.fillStyle = particle.color;
         ctx.beginPath();
-        ctx.arc(particle.x, particle.y, Math.max(3, size * 0.34), 0, Math.PI * 2);
+        ctx.arc(particle.x, particle.y, Math.max(3, size * 0.38), 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
@@ -2662,29 +3091,325 @@ function drawHeartItems() {
   }
 }
 
-function hudHeaderLayout() {
-  const portrait = HEIGHT > WIDTH;
-  const edge = WIDTH < 650 ? 18 : 22;
-  const gap = WIDTH < 650 ? 10 : 12;
-  const mapWidth = Math.round(WIDTH * (portrait ? 0.27 : 0.22));
-  const mapHeight = portrait
+const TOP_VIDEO_SLOT_SCALE = 1.28;
+const TOP_VIDEO_SLOT_SIZE_RATIO = 2 / 3;
+const TOP_VIDEO_SLOT_TOP_ASPECT = 1.04;
+const TOP_VIDEO_SLOT_BOTTOM_RATIO = 0.88;
+const TOP_VIDEO_SLOT_REFERENCE_Y = 30;
+const HUD_ULTIMATE_FRAME_COLOR = "rgba(132, 92, 157, 0.42)";
+const MINIMAP_VERTICAL_EXAGGERATION_MAX = 2.5;
+
+function topVideoSlotReferenceHeight(mapWidth) {
+  return HEIGHT > WIDTH
     ? Math.max(104, Math.min(128, Math.round(mapWidth * 0.72)))
     : Math.max(92, Math.min(112, Math.round(mapWidth * 0.48)));
-  const mapX = WIDTH - edge - mapWidth;
-  const contentWidth = mapX - edge - gap;
-  const scoreWidth = Math.round(contentWidth * 0.34);
-  const stageWidth = Math.round(contentWidth * 0.29);
+}
+
+function topVideoSlotMetrics(mapX, mapWidth) {
+  const centerGap = WIDTH < 650 ? 8 : 12;
+  const baseHeight = TOP_VIDEO_SLOT_REFERENCE_Y +
+    topVideoSlotReferenceHeight(mapWidth) + 12;
+  const maximumTopWidth = Math.max(1, mapX - centerGap);
+  const height = Math.min(
+    maximumTopWidth / TOP_VIDEO_SLOT_TOP_ASPECT,
+    baseHeight * TOP_VIDEO_SLOT_SCALE * TOP_VIDEO_SLOT_SIZE_RATIO,
+  );
   return {
-    top: 22,
-    mainHeight: mapHeight,
-    score: { x: edge, width: scoreWidth },
-    stage: { x: edge + scoreWidth, width: stageWidth },
-    hearts: {
-      x: edge + scoreWidth + stageWidth,
-      width: contentWidth - scoreWidth - stageWidth,
-    },
-    map: { x: mapX, y: 22, width: mapWidth, height: mapHeight },
+    centerGap,
+    height,
+    topWidth: height * TOP_VIDEO_SLOT_TOP_ASPECT,
+    bottomWidth: height * TOP_VIDEO_SLOT_BOTTOM_RATIO,
   };
+}
+
+function hudHeaderLayout() {
+  const portrait = HEIGHT > WIDTH;
+  const gap = WIDTH < 650 ? 10 : 12;
+  const infoY = 14;
+  const infoHeight = 20;
+  const mapY = 7;
+  const mapWidth = Math.round(WIDTH * (portrait ? 0.32 : 0.28));
+  const mapHeight = Math.max(76, Math.min(96, Math.round(mapWidth * 0.42)));
+  const mapX = (WIDTH - mapWidth) / 2;
+  const video = topVideoSlotMetrics(mapX, mapWidth);
+  const groupGap = WIDTH < 650 ? 4 : 6;
+  const videoGap = WIDTH < 650 ? 6 : 8;
+  const leftGroupX = video.topWidth + videoGap;
+  const halfInnerEdge = WIDTH / 2 - video.centerGap;
+  const sideAvailableWidth = Math.max(2, halfInnerEdge - leftGroupX);
+  const sideRegionWidth = Math.min(
+    96,
+    Math.max(1, (sideAvailableWidth - groupGap) / 2),
+  );
+  const sideGroupWidth = sideRegionWidth * 2 + groupGap;
+  const rightGroupX = WIDTH - video.topWidth - videoGap - sideGroupWidth;
+  return {
+    top: mapY,
+    mainHeight: mapHeight,
+    infoY,
+    infoHeight,
+    stage: {
+      x: rightGroupX,
+      y: infoY,
+      width: sideRegionWidth,
+      height: infoHeight,
+    },
+    hearts: {
+      x: leftGroupX,
+      y: infoY,
+      width: sideRegionWidth,
+      height: infoHeight,
+    },
+    map: { x: mapX, y: mapY, width: mapWidth, height: mapHeight },
+    ultimate: {
+      x: leftGroupX + sideRegionWidth + groupGap,
+      y: infoY,
+      width: sideRegionWidth,
+      height: infoHeight,
+    },
+    score: {
+      x: rightGroupX + sideRegionWidth + groupGap,
+      y: infoY,
+      width: sideRegionWidth,
+      height: infoHeight,
+    },
+  };
+}
+
+function topVideoSlotLayout() {
+  const header = hudHeaderLayout();
+  const { height, topWidth, bottomWidth } = topVideoSlotMetrics(
+    header.map.x,
+    header.map.width,
+  );
+  return {
+    height,
+    left: [
+      { x: 0, y: 0 },
+      { x: topWidth, y: 0 },
+      { x: bottomWidth, y: height },
+      { x: 0, y: height },
+    ],
+    right: [
+      { x: WIDTH, y: 0 },
+      { x: WIDTH - topWidth, y: 0 },
+      { x: WIDTH - bottomWidth, y: height },
+      { x: WIDTH, y: height },
+    ],
+  };
+}
+
+function traceTopVideoSlot(points, renderContext = ctx) {
+  renderContext.beginPath();
+  renderContext.moveTo(points[0].x, points[0].y);
+  for (let point = 1; point < points.length; point += 1) {
+    renderContext.lineTo(points[point].x, points[point].y);
+  }
+  renderContext.lineTo(points[0].x, points[0].y);
+}
+
+function drawTopVideoSlotBorder(points, renderContext = ctx) {
+  renderContext.save();
+  renderContext.lineJoin = "round";
+  traceTopVideoSlot(points, renderContext);
+  renderContext.strokeStyle = HUD_ULTIMATE_FRAME_COLOR;
+  renderContext.lineWidth = 1.5;
+  renderContext.stroke();
+  renderContext.restore();
+}
+
+function drawVideoCover(video, x, y, width, height, renderContext = ctx) {
+  const sourceWidth = video?.videoWidth ?? 0;
+  const sourceHeight = video?.videoHeight ?? 0;
+  if (sourceWidth <= 0 || sourceHeight <= 0 || width <= 0 || height <= 0) return false;
+  const sourceAspect = sourceWidth / sourceHeight;
+  const targetAspect = width / height;
+  let sourceX = 0;
+  let sourceY = 0;
+  let cropWidth = sourceWidth;
+  let cropHeight = sourceHeight;
+  if (sourceAspect > targetAspect) {
+    cropWidth = sourceHeight * targetAspect;
+    sourceX = (sourceWidth - cropWidth) / 2;
+  } else {
+    cropHeight = sourceWidth / targetAspect;
+    sourceY = (sourceHeight - cropHeight) / 2;
+  }
+  renderContext.drawImage(
+    video,
+    sourceX,
+    sourceY,
+    cropWidth,
+    cropHeight,
+    x,
+    y,
+    width,
+    height,
+  );
+  return true;
+}
+
+function monsterVideoCutInOpacity(asset) {
+  if (!asset?.active || !asset.video) return 0;
+  const video = asset.video;
+  const playbackRate = Math.max(0.1, video.playbackRate || 1);
+  const elapsed = Math.max(0, video.currentTime || 0) / playbackRate;
+  const duration = Number.isFinite(video.duration) ? video.duration : 0;
+  const remaining = duration > 0
+    ? Math.max(0, duration - (video.currentTime || 0)) / playbackRate
+    : Infinity;
+  return Math.max(0, Math.min(1, elapsed / 0.08, remaining / 0.16));
+}
+
+const topVideoSlotLayers = { left: null, right: null };
+
+function prepareTopVideoSlotLayer(side, points, height, slotVideo, slotOpacity = 1) {
+  const slotWidth = side === "left"
+    ? Math.max(points[1].x, points[2].x)
+    : WIDTH - Math.min(points[1].x, points[2].x);
+  const originX = side === "left" ? 0 : WIDTH - slotWidth;
+  const renderScale = Math.max(1, Math.min(
+    MAX_RENDER_SCALE,
+    canvas.width > 0 ? canvas.width / WIDTH : 1,
+  ));
+  const pixelWidth = Math.max(1, Math.ceil(slotWidth * renderScale));
+  const pixelHeight = Math.max(1, Math.ceil(height * renderScale));
+  let layer = topVideoSlotLayers[side];
+  if (!layer) {
+    const surface = typeof OffscreenCanvas === "function"
+      ? new OffscreenCanvas(pixelWidth, pixelHeight)
+      : typeof document !== "undefined" ? document.createElement?.("canvas") : null;
+    const context = surface?.getContext?.("2d");
+    if (!surface || !context) return null;
+    layer = { surface, context, frameKey: "" };
+    topVideoSlotLayers[side] = layer;
+  }
+  const { surface, context } = layer;
+  const resized = surface.width !== pixelWidth || surface.height !== pixelHeight;
+  if (resized) {
+    surface.width = pixelWidth;
+    surface.height = pixelHeight;
+  }
+  const videoFrame = slotVideo
+    ? Math.max(0, Math.floor((slotVideo.currentTime ?? 0) * 30))
+    : -1;
+  const videoSource = slotVideo?.currentSrc || slotVideo?.src || "idle";
+  const opacityFrame = Math.round(slotOpacity * 100);
+  const frameKey = `${pixelWidth}:${pixelHeight}:${videoSource}:${videoFrame}:${opacityFrame}`;
+  if (!resized && layer.frameKey === frameKey) {
+    return { surface, originX, slotWidth };
+  }
+
+  const localPoints = points.map((point) => ({
+    x: point.x - originX,
+    y: point.y,
+  }));
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.clearRect(0, 0, pixelWidth, pixelHeight);
+  context.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.save();
+  traceTopVideoSlot(localPoints, context);
+  context.clip();
+  context.fillStyle = "rgba(9, 5, 18, 0.36)";
+  context.fillRect(0, 0, slotWidth, height);
+  if (slotVideo && slotOpacity > 0) {
+    context.save();
+    context.globalAlpha *= slotOpacity;
+    drawVideoCover(
+      slotVideo,
+      0,
+      0,
+      slotWidth,
+      height,
+      context,
+    );
+    context.restore();
+  }
+  context.restore();
+  drawTopVideoSlotBorder(localPoints, context);
+  layer.frameKey = frameKey;
+  return { surface, originX, slotWidth };
+}
+
+function drawTopVideoSlots() {
+  const layout = topVideoSlotLayout();
+  for (const [side, points] of [
+    ["left", layout.left],
+    ["right", layout.right],
+  ]) {
+    const gunVideo = typeof playerGunVideoAsset !== "undefined" &&
+      playerGunVideoAsset.loaded && playerGunVideoAsset.active
+      ? playerGunVideoAsset.video
+      : null;
+    const runVideo = typeof playerRunVideoAsset !== "undefined" &&
+      playerRunVideoAsset.loaded && playerRunVideoAsset.active
+      ? playerRunVideoAsset.video
+      : null;
+    const standVideo = typeof playerStandVideoAsset !== "undefined" &&
+      playerStandVideoAsset.loaded && playerStandVideoAsset.active
+      ? playerStandVideoAsset.video
+      : null;
+    const downVideo = typeof playerDownVideoAsset !== "undefined" &&
+      playerDownVideoAsset.loaded && playerDownVideoAsset.active
+      ? playerDownVideoAsset.video
+      : null;
+    const activeEnemyVideoAsset = typeof activeEnemyAttackVideoAsset === "function"
+      ? activeEnemyAttackVideoAsset()
+      : typeof monster2AttackVideoAsset !== "undefined"
+        ? monster2AttackVideoAsset
+        : null;
+    const enemyVideoAsset = activeEnemyVideoAsset?.loaded && activeEnemyVideoAsset.active
+      ? activeEnemyVideoAsset
+      : null;
+    const slotVideo = side === "left"
+      ? downVideo ?? gunVideo ?? runVideo ?? standVideo
+      : enemyVideoAsset?.video ?? null;
+    const slotOpacity = side === "right" && enemyVideoAsset
+      ? monsterVideoCutInOpacity(enemyVideoAsset)
+      : 1;
+    const layer = prepareTopVideoSlotLayer(
+      side,
+      points,
+      layout.height,
+      slotVideo,
+      slotOpacity,
+    );
+    if (layer) {
+      ctx.drawImage(
+        layer.surface,
+        layer.originX,
+        0,
+        layer.slotWidth,
+        layout.height,
+      );
+      continue;
+    }
+    ctx.save();
+    traceTopVideoSlot(points);
+    ctx.clip();
+    ctx.fillStyle = "rgba(9, 5, 18, 0.36)";
+    ctx.fillRect(0, 0, WIDTH, layout.height);
+    const slotWidth = side === "left"
+      ? Math.max(points[1].x, points[2].x)
+      : WIDTH - Math.min(points[1].x, points[2].x);
+    const originX = side === "left" ? 0 : WIDTH - slotWidth;
+    if (slotVideo && slotOpacity > 0) {
+      ctx.save();
+      ctx.globalAlpha *= slotOpacity;
+      drawVideoCover(
+        slotVideo,
+        originX,
+        0,
+        slotWidth,
+        layout.height,
+      );
+      ctx.restore();
+    }
+    ctx.restore();
+    drawTopVideoSlotBorder(points);
+  }
 }
 
 function drawMinimapDistanceFog(
@@ -2715,7 +3440,68 @@ function drawMinimapDistanceFog(
   renderContext.fillRect(plotX, plotY, plotWidth, plotHeight);
 }
 
+const MINIMAP_RENDER_INTERVAL = 1 / 30;
+const MINIMAP_IMMEDIATE_REFRESH_DISTANCE = 24;
 let minimapLayer = null;
+let minimapWorldBoundsCache = null;
+let minimapRenderCache = {
+  signature: "",
+  time: -Infinity,
+  focusX: NaN,
+  focusY: NaN,
+};
+
+function invalidateMinimapCache() {
+  minimapWorldBoundsCache = null;
+  minimapRenderCache.signature = "";
+  minimapRenderCache.time = -Infinity;
+}
+
+function minimapWorldBounds() {
+  const first = platforms[0];
+  const last = platforms[platforms.length - 1];
+  const signature = [
+    mapSeed,
+    WIDTH,
+    HEIGHT,
+    platforms.length,
+    first?.id ?? "",
+    first?.start ?? "",
+    first?.y ?? "",
+    last?.id ?? "",
+    last?.end ?? "",
+    last?.y ?? "",
+  ].join(":");
+  if (minimapWorldBoundsCache?.signature === signature) {
+    return minimapWorldBoundsCache;
+  }
+
+  let left = Infinity;
+  let right = -Infinity;
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const platform of platforms) {
+    left = Math.min(left, platform.start);
+    right = Math.max(right, platform.end);
+    if (platform.kind === "ramp") {
+      top = Math.min(top, platform.entryY, platform.exitY);
+      bottom = Math.max(bottom, platform.entryY, platform.exitY);
+    } else {
+      top = Math.min(top, platform.y);
+      bottom = Math.max(bottom, platform.y);
+    }
+  }
+  const horizontalMargin = Math.max(1, (right - left) * 0.025);
+  const verticalMargin = Math.max(LEVEL_GAP * 0.65, (bottom - top) * 0.08);
+  minimapWorldBoundsCache = {
+    signature,
+    left: left - horizontalMargin,
+    right: right + horizontalMargin,
+    top: top - verticalMargin,
+    bottom: bottom + verticalMargin,
+  };
+  return minimapWorldBoundsCache;
+}
 
 function prepareMinimapLayer(panelX, panelY, panelWidth, panelHeight) {
   const renderScale = 2;
@@ -2818,34 +3604,11 @@ function drawMinimap(fullMap = false) {
   const plotWidth = panelWidth - 20;
   const plotHeight = panelHeight - 20;
 
-  let fullWorldLeft = Infinity;
-  let fullWorldRight = -Infinity;
-  let fullWorldTop = Infinity;
-  let fullWorldBottom = -Infinity;
-  for (const platform of platforms) {
-    fullWorldLeft = Math.min(fullWorldLeft, platform.start);
-    fullWorldRight = Math.max(fullWorldRight, platform.end);
-    if (platform.kind === "ramp") {
-      fullWorldTop = Math.min(fullWorldTop, platform.entryY, platform.exitY);
-      fullWorldBottom = Math.max(fullWorldBottom, platform.entryY, platform.exitY);
-    } else {
-      fullWorldTop = Math.min(fullWorldTop, platform.y);
-      fullWorldBottom = Math.max(fullWorldBottom, platform.y);
-    }
-  }
-
-  const horizontalMargin = Math.max(
-    1,
-    (fullWorldRight - fullWorldLeft) * 0.025,
-  );
-  const verticalMargin = Math.max(
-    LEVEL_GAP * 0.65,
-    (fullWorldBottom - fullWorldTop) * 0.08,
-  );
-  fullWorldLeft -= horizontalMargin;
-  fullWorldRight += horizontalMargin;
-  fullWorldTop -= verticalMargin;
-  fullWorldBottom += verticalMargin;
+  const worldBounds = minimapWorldBounds();
+  const fullWorldLeft = worldBounds.left;
+  const fullWorldRight = worldBounds.right;
+  const fullWorldTop = worldBounds.top;
+  const fullWorldBottom = worldBounds.bottom;
 
   const fullWorldWidth = Math.max(1, fullWorldRight - fullWorldLeft);
   const fullWorldHeight = Math.max(1, fullWorldBottom - fullWorldTop);
@@ -2874,12 +3637,19 @@ function drawMinimap(fullMap = false) {
     (plotWidth - markerPadding * 2) / worldWidth,
     (plotHeight - markerPadding * 2) / worldHeight,
   );
+  const localScaleX = plotWidth / worldWidth;
+  const localScaleY = Math.min(
+    plotHeight / worldHeight,
+    localScaleX * MINIMAP_VERTICAL_EXAGGERATION_MAX,
+  );
+  const localContentHeight = worldHeight * localScaleY;
   const mapX = expanded
     ? (value) => plotX + (plotWidth - worldWidth * mapScale) / 2 + (value - worldLeft) * mapScale
     : (value) => plotX + (value - worldLeft) / worldWidth * plotWidth;
   const mapY = expanded
     ? (value) => plotY + (plotHeight - worldHeight * mapScale) / 2 + (value - worldTop) * mapScale
-    : (value) => plotY + (value - worldTop) / worldHeight * plotHeight;
+    : (value) => plotY + (plotHeight - localContentHeight) / 2 +
+      (value - worldTop) * localScaleY;
 
   const renderMap = (ctx) => {
   ctx.save();
@@ -3019,23 +3789,51 @@ function drawMinimap(fullMap = false) {
     renderMap(ctx);
     return;
   }
-  const layer = prepareMinimapLayer(panelX, panelY, panelWidth, panelHeight);
-  if (!layer) {
-    renderMap(ctx);
-    return;
-  }
-  renderMap(layer.context);
-  applyMinimapEdgeMask(
-    layer.context,
+  const renderSignature = [
+    mapSeed,
     panelX,
     panelY,
     panelWidth,
     panelHeight,
-    plotX,
-    plotY,
-    plotWidth,
-    plotHeight,
+    platforms.length,
+  ].join(":");
+  const elapsed = gameTime - minimapRenderCache.time;
+  const focusShift = Math.hypot(
+    focusX - minimapRenderCache.focusX,
+    focusY - minimapRenderCache.focusY,
   );
+  const shouldRefresh = (
+    minimapRenderCache.signature !== renderSignature ||
+    elapsed < 0 || elapsed >= MINIMAP_RENDER_INTERVAL ||
+    focusShift >= MINIMAP_IMMEDIATE_REFRESH_DISTANCE
+  );
+  let layer = minimapLayer;
+  if (shouldRefresh) {
+    layer = prepareMinimapLayer(panelX, panelY, panelWidth, panelHeight);
+    if (!layer) {
+      renderMap(ctx);
+      return;
+    }
+    renderMap(layer.context);
+    applyMinimapEdgeMask(
+      layer.context,
+      panelX,
+      panelY,
+      panelWidth,
+      panelHeight,
+      plotX,
+      plotY,
+      plotWidth,
+      plotHeight,
+    );
+    minimapRenderCache = {
+      signature: renderSignature,
+      time: gameTime,
+      focusX,
+      focusY,
+    };
+  }
+  if (!layer?.surface) return;
   ctx.save();
   ctx.globalAlpha = 1;
   ctx.drawImage(layer.surface, panelX, panelY, panelWidth, panelHeight);
@@ -3229,83 +4027,282 @@ function drawPixelHeart(x, y, fillAmount, scale = 3) {
   }
 }
 
+function paintPixelUltimateSlot(target, x, y, filled, scale) {
+  const outline = [
+    "0001000",
+    "0010100",
+    "0100010",
+    "1000001",
+    "0100010",
+    "0010100",
+    "0001000",
+  ];
+  const core = [
+    "0001000",
+    "0011100",
+    "0111110",
+    "1111111",
+    "0111110",
+    "0011100",
+    "0001000",
+  ];
+  const pixels = filled ? core : outline;
+  for (let row = 0; row < pixels.length; row += 1) {
+    for (let column = 0; column < pixels[row].length; column += 1) {
+      if (pixels[row][column] !== "1") continue;
+      target.fillStyle = filled
+        ? row <= 2 ? "#efd6ff" : "#a855f1"
+        : "rgba(156, 123, 183, 0.46)";
+      target.fillRect(
+        x + column * scale,
+        y + row * scale,
+        scale,
+        scale,
+      );
+    }
+  }
+}
+
+function drawPixelUltimateSlot(x, y, filled, scale = 2) {
+  const sprite = cachedCanvasSprite(
+    hudGlyphSpriteCache,
+    `ultimate:${filled ? 1 : 0}:${scale}`,
+    7 * scale,
+    7 * scale,
+    (spriteContext) => paintPixelUltimateSlot(spriteContext, 0, 0, filled, scale),
+  );
+  if (sprite) {
+    ctx.drawImage(sprite, pixelSnap(x, 1), pixelSnap(y, 1),
+      7 * scale, 7 * scale);
+  } else {
+    paintPixelUltimateSlot(ctx, x, y, filled, scale);
+  }
+}
+
+function digitalHudScoreValue() {
+  const elapsed = gameTime - player.scoreGainStartedAt;
+  if (
+    !Number.isFinite(elapsed) || elapsed < 0 ||
+    elapsed >= HUD_SCORE_DIGITAL_DURATION
+  ) return player.score;
+  const previousScore = Math.max(0, player.score - player.scoreGainAmount);
+  const progress = elapsed / HUD_SCORE_DIGITAL_DURATION;
+  const digitalSteps = 6;
+  const steppedProgress = Math.min(
+    1,
+    Math.floor(progress * digitalSteps) / digitalSteps,
+  );
+  return Math.round(
+    previousScore + (player.score - previousScore) * steppedProgress,
+  );
+}
+
+function ultimateMeterFillRatio() {
+  if (player.ultimateCharges >= PLAYER_MAX_ULTIMATE_CHARGES) return 1;
+  return Math.max(0, Math.min(
+    1,
+    (player.ultimateMeterScore ?? 0) / ULTIMATE_SCORE_PER_CHARGE,
+  ));
+}
+
+function ultimateMeterLayout() {
+  return {
+    x: 0,
+    y: 0,
+    width: WIDTH,
+    height: 6,
+    inset: 1,
+  };
+}
+
+function drawUltimateScoreMeter() {
+  const layout = ultimateMeterLayout();
+  const barWidth = layout.width;
+  const barHeight = layout.height;
+  const barX = layout.x;
+  const barY = layout.y;
+  const inset = layout.inset;
+  const innerWidth = barWidth - inset * 2;
+  const innerHeight = barHeight - inset * 2;
+  const ratio = ultimateMeterFillRatio();
+  const fillWidth = Math.round(innerWidth * ratio);
+  const flashElapsed = gameTime - player.ultimateChargeStartedAt;
+  const flash = flashElapsed >= 0 && flashElapsed < HUD_ULTIMATE_CHARGE_FLASH_DURATION
+    ? 1 - flashElapsed / HUD_ULTIMATE_CHARGE_FLASH_DURATION
+    : 0;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(8, 4, 14, 0.82)";
+  ctx.fillRect(barX, barY, barWidth, barHeight);
+  ctx.fillStyle = HUD_ULTIMATE_FRAME_COLOR;
+  ctx.fillRect(barX, barY, barWidth, 1);
+  ctx.fillRect(barX, barY + barHeight - 1, barWidth, 1);
+  if (fillWidth > 0) {
+    const fill = ctx.createLinearGradient(barX, 0, barX + barWidth, 0);
+    fill.addColorStop(0, "#6f24c7");
+    fill.addColorStop(0.62, "#b04fff");
+    fill.addColorStop(1, "#f0d0ff");
+    ctx.fillStyle = fill;
+    ctx.shadowColor = "#a942ff";
+    ctx.shadowBlur = 4 + flash * 9;
+    ctx.fillRect(barX + inset, barY + inset, fillWidth, innerHeight);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = "#f4ddff";
+    ctx.fillRect(barX + inset, barY + inset, fillWidth, 1);
+  }
+  ctx.globalAlpha = 0.24;
+  ctx.fillStyle = "#06030a";
+  for (let segment = 1; segment < 10; segment += 1) {
+    const segmentX = barX + inset + Math.round(innerWidth * segment / 10);
+    ctx.fillRect(segmentX, barY + inset, 1, innerHeight);
+  }
+  if (flash > 0) {
+    ctx.globalAlpha = flash * 0.85;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(barX, barY, barWidth, 1);
+    ctx.fillRect(barX, barY + barHeight - 1, barWidth, 1);
+  }
+  ctx.restore();
+}
+
 function drawHud() {
   const header = hudHeaderLayout();
-  const glyphScale = WIDTH >= 1100 ? 3 : 2;
-  const valueY = header.top + (header.mainHeight - 9 * glyphScale) / 2;
-  const labelY = header.top + (header.mainHeight - 7 * glyphScale) / 2;
-  const textGap = glyphScale * 3;
-  const scoreText = String(player.score).padStart(3, "0");
+  const labelScale = 1;
+  const hudScale = 7 / 9;
+  const infoCenterY = header.infoY + header.infoHeight / 2;
+  const labelY = infoCenterY - 7 * labelScale / 2;
+  const valueY = infoCenterY - 9 * hudScale / 2;
+  const textGap = 3;
+  const scoreText = String(digitalHudScoreValue()).padStart(3, "0");
   const stageText = String(CURRENT_STAGE).padStart(2, "0");
-  const scoreWidth = pixelTextWidth("SCORE", glyphScale) + textGap +
-    hudNumeralWidth(scoreText, glyphScale);
-  const scoreX = header.score.x + (header.score.width - scoreWidth) / 2;
+  const scoreLabelWidth = pixelTextWidth("SCORE", labelScale);
+  const scoreValueWidth = hudNumeralWidth(scoreText, hudScale);
+  const scoreRowWidth = scoreLabelWidth + textGap + scoreValueWidth;
+  const scoreX = header.score.x + (header.score.width - scoreRowWidth) / 2;
+  const scoreValueX = scoreX + scoreLabelWidth + textGap;
+  const scoreCenterX = header.score.x + header.score.width / 2;
+  const scoreCenterY = infoCenterY;
+  const stageCenterY = infoCenterY;
+  const stageLabelWidth = pixelTextWidth("STAGE", labelScale);
+  const stageValueWidth = hudNumeralWidth(stageText, hudScale);
+  const stageRowWidth = stageLabelWidth + textGap + stageValueWidth;
+  const infoVisualScale = Math.min(
+    HUD_INFO_TEXT_VISUAL_SCALE,
+    (header.score.width - 4) / scoreRowWidth,
+    (header.stage.width - 4) / stageRowWidth,
+  );
+  const canTransformHudText = typeof ctx.translate === "function" &&
+    typeof ctx.scale === "function";
 
+  if (TEST_MODE && showFullMap) {
+    drawMinimap(true);
+    return;
+  }
+  drawTopVideoSlots();
+  drawUltimateScoreMeter();
+  drawMinimap(false);
   ctx.save();
   ctx.shadowColor = "rgba(101, 218, 230, 0.35)";
   ctx.shadowBlur = 5;
+  ctx.save();
+  if (canTransformHudText) {
+    ctx.translate(scoreCenterX, scoreCenterY);
+    ctx.scale(infoVisualScale, infoVisualScale);
+    ctx.translate(-scoreCenterX, -scoreCenterY);
+  }
   drawPixelText(
     "SCORE",
     scoreX,
     labelY,
-    glyphScale,
+    labelScale,
     "#99dce5",
   );
   drawHudNumerals(
     scoreText,
-    scoreX + pixelTextWidth("SCORE", glyphScale) + textGap,
+    scoreValueX,
     valueY,
-    glyphScale,
+    hudScale,
   );
+  ctx.restore();
 
+  const stageStartX = header.stage.x + (header.stage.width - stageRowWidth) / 2;
+  const stageValueX = stageStartX + stageLabelWidth + textGap;
   const stageCenterX = header.stage.x + header.stage.width / 2;
-  const stageLabelWidth = pixelTextWidth("STAGE", glyphScale);
-  const stageValueWidth = hudNumeralWidth(stageText, glyphScale);
-  const stageStartX = (
-    stageCenterX -
-    (stageLabelWidth + textGap + stageValueWidth) / 2
-  );
+  ctx.save();
+  if (canTransformHudText) {
+    ctx.translate(stageCenterX, stageCenterY);
+    ctx.scale(infoVisualScale, infoVisualScale);
+    ctx.translate(-stageCenterX, -stageCenterY);
+  }
   drawPixelText(
     "STAGE",
     stageStartX,
     labelY,
-    glyphScale,
+    labelScale,
     "#99dce5",
   );
   drawHudNumerals(
     stageText,
-    stageStartX + stageLabelWidth + textGap,
+    stageValueX,
     valueY,
-    glyphScale,
+    hudScale,
   );
+  ctx.restore();
 
   ctx.shadowColor = "rgba(255, 87, 117, 0.44)";
   ctx.shadowBlur = 6;
-  const heartScale = glyphScale;
-  const heartWidth = 7 * heartScale;
-  const heartGap = Math.round(glyphScale * 2.3);
   const maximumHearts = Math.min(PLAYER_MAX_HEARTS, player.maxHp ?? 3);
-  const heartsPerRow = WIDTH > HEIGHT ? PLAYER_MAX_HEARTS : 5;
-  const heartRows = Math.ceil(maximumHearts / heartsPerRow);
-  const rowHeight = 6 * heartScale + 6;
-  const heartsY = header.top + (header.mainHeight - heartRows * rowHeight + 6) / 2;
+  const heartScale = Math.min(
+    3,
+    header.hearts.width / Math.max(
+      1,
+      maximumHearts * 7 + Math.max(0, maximumHearts - 1) * 1.7,
+    ),
+  );
+  const heartWidth = 7 * heartScale;
+  const heartGap = heartScale * 1.7;
+  const heartRowWidth = maximumHearts * heartWidth +
+    Math.max(0, maximumHearts - 1) * heartGap;
+  const heartsX = header.hearts.x + (header.hearts.width - heartRowWidth) / 2;
+  const heartsY = infoCenterY - 3 * heartScale;
   for (let heart = 0; heart < maximumHearts; heart += 1) {
-    const row = Math.floor(heart / heartsPerRow);
-    const column = heart % heartsPerRow;
-    const rowCount = Math.min(heartsPerRow, maximumHearts - row * heartsPerRow);
-    const rowWidth = rowCount * heartWidth + (rowCount - 1) * heartGap;
-    const heartsX = header.hearts.x + (header.hearts.width - rowWidth) / 2;
     drawPixelHeart(
-      heartsX + column * (heartWidth + heartGap),
-      heartsY + row * rowHeight,
+      heartsX + heart * (heartWidth + heartGap),
+      heartsY,
       Math.max(0, Math.min(1, player.hp - heart)),
       heartScale,
     );
   }
-  ctx.restore();
 
-  drawMinimap(TEST_MODE && showFullMap);
-  if (TEST_MODE && showFullMap) return;
+  const ultimateScale = Math.min(
+    3,
+    header.ultimate.width / Math.max(
+      1,
+      PLAYER_MAX_ULTIMATE_CHARGES * 7 +
+      (PLAYER_MAX_ULTIMATE_CHARGES - 1) * 2,
+    ),
+  );
+  const ultimateWidth = 7 * ultimateScale;
+  const ultimateGap = 2 * ultimateScale;
+  const ultimateRowWidth = PLAYER_MAX_ULTIMATE_CHARGES * ultimateWidth +
+    (PLAYER_MAX_ULTIMATE_CHARGES - 1) * ultimateGap;
+  const ultimateX = header.ultimate.x +
+    (header.ultimate.width - ultimateRowWidth) / 2;
+  const ultimateY = infoCenterY - 7 * ultimateScale / 2;
+  const ultimateCharges = Math.max(0, Math.min(
+    PLAYER_MAX_ULTIMATE_CHARGES,
+    player.ultimateCharges ?? 0,
+  ));
+  for (let slot = 0; slot < PLAYER_MAX_ULTIMATE_CHARGES; slot += 1) {
+    drawPixelUltimateSlot(
+      ultimateX + slot * (ultimateWidth + ultimateGap),
+      ultimateY,
+      slot < ultimateCharges,
+      ultimateScale,
+    );
+  }
+  ctx.restore();
 
   if (
     !gameOver && !playerIsDown() &&

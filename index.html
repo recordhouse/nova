@@ -8,12 +8,16 @@
     <link rel="preload" href="./assets/sound/gun.mp3" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/gun_impact.mp3?v=20260924-1" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/gun_hit.mp3?v=20260924-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/heart.mp3" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/metal.mp3" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/laser.mp3?v=20260922-2" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/monster_die_01.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/monster_die_04.mp3" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/monster_fire_02.mp3?v=20260923-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/resurrection.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/shield.mp3" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/music/stage_01.mp3?v=20260924-1" as="audio" />
-    <link rel="stylesheet" href="./styles.css?v=20260924-2" />
+    <link rel="stylesheet" href="./styles.css?v=20261014-2" />
   </head>
   <body>
     <main class="game-shell" aria-label="NOVA 게임 프로토타입">
@@ -139,20 +143,29 @@
           </button>
         </div>
         <div class="action-controls">
+          <button
+            type="button"
+            class="control-button action ultimate"
+            data-control="ultimate"
+            data-ultimate-control
+            data-charges="0"
+            aria-label="필살기, 충전 0개"
+            aria-disabled="true"
+          >ULT</button>
           <button class="control-button action fire" data-control="fire" aria-label="사격">FIRE</button>
         </div>
       </section>
     </main>
 
-    <script src="./js/config.js?v=20260924-7"></script>
-    <script src="./js/assets.js?v=20260924-3"></script>
-    <script src="./js/state.js?v=20260924-2"></script>
-    <script src="./js/world.js?v=20260923-1"></script>
-    <script src="./js/combat.js?v=20260924-6"></script>
-    <script src="./js/player.js?v=20260924-5"></script>
-    <script src="./js/enemies.js?v=20260923-3"></script>
-    <script src="./js/renderer.js?v=20260924-10"></script>
-    <script src="./js/input.js?v=20260924-1"></script>
-    <script src="./js/main.js?v=20260924-2"></script>
+    <script src="./js/config.js?v=20261015-1"></script>
+    <script src="./js/assets.js?v=20261015-5"></script>
+    <script src="./js/state.js?v=20261014-1"></script>
+    <script src="./js/world.js?v=20261015-3"></script>
+    <script src="./js/combat.js?v=20261015-4"></script>
+    <script src="./js/player.js?v=20261015-1"></script>
+    <script src="./js/enemies.js?v=20261015-4"></script>
+    <script src="./js/renderer.js?v=20261015-11"></script>
+    <script src="./js/input.js?v=20261015-2"></script>
+    <script src="./js/main.js?v=20261015-5"></script>
   </body>
 </html>

@@ -1661,6 +1661,7 @@ function generateMap() {
 
 function generateMapCandidate(safeForwardFlow = false) {
   platforms.length = 0;
+  invalidatePlatformSpatialIndex();
   branches.length = 0;
   midBosses.length = 0;
   bossDoor = null;
@@ -1983,8 +1984,75 @@ function generateMapCandidate(safeForwardFlow = false) {
   return true;
 }
 
+const PLATFORM_SPATIAL_BUCKET_SIZE = 384;
+let platformSpatialIndex = null;
+
+function invalidatePlatformSpatialIndex() {
+  platformSpatialIndex = null;
+}
+
+function ensurePlatformSpatialIndex() {
+  const first = platforms[0] ?? null;
+  const last = platforms[platforms.length - 1] ?? null;
+  if (
+    platformSpatialIndex &&
+    platformSpatialIndex.count === platforms.length &&
+    platformSpatialIndex.first === first &&
+    platformSpatialIndex.last === last
+  ) return platformSpatialIndex;
+
+  const buckets = new Map();
+  const order = new Map();
+  for (let index = 0; index < platforms.length; index += 1) {
+    const platform = platforms[index];
+    order.set(platform, index);
+    const firstBucket = Math.floor(platform.start / PLATFORM_SPATIAL_BUCKET_SIZE);
+    // Keep an exact end boundary in the adjacent bucket for swept projectile
+    // queries; platformsAt still applies its original end-exclusive check.
+    const lastBucket = Math.floor(platform.end / PLATFORM_SPATIAL_BUCKET_SIZE);
+    for (let bucket = firstBucket; bucket <= lastBucket; bucket += 1) {
+      if (!buckets.has(bucket)) buckets.set(bucket, []);
+      buckets.get(bucket).push(platform);
+    }
+  }
+  platformSpatialIndex = {
+    count: platforms.length,
+    first,
+    last,
+    buckets,
+    order,
+  };
+  return platformSpatialIndex;
+}
+
 function platformsAt(x) {
-  return platforms.filter((platform) => x >= platform.start && x < platform.end);
+  const index = ensurePlatformSpatialIndex();
+  const bucket = Math.floor(x / PLATFORM_SPATIAL_BUCKET_SIZE);
+  return (index.buckets.get(bucket) ?? []).filter((platform) => (
+    x >= platform.start && x < platform.end
+  ));
+}
+
+function platformsBetween(left, right) {
+  const index = ensurePlatformSpatialIndex();
+  const minimum = Math.min(left, right);
+  const maximum = Math.max(left, right);
+  const firstBucket = Math.floor(minimum / PLATFORM_SPATIAL_BUCKET_SIZE);
+  const lastBucket = Math.floor(maximum / PLATFORM_SPATIAL_BUCKET_SIZE);
+  const seen = new Set();
+  const candidates = [];
+  for (let bucket = firstBucket; bucket <= lastBucket; bucket += 1) {
+    for (const platform of index.buckets.get(bucket) ?? []) {
+      if (
+        seen.has(platform) ||
+        platform.start > maximum || platform.end < minimum
+      ) continue;
+      seen.add(platform);
+      candidates.push(platform);
+    }
+  }
+  candidates.sort((a, b) => index.order.get(a) - index.order.get(b));
+  return candidates;
 }
 
 function buildStars() {
@@ -2027,8 +2095,12 @@ function enemyRectOverlapsEnemy(
   });
 }
 
-function addEnemy(platform, x, kind = "monster1") {
+function addEnemy(platform, x, kind = "monster1", options = {}) {
   const definition = MONSTER_TYPES[kind] ?? MONSTER_TYPES.monster1;
+  const crimsonVariant = kind === "monster1" && (
+    options.crimsonVariant === true ||
+    (options.rollCrimson === true && mapRandom() < MONSTER1_CRIMSON_CHANCE)
+  );
   const y = (
     platformSurfaceY(platform, x + definition.width / 2) - definition.height -
     (definition.hoverHeight ?? 0)
@@ -2044,6 +2116,10 @@ function addEnemy(platform, x, kind = "monster1") {
     spriteTopInset: definition.spriteTopInset,
     spriteFacing: definition.spriteFacing ?? 1,
     kind,
+    crimsonVariant,
+    crimsonExplosionTriggered: false,
+    deathResolved: false,
+    contactDamageTimer: 0,
     platform,
     hp: definition.hp,
     maxHp: definition.hp,
@@ -2102,6 +2178,16 @@ function addEnemy(platform, x, kind = "monster1") {
     attackCooldown: definition.attackCooldown,
     attackTimer: kind === "monster3"
       ? 0.8 + mapRandom() * 2.2 : 0,
+    spearAttackRange: definition.spearAttackRange,
+    spearAttackVerticalRange: definition.spearAttackVerticalRange,
+    spearChargeDuration: definition.spearChargeDuration,
+    spearRecoveryDuration: definition.spearRecoveryDuration,
+    spearAttackCooldown: definition.spearAttackCooldown,
+    spearSpeed: definition.spearSpeed,
+    spearRadius: definition.spearRadius,
+    spearTravelRange: definition.spearTravelRange,
+    spearForwardOffset: definition.spearForwardOffset,
+    spearHeight: definition.spearHeight,
     ambientFireDelayMin: definition.ambientFireDelayMin,
     ambientFireDelayMax: definition.ambientFireDelayMax,
     ambientFireTimer: kind === "monster2"
@@ -2144,6 +2230,7 @@ function addEnemy(platform, x, kind = "monster1") {
 function addTurret(platform, x) {
   const surfaceY = platformSurfaceY(platform, x + TURRET.width / 2);
   turrets.push({
+    kind: "turret",
     x,
     y: surfaceY - TURRET.height,
     width: TURRET.width,
@@ -2157,6 +2244,8 @@ function addTurret(platform, x) {
     chargeParticleTimer: 0,
     recoilTimer: 0,
     hitTimer: 0,
+    contactDamageTimer: 0,
+    attackVideoPrimed: false,
     animationPhase: mapRandom() * Math.PI * 2,
     active: false,
     alive: true,
@@ -2410,7 +2499,9 @@ function buildStage() {
           monsterX,
           monsterDefinition,
         )) {
-          addEnemy(platform, monsterX, monsterKind);
+          addEnemy(platform, monsterX, monsterKind, {
+            rollCrimson: monsterKind === "monster1",
+          });
         }
       }
     }
@@ -2466,6 +2557,7 @@ function startingPlatform() {
 
 function resetPlayerPosition() {
   resetPlayerDownState();
+  if (typeof stopPlayerDownVideo === "function") stopPlayerDownVideo();
   player.x = 110;
   player.platform = startingPlatform();
   player.y = platformSurfaceY(
@@ -2483,6 +2575,27 @@ function resetPlayerPosition() {
   player.fireAnimationTime = 0;
   player.fireBarrel = 0;
   player.fireWasActive = false;
+  if (typeof syncPlayerGunVideoPlayback === "function") {
+    syncPlayerGunVideoPlayback(false);
+  } else {
+    player.fireVideoActive = false;
+    if (typeof stopPlayerGunVideo === "function") stopPlayerGunVideo();
+  }
+  if (typeof syncPlayerRunVideoPlayback === "function") {
+    syncPlayerRunVideoPlayback(false);
+  } else {
+    player.runVideoActive = false;
+    if (typeof stopPlayerRunVideo === "function") stopPlayerRunVideo();
+  }
+  if (typeof syncPlayerStandVideoPlayback === "function") {
+    syncPlayerStandVideoPlayback(false);
+  } else {
+    player.standVideoActive = false;
+    if (typeof stopPlayerStandVideo === "function") stopPlayerStandVideo();
+  }
+  if (typeof resetEnemyAttackVideo === "function") {
+    resetEnemyAttackVideo();
+  }
   player.fireEnergy = PLAYER_FIRE_ENERGY_MAX;
   player.grounded = true;
   player.crouching = false;
@@ -2587,7 +2700,9 @@ function spawnTestMonster(kind) {
   const spawn = candidates[0];
   if (!spawn) return null;
 
-  const enemy = addEnemy(spawn.platform, spawn.x, kind);
+  const enemy = addEnemy(spawn.platform, spawn.x, kind, {
+    rollCrimson: kind === "monster1",
+  });
   if (!enemy) return null;
   enemy.facing = Math.sign(playerCenterX - spawn.centerX) || -facing;
   enemy.attackDirection = enemy.facing;
@@ -2784,6 +2899,7 @@ function resizeGameResolution(width, height) {
   stars.length = 0;
   buildStars();
   lowestPlatformY += verticalShift;
+  if (typeof invalidateMinimapCache === "function") invalidateMinimapCache();
 
   const preservedScreenX = Math.max(0, Math.min(1, playerScreenRatio)) * WIDTH;
   cameraX = Math.max(
@@ -2863,11 +2979,20 @@ function resetGame() {
   heartItems.length = 0;
   turrets.length = 0;
   generateMap();
+  if (typeof invalidateMinimapCache === "function") invalidateMinimapCache();
   resetPlayerPosition();
 
-  player.hp = 3;
-  player.maxHp = 3;
+  player.hp = PLAYER_MAX_HEARTS;
+  player.maxHp = PLAYER_MAX_HEARTS;
+  player.ultimateCharges = 0;
+  player.ultimateMeterScore = 0;
+  player.ultimateChargeStartedAt = -Infinity;
   player.score = 0;
+  player.scoreGainAmount = 0;
+  player.scoreGainStartedAt = -Infinity;
+  if (typeof updateUltimateControlButton === "function") {
+    updateUltimateControlButton();
+  }
   player.invincible = 0;
   cameraLookDirection = 1;
   cameraPendingDirection = 0;

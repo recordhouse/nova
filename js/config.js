@@ -16,6 +16,7 @@ const testSpawnMonster1Button = document.querySelector("[data-test-spawn-monster
 const testSpawnMonster2Button = document.querySelector("[data-test-spawn-monster2]");
 const testSpawnMonster3Button = document.querySelector("[data-test-spawn-monster3]");
 const testSpawnMonster4Button = document.querySelector("[data-test-spawn-monster4]");
+const ultimateControlButton = document.querySelector("[data-ultimate-control]");
 const gameShellElement = document.querySelector(".game-shell");
 if (testControlsElement) testControlsElement.hidden = !TEST_MODE;
 
@@ -49,12 +50,18 @@ const JUMP_SPEED = 950;
 const PLAYER_RUN_SPEED = 275;
 const PLAYER_RUN_MAX_SPEED = 480;
 const PLAYER_RUN_ACCELERATION = 120;
+const PLAYER_RUNNING_FIRE_ENABLED = false;
 const PLAYER_ACCELERATION_SHIELD_STAGE_1_PROGRESS = 0.23;
 const PLAYER_ACCELERATION_SHIELD_STAGE_2_PROGRESS = 0.48;
 const PLAYER_ACCELERATION_SHIELD_STAGE_3_PROGRESS = 0.86;
 const PLAYER_ACCELERATION_SHIELD_VISUAL_SPEED = 5.5;
 const PLAYER_ACCELERATION_SHIELD_HIT_DURATION = 0.32;
 const PLAYER_ACCELERATION_SHIELD_BLOCK_GRACE = 0.24;
+const PLAYER_ACCELERATION_SHIELD_BREAK_DURATION = 0.44;
+const PLAYER_ACCELERATION_SHIELD_BREAK_SHARDS_PER_DOT = 4;
+const PLAYER_SHIELD_RAM_DAMAGE = 1;
+const PLAYER_SHIELD_RAM_KNOCKBACK_SPEED = 900;
+const PLAYER_SHIELD_RAM_KNOCKBACK_DURATION = 0.46;
 const PLAYER_COYOTE_TIME = 0.11;
 const PLAYER_JUMP_BUFFER_TIME = 0.12;
 const PLAYER_MAX_FALL_SPEED = 760;
@@ -147,6 +154,7 @@ const CAMERA_MAX_PAN_SPEED_RATIO = 0.75;
 const PLAYER_SPRITE_DRAW_HEIGHT = 149.6;
 const PLAYER_STAND_SPRITE_SCALE = 1.12;
 const PLAYER_BLAST_SPRITE_SCALE = 1.1;
+const PLAYER_BLAST_RUN_SPRITE_SCALE = 1.36;
 const PLAYER_BLAST_HIGH_SPRITE_SCALE = PLAYER_BLAST_SPRITE_SCALE * 1.2;
 const PLAYER_SIT_SPRITE_SCALE = 1;
 const PLAYER_BLAST_SIT_SPRITE_SCALE = 0.972;
@@ -159,7 +167,12 @@ const PLAYER_JUMP_SPRITE_Y_OFFSET = 8;
 const PLAYER_SIT_SPRITE_Y_OFFSET = 8;
 const PLAYER_DOWN_SPRITE_SCALE = PLAYER_STAND_SPRITE_SCALE;
 const PLAYER_DOWN_SPRITE_Y_OFFSET = 16;
-const PLAYER_MAX_HEARTS = 10;
+const PLAYER_MAX_HEARTS = 3;
+const PLAYER_MAX_ULTIMATE_CHARGES = 3;
+const ULTIMATE_SCORE_PER_CHARGE = 1500;
+const HUD_ULTIMATE_CHARGE_FLASH_DURATION = 0.72;
+const HUD_INFO_TEXT_VISUAL_SCALE = 1.6;
+const HUD_SCORE_DIGITAL_DURATION = 0.36;
 const HEART_ITEM_RADIUS = 26;
 const HEART_ITEM_DRAW_SCALE = 6;
 const PLAYER_DOWN_FPS = 8;
@@ -171,6 +184,8 @@ const PLAYER_REVIVAL_INVINCIBILITY = 3;
 const PLAYER_REVIVAL_RADIUS = 240;
 const PLAYER_REVIVAL_DAMAGE = 2;
 const PLAYER_REVIVAL_LIGHT_COUNT = 8;
+const PLAYER_REVIVAL_ORB_SIZE_MIN = 14;
+const PLAYER_REVIVAL_ORB_SIZE_VARIANCE = 3;
 const PLAYER_REVIVAL_KNOCKBACK_SPEED = 1500;
 const PLAYER_REVIVAL_KNOCKBACK_DURATION = 0.72;
 const PLAYER_REVIVAL_KNOCKBACK_DAMPING = 3;
@@ -181,6 +196,12 @@ const PLAYER_REVERSAL_BRAKE = 1050;
 const PLAYER_REVERSAL_ACCELERATION = 1850;
 const PLAYER_STOP_BRAKE = 1250;
 const PLAYER_REVERSAL_SPARK_INTERVAL = 0.025;
+const MONSTER1_CRIMSON_CHANCE = 1 / 5;
+const MONSTER1_CRIMSON_EXPLOSION_RADIUS = 280;
+const MONSTER1_CRIMSON_EXPLOSION_DAMAGE = 2;
+const MONSTER1_CRIMSON_KNOCKBACK_SPEED = 1250;
+const HOSTILE_CONTACT_DAMAGE = 1;
+const HOSTILE_CONTACT_COOLDOWN = 0.65;
 const PLAYER_MUZZLE_HEIGHT_RATIO = 1 / 3;
 const PLAYER_MUZZLE_FORWARD_OFFSET = 44;
 const PLAYER_MUZZLE_VERTICAL_OFFSET = -10;
@@ -202,6 +223,7 @@ const PLAYER_CROUCH_HITBOX_WIDTH = 66;
 const PLAYER_CROUCH_HITBOX_HEIGHT = 123;
 const PROJECTILE_MAX_RICOCHETS = 5;
 const COMBAT_DEBRIS_LIMIT = 180;
+const ACTIVE_PARTICLE_LIMIT = 520;
 const ENEMY_SPAWN_EDGE_MARGIN = 64;
 const ENEMY_SPAWN_MIN_PLATFORM_LENGTH = 132;
 const ENEMY_SPAWN_MIN_LENGTH = 92;
@@ -342,6 +364,16 @@ const MONSTER_TYPES = {
     jumpRecoveryDuration: 0.1,
     jumpCooldown: 0.7,
     attackCooldown: 0.65,
+    spearAttackRange: 180,
+    spearAttackVerticalRange: 110,
+    spearChargeDuration: 0.65,
+    spearRecoveryDuration: 0.22,
+    spearAttackCooldown: 2.3,
+    spearSpeed: 760,
+    spearRadius: 13,
+    spearTravelRange: 220,
+    spearForwardOffset: 48,
+    spearHeight: 52,
     hitDuration: 0.2,
     hitKnockbackSpeed: 360,
     hitKnockbackMaxSpeed: 600,

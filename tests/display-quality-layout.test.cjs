@@ -79,18 +79,267 @@ test("backing resolution is capped for memory while remaining sharper than 1x", 
   assert.equal(canvas.height, 2560);
 });
 
-test("the four header regions and minimap stay separate in portrait and landscape", () => {
+test("the HUD groups hearts and ultimates left and stage and score right of the centered map", () => {
   const { scope } = createDisplay();
   for (const [width, height] of [[540, 960], [720, 1280], [960, 540], [1280, 720]]) {
     read(scope, `WIDTH=${width}; HEIGHT=${height}`);
     const header = scope.hudHeaderLayout();
+    const slots = scope.topVideoSlotLayout();
     assert.equal(header.map.y, header.top);
-    assert.equal(header.map.x + header.map.width, width - (width < 650 ? 18 : 22));
-    assert.ok(header.score.x + header.score.width <= header.stage.x);
-    assert.ok(header.stage.x + header.stage.width <= header.hearts.x);
-    assert.ok(header.hearts.x + header.hearts.width + 8 <= header.map.x);
-    assert.ok(header.map.y + header.map.height <= 150);
+    assert.equal(header.map.x + header.map.width / 2, width / 2);
+    assert.ok(header.hearts.x + header.hearts.width < header.ultimate.x);
+    assert.ok(header.stage.x + header.stage.width < header.score.x);
+    assert.ok(header.hearts.x > slots.left[1].x,
+      "the left HUD group sits beside, not over, the video");
+    assert.ok(header.score.x + header.score.width < slots.right[1].x,
+      "the right HUD group sits beside, not over, the video");
+    assert.ok(header.ultimate.x + header.ultimate.width <= width / 2);
+    assert.ok(header.stage.x >= width / 2);
+    assert.equal(header.hearts.width, header.ultimate.width);
+    assert.equal(header.stage.width, header.score.width);
+    assert.equal(header.hearts.width, header.stage.width);
+    assert.ok(header.hearts.width <= 96);
+    assert.equal(header.stage.y, header.score.y);
+    assert.equal(header.hearts.y, header.stage.y);
+    assert.equal(header.ultimate.y, header.stage.y);
+    assert.equal(header.infoY, 14);
+    assert.equal(header.map.y, 7);
+    assert.equal(header.map.y, scope.ultimateMeterLayout().height + 1,
+      "the minimap hugs the ultimate meter without overlapping it");
+    assert.ok(header.infoY > 10, "status rows move down");
+    assert.ok(header.map.y < 34, "the minimap moves up");
+    assert.ok(header.map.y + header.map.height <= 170);
+    assert.ok(header.map.width / header.map.height >= 2.25,
+      "the minimap uses a wider horizontal aspect ratio");
   }
+});
+
+test("two mirrored video slots are reduced near-square trapezoids with wider tops", () => {
+  const { scope, calls } = createDisplay();
+  for (const [width, height] of [[540, 960], [720, 1280], [960, 540], [1280, 720]]) {
+    read(scope, `WIDTH=${width}; HEIGHT=${height}`);
+    const header = scope.hudHeaderLayout();
+    const slots = scope.topVideoSlotLayout();
+    assert.equal(slots.left[0].x, 0);
+    assert.equal(slots.right[0].x, width);
+    assert.equal(read(scope, "TOP_VIDEO_SLOT_SCALE"), 1.28);
+    assert.equal(read(scope, "TOP_VIDEO_SLOT_SIZE_RATIO"), 2 / 3);
+    assert.ok(slots.left[1].x > slots.height,
+      "the top is slightly wider than the slot height");
+    assert.ok(slots.left[1].x < slots.height * 1.08,
+      "the overall silhouette remains close to a square");
+    assert.ok(slots.left[1].x > slots.left[2].x,
+      "the top edge is wider than the bottom edge");
+    assert.ok(Math.abs(width - slots.right[1].x - slots.left[1].x) < 1e-9);
+    assert.ok(Math.abs(width - slots.right[2].x - slots.left[2].x) < 1e-9);
+    assert.ok(slots.left[1].x <= header.map.x - (width < 650 ? 8 : 12));
+    assert.equal(slots.left.length, 4);
+    assert.equal(slots.right.length, 4);
+    assert.equal(slots.left[0].x, slots.left[3].x);
+    assert.equal(slots.right[0].x, slots.right[3].x);
+    assert.equal(slots.left[0].y, slots.left[1].y);
+    assert.equal(slots.left[2].y, slots.left[3].y);
+    for (let point = 0; point < 4; point += 1) {
+      assert.equal(slots.right[point].x, width - slots.left[point].x);
+      assert.equal(slots.right[point].y, slots.left[point].y);
+    }
+  }
+
+  calls.length = 0;
+  scope.drawTopVideoSlots();
+  assert.equal(calls.filter((call) => call.operation === "clip").length, 2);
+  const slotLines = calls.filter((call) => call.operation === "stroke");
+  assert.equal(slotLines.length, 2,
+    "each video slot has one subtle frame line");
+  assert.ok(slotLines.every((call) =>
+    call.strokeColor === "rgba(132, 92, 157, 0.42)"),
+  "the video frame visually continues the ultimate meter frame");
+});
+
+test("the active gun video fills only the clipped left trapezoid", () => {
+  const { scope, calls } = createDisplay();
+  const video = { videoWidth: 1080, videoHeight: 1080 };
+  scope.playerGunVideoAsset = { video, loaded: true, active: true };
+  const layout = scope.topVideoSlotLayout();
+
+  scope.drawTopVideoSlots();
+
+  const videoDraws = calls.filter((call) =>
+    call.operation === "drawImage" && call.args[0] === video);
+  assert.equal(videoDraws.length, 1);
+  const draw = videoDraws[0].args;
+  assert.equal(draw.length, 9);
+  assert.equal(draw[5], 0);
+  assert.equal(draw[6], 0);
+  assert.equal(draw[7], Math.max(layout.left[1].x, layout.left[2].x));
+  assert.equal(draw[8], layout.height);
+  assert.ok(draw[1] >= 0);
+  assert.ok(draw[2] > 0, "the square source is cover-cropped for the wide slot");
+  assert.equal(draw[3], video.videoWidth);
+  assert.ok(draw[4] < video.videoHeight);
+  assert.equal(calls.filter((call) => call.operation === "clip").length, 2);
+});
+
+test("the active run video shares the left protagonist slot", () => {
+  const { scope, calls } = createDisplay();
+  const video = { videoWidth: 480, videoHeight: 480 };
+  scope.playerRunVideoAsset = { video, loaded: true, active: true };
+  const layout = scope.topVideoSlotLayout();
+
+  scope.drawTopVideoSlots();
+
+  const videoDraws = calls.filter((call) =>
+    call.operation === "drawImage" && call.args[0] === video);
+  assert.equal(videoDraws.length, 1);
+  const draw = videoDraws[0].args;
+  const slotWidth = Math.max(layout.left[1].x, layout.left[2].x);
+  assert.equal(draw[5], 0);
+  assert.equal(draw[6], 0);
+  assert.equal(draw[7], slotWidth);
+  assert.equal(draw[8], layout.height);
+});
+
+test("the active stand video shares the left protagonist slot", () => {
+  const { scope, calls } = createDisplay();
+  const video = { videoWidth: 480, videoHeight: 480 };
+  scope.playerStandVideoAsset = { video, loaded: true, active: true };
+  const layout = scope.topVideoSlotLayout();
+
+  scope.drawTopVideoSlots();
+
+  const videoDraws = calls.filter((call) =>
+    call.operation === "drawImage" && call.args[0] === video);
+  assert.equal(videoDraws.length, 1);
+  const draw = videoDraws[0].args;
+  assert.equal(draw[5], 0);
+  assert.equal(draw[6], 0);
+  assert.equal(draw[7], Math.max(layout.left[1].x, layout.left[2].x));
+  assert.equal(draw[8], layout.height);
+});
+
+test("the one-shot down video takes priority in the left protagonist slot", () => {
+  const { scope, calls } = createDisplay();
+  const downVideo = { videoWidth: 480, videoHeight: 480 };
+  const standVideo = { videoWidth: 480, videoHeight: 480 };
+  scope.playerDownVideoAsset = { video: downVideo, loaded: true, active: true };
+  scope.playerStandVideoAsset = { video: standVideo, loaded: true, active: true };
+
+  scope.drawTopVideoSlots();
+
+  assert.equal(calls.filter((call) =>
+    call.operation === "drawImage" && call.args[0] === downVideo).length, 1);
+  assert.equal(calls.filter((call) =>
+    call.operation === "drawImage" && call.args[0] === standVideo).length, 0);
+});
+
+test("an active enemy attack cut-in fills only the clipped right trapezoid", () => {
+  const { scope, calls } = createDisplay();
+  const video = {
+    videoWidth: 480,
+    videoHeight: 480,
+    currentTime: 1,
+    duration: 3.4,
+    playbackRate: 2.9,
+  };
+  const asset = { video, loaded: true, active: true };
+  scope.activeEnemyAttackVideoAsset = () => asset;
+  const layout = scope.topVideoSlotLayout();
+
+  scope.drawTopVideoSlots();
+
+  const videoDraws = calls.filter((call) =>
+    call.operation === "drawImage" && call.args[0] === video);
+  assert.equal(videoDraws.length, 1);
+  const draw = videoDraws[0].args;
+  const width = read(scope, "WIDTH");
+  const slotWidth = width - Math.min(
+    layout.right[1].x,
+    layout.right[2].x,
+  );
+  assert.equal(draw[5], width - slotWidth);
+  assert.equal(draw[6], 0);
+  assert.equal(draw[7], slotWidth);
+  assert.equal(draw[8], layout.height);
+});
+
+test("the monster cut-in fades at its start and end without affecting player videos", () => {
+  const { scope } = createDisplay();
+  const asset = {
+    active: true,
+    video: { currentTime: 0.116, duration: 3.4, playbackRate: 2.9 },
+  };
+  const entering = scope.monsterVideoCutInOpacity(asset);
+  asset.video.currentTime = 1;
+  const settled = scope.monsterVideoCutInOpacity(asset);
+  asset.video.currentTime = 3.168;
+  const leaving = scope.monsterVideoCutInOpacity(asset);
+  assert.ok(entering > 0 && entering < 1);
+  assert.equal(settled, 1);
+  assert.ok(leaving > 0 && leaving < 1);
+});
+
+test("video slot layers render sharply without gradients or tint and add a subtle HUD line", () => {
+  const { scope, canvas, calls } = createDisplay();
+  const layerCalls = [];
+  const layerStack = [];
+  const layerSurfaces = [];
+  const layerContext = new Proxy({
+    globalAlpha: 1,
+    globalCompositeOperation: "source-over",
+  }, {
+    get(target, key) {
+      if (key in target) return target[key];
+      if (key === "save") return () => layerStack.push({ ...target });
+      if (key === "restore") return () => Object.assign(target, layerStack.pop());
+      if (key === "createLinearGradient") return (...args) => {
+        const gradient = { args, stops: [],
+          addColorStop(offset, color) { this.stops.push({ offset, color }); } };
+        layerCalls.push({ operation: key, args, gradient });
+        return gradient;
+      };
+      return (...args) => layerCalls.push({
+        operation: key,
+        args,
+        composite: target.globalCompositeOperation,
+      });
+    },
+  });
+  scope.OffscreenCanvas = class {
+    constructor(width, height) {
+      this.width = width;
+      this.height = height;
+      layerSurfaces.push(this);
+    }
+    getContext() { return layerContext; }
+  };
+  scope.playerGunVideoAsset = {
+    video: { videoWidth: 480, videoHeight: 480, currentTime: 0.5 },
+    loaded: true,
+    active: true,
+  };
+
+  scope.drawTopVideoSlots();
+
+  const layout = scope.topVideoSlotLayout();
+  const renderScale = canvas.width / read(scope, "WIDTH");
+  assert.equal(layerSurfaces.length, 2);
+  assert.equal(layerSurfaces[0].width,
+    Math.ceil(Math.max(layout.left[1].x, layout.left[2].x) * renderScale));
+  assert.equal(layerSurfaces[0].height, Math.ceil(layout.height * renderScale));
+  assert.equal(layerContext.imageSmoothingEnabled, true);
+  assert.equal(layerContext.imageSmoothingQuality, "high");
+  assert.equal(calls.filter((call) => call.operation === "stroke").length, 0);
+  assert.equal(calls.filter((call) => call.operation === "drawImage").length, 2);
+  assert.equal(layerCalls.filter((call) =>
+    call.operation === "createLinearGradient").length, 0);
+  assert.equal(layerCalls.filter((call) =>
+    call.composite === "destination-in").length, 0);
+  assert.equal(layerCalls.filter((call) =>
+    call.operation === "fillRect").length, 2,
+  "each slot has only its flat idle background and no video tint overlay");
+  assert.equal(layerCalls.filter((call) =>
+    call.operation === "stroke").length, 2,
+  "each cached slot layer gets one subtle ultimate-meter border");
 });
 
 test("player projectile glow is painted once and reused for every shot", () => {
@@ -172,6 +421,31 @@ test("revival orbs and impact rays reuse glow sprites and skip offscreen particl
   scope.drawParticles();
   assert.equal(created, 2);
   assert.equal(calls.filter((call) => call.operation === "drawImage").length, 4);
+});
+
+test("running shield and revival circles use crisp layers without blurred gradients", () => {
+  const { scope } = createDisplay();
+  const spriteCalls = [];
+  scope.document.createElement = () => ({
+    getContext: () => new Proxy({}, {
+      get(target, key) {
+        if (key in target) return target[key];
+        return (...args) => spriteCalls.push({ operation: key, args });
+      },
+      set(target, key, value) {
+        target[key] = value;
+        return true;
+      },
+    }),
+  });
+  scope.getPlayerShieldDotSprite();
+  scope.getPlayerRevivalOrbSprite();
+  assert.equal(
+    spriteCalls.filter((call) => call.operation === "createRadialGradient").length,
+    0,
+  );
+  assert.equal(spriteCalls.filter((call) => call.operation === "arc").length, 6);
+  assert.equal(spriteCalls.filter((call) => call.operation === "fill").length, 6);
 });
 
 test("non-fireball enemy shots are drawn only near the camera", () => {

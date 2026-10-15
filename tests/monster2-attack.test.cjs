@@ -129,6 +129,32 @@ test("monster2 visibly charges before launching its five-shot volley", () => {
   assert.ok(enemy.ambientFireTimer >= 2.8 && enemy.ambientFireTimer <= 6.5);
 });
 
+test("simultaneous visible attacks request one cut-in for the nearest monster2", () => {
+  const { scope } = createGame();
+  vm.runInContext(`
+    globalThis.videoRequests=[];
+    playEnemyAttackVideo=(kind,now,enemy)=>{videoRequests.push({kind,now,enemy});return true};
+    player.x=650-player.width/2;
+    player.y=500-player.height;
+    fixtureEnemy.x=400;
+    fixtureEnemy.state='chase';
+    fixtureEnemy.attackTimer=0;
+    fixtureEnemy.ambientFireTimer=0;
+    globalThis.fartherEnemy=addEnemy(fixtureRoad,100,'monster2');
+    fartherEnemy.state='chase';
+    fartherEnemy.attackTimer=0;
+    fartherEnemy.ambientFireTimer=0;
+  `, scope);
+
+  scope.updateEnemies(0);
+
+  assert.equal(scope.videoRequests.length, 1);
+  assert.equal(scope.videoRequests[0].kind, "monster2");
+  assert.equal(scope.videoRequests[0].enemy, scope.fixtureEnemy);
+  assert.equal(scope.fixtureEnemy.state, "inhale");
+  assert.equal(scope.fartherEnemy.state, "inhale");
+});
+
 test("charge grows visibly, renders over the body, and creates no persistent particles", () => {
   const { scope, calls } = createGame();
   const enemy = scope.fixtureEnemy;

@@ -48,18 +48,18 @@ function click(button) {
   button.listeners.click({ preventDefault() {} });
 }
 
-test("test BGM button pauses and resumes stage music", () => {
+test("test BGM starts paused and the button resumes then pauses it", () => {
   const { button, pauseCalls } = createGame();
-  assert.equal(button.attributes["aria-pressed"], "false");
-  assert.equal(button.textContent, "BGM Ⅱ");
-  click(button);
   assert.equal(button.attributes["aria-pressed"], "true");
   assert.equal(button.textContent, "BGM ▶");
   assert.ok(button.attributes["aria-label"].includes("일시정지됨"));
   click(button);
   assert.equal(button.attributes["aria-pressed"], "false");
   assert.equal(button.textContent, "BGM Ⅱ");
-  assert.deepEqual(pauseCalls, [true, false]);
+  click(button);
+  assert.equal(button.attributes["aria-pressed"], "true");
+  assert.equal(button.textContent, "BGM ▶");
+  assert.deepEqual(pauseCalls, [false, true]);
 });
 
 test("normal mode hides and cannot operate the BGM test control", () => {

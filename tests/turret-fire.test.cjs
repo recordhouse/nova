@@ -102,3 +102,36 @@ test("turret muzzle follows the lowered visual artwork", () => {
     read(scope, "TURRET.spriteHeight") * 0.2
   ));
 });
+
+test("a visible turret requests one attack cut-in at the start of each burst", () => {
+  const scope = createGame();
+  const turret = scope.fixtureTurret;
+  read(scope, `
+    player.x=650; player.y=420; cameraX=0; cameraY=0;
+    globalThis.attackVideoRequests=[];
+    playEnemyAttackVideo=(kind,now,source)=>attackVideoRequests.push({kind,now,source});
+  `);
+  turret.fireTimer = read(scope, "TURRET.chargeDuration + 0.1");
+
+  scope.updateTurrets(0.11);
+  scope.updateTurrets(0.1);
+
+  assert.equal(read(scope, "attackVideoRequests.length"), 1);
+  assert.equal(read(scope, "attackVideoRequests[0].kind"), "turret");
+  assert.equal(read(scope, "attackVideoRequests[0].source"), turret);
+});
+
+test("a turret requests its first-encounter introduction when it enters view", () => {
+  const scope = createGame();
+  read(scope, `
+    player.x=650; player.y=420; cameraX=0; cameraY=0;
+    globalThis.introductionRequests=[];
+    queueEnemyIntroductionVideo=(kind,distance)=>introductionRequests.push({kind,distance});
+  `);
+
+  scope.updateTurrets(0);
+
+  assert.equal(read(scope, "introductionRequests.length"), 1);
+  assert.equal(read(scope, "introductionRequests[0].kind"), "turret");
+  assert.equal(read(scope, "Number.isFinite(introductionRequests[0].distance)"), true);
+});

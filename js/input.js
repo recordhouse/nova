@@ -13,6 +13,7 @@ const keyMap = {
   KeyW: "up",
   Space: "jump",
   KeyJ: "fire",
+  KeyK: "ultimate",
 };
 
 function keyboardControl(event) {
@@ -108,6 +109,18 @@ function resetAllInputs() {
     keyboardControls[control] = false;
     controls[control] = false;
   });
+  if (typeof syncPlayerGunVideoPlayback === "function") {
+    syncPlayerGunVideoPlayback(false);
+  }
+  if (typeof syncPlayerRunVideoPlayback === "function") {
+    syncPlayerRunVideoPlayback(false);
+  }
+  if (typeof syncPlayerStandVideoPlayback === "function") {
+    syncPlayerStandVideoPlayback(false);
+  }
+  if (typeof stopEnemyAttackVideo === "function") {
+    stopEnemyAttackVideo();
+  }
 }
 
 window.addEventListener("keydown", (event) => {
@@ -214,7 +227,7 @@ testMapButton?.addEventListener("click", (event) => {
   toggleTestMap();
 });
 
-let testMusicPaused = false;
+let testMusicPaused = true;
 function updateTestMusicButton() {
   if (!TEST_MODE || !testMusicButton) return;
   testMusicButton.setAttribute("aria-pressed", String(testMusicPaused));

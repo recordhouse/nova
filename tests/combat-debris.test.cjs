@@ -143,3 +143,35 @@ test("organic and metal debris share the existing particle budget", () => {
   }
   assert.equal(scope.particles.filter((particle) => particle.debris).length, 180);
 });
+
+test("falling debris checks only nearby roads instead of every road in the map", () => {
+  const { scope } = createEffects();
+  scope.platforms = [{ start: 0, end: 1000, y: 900 }];
+  const debris = explode(scope, "monster1");
+
+  for (let frame = 0; frame < 150; frame += 1) scope.updateParticles(1 / 60);
+
+  assert.ok(debris.every((particle) => particle.groundDebris));
+  assert.ok(debris.every((particle) => particle.y === 500));
+});
+
+test("explosion debris reuses its source road without rebuilding a road candidate list", () => {
+  const { scope } = createEffects();
+  const platform = { start: 0, end: 1000, y: 500 };
+  scope.platformsAt = () => {
+    throw new Error("source-road debris should not query the complete map");
+  };
+  scope.burstCombatantExplosion({
+    x: 300,
+    y: 428,
+    width: 64,
+    height: 72,
+    platform,
+  }, "monster1");
+
+  for (let frame = 0; frame < 150; frame += 1) scope.updateParticles(1 / 60);
+
+  const debris = scope.particles.filter((particle) => particle.debris);
+  assert.ok(debris.every((particle) => particle.groundDebris));
+  assert.ok(debris.every((particle) => particle.y === 500));
+});

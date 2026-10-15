@@ -71,13 +71,16 @@ button {
 .test-controls {
   position: absolute;
   z-index: 4;
-  top: max(156px, calc(env(safe-area-inset-top) + 12px));
-  left: 4%;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  left: 50%;
   display: flex;
   flex-wrap: wrap;
+  width: max-content;
   max-width: 92%;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  transform: translateX(-50%);
   pointer-events: none;
 }
 
@@ -371,6 +374,28 @@ button {
   color: #181100;
   border-color: #ffe08a;
   background: rgb(255 184 0 / 82%);
+}
+
+.control-button.ultimate {
+  width: clamp(52px, 14vw, 72px);
+  height: clamp(52px, 14vw, 72px);
+  color: rgb(221 196 238 / 46%);
+  border-color: rgb(154 95 205 / 38%);
+  background:
+    radial-gradient(circle, rgb(114 45 160 / 22%), rgb(21 10 29 / 76%) 72%);
+  box-shadow:
+    inset 0 0 18px rgb(189 104 255 / 8%),
+    0 0 0 rgb(168 77 227 / 0%);
+}
+
+.control-button.ultimate.ready {
+  color: #f5dcff;
+  border-color: rgb(211 130 255 / 88%);
+  background:
+    radial-gradient(circle, rgb(168 77 227 / 72%), rgb(55 19 78 / 86%) 72%);
+  box-shadow:
+    inset 0 0 20px rgb(242 211 255 / 20%),
+    0 0 18px rgb(168 77 227 / 36%);
 }
 
 .control-button.active,

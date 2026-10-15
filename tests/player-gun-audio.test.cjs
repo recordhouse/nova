@@ -96,7 +96,11 @@ test("combat sounds preload and use their intended audio segments", async () => 
     metalHitSound.decode,
     turretLaserSound.decode,
     monsterDie01Sound.decode,
+    monsterDie04Sound.decode,
     monsterFire02Sound.decode,
+    resurrectionSound.decode,
+    heartPickupSound.decode,
+    shieldSound.decode,
   ])`, scope);
   scope.playPlayerGunSound();
   scope.playPlayerGunImpactSound();
@@ -104,7 +108,11 @@ test("combat sounds preload and use their intended audio segments", async () => 
   scope.playMetalHitSound();
   scope.playTurretLaserSound();
   scope.playMonsterDie01Sound();
+  scope.playMonsterDie04Sound();
   scope.playMonsterFire02Sound();
+  scope.playResurrectionSound();
+  scope.playHeartPickupSound();
+  scope.playShieldSound();
   const impactOffset = vm.runInContext("PLAYER_GUN_IMPACT_SOUND_OFFSET", scope);
 
   assert.equal(contexts.length, 1);
@@ -115,6 +123,13 @@ test("combat sounds preload and use their intended audio segments", async () => 
   assert.equal(musicInstances[0].volume, 0.18);
   assert.equal(musicInstances[0].preload, "auto");
   assert.equal(musicInstances[0].playsInline, true);
+  assert.equal(vm.runInContext("stageMusicPaused", scope), false);
+  assert.equal(musicInstances[0].playCalls, 1,
+    "normal mode starts background music without the test-mode pause");
+  scope.playCurrentStageMusic();
+  assert.equal(musicInstances[0].playCalls, 1);
+  scope.setCurrentStageMusicPaused(false);
+  assert.equal(musicInstances[0].paused, false);
   assert.equal(musicInstances[0].playCalls, 1);
   scope.setCurrentStageMusicPaused(true);
   assert.equal(musicInstances[0].paused, true);
@@ -126,6 +141,10 @@ test("combat sounds preload and use their intended audio segments", async () => 
   assert.equal(musicInstances[0].playCalls, 2);
   assert.ok(fetchedSources.includes("./assets/sound/gun_impact.mp3?v=20260924-1"));
   assert.ok(fetchedSources.includes("./assets/sound/gun_hit.mp3?v=20260924-1"));
+  assert.ok(fetchedSources.includes("./assets/sound/heart.mp3"));
+  assert.ok(fetchedSources.includes("./assets/sound/monster_die_04.mp3"));
+  assert.ok(fetchedSources.includes("./assets/sound/resurrection.mp3"));
+  assert.ok(fetchedSources.includes("./assets/sound/shield.mp3"));
   assert.ok(impactOffset >= 0 && impactOffset < 0.339592);
   assert.deepEqual(starts, [
     [10, 0, 0.115],
@@ -135,14 +154,68 @@ test("combat sounds preload and use their intended audio segments", async () => 
     [10, 0],
     [10, 0],
     [10, 0],
+    [10, 0],
+    [10, 0],
+    [10, 0],
+    [10, 0],
   ]);
   assert.deepEqual(
-    outputGains.slice(0, 6).map((gain) => gain.value),
-    [0.3, 0.34, 0.28, 0.55, 0.38, 0.3],
+    outputGains.slice(0, 10).map((gain) => gain.value),
+    [0.3, 0.34, 0.28, 0.55, 0.38, 0.38, 0.3, 0.5, 0.44, 0.42],
   );
   assert.deepEqual(gainEvents, [
     ["set", 0.42, 10],
     ["set", 0.42, 10.09],
     ["ramp", 0, 10.115],
   ]);
+});
+
+test("only test mode starts with stage music paused", () => {
+  for (const [search, expectedPaused, expectedPlayCalls] of [
+    ["", false, 1],
+    ["?test=1", true, 0],
+  ]) {
+    const musicInstances = [];
+    class FakeAudio {
+      constructor(source) {
+        this.source = source;
+        this.paused = true;
+        this.playCalls = 0;
+        musicInstances.push(this);
+      }
+      play() {
+        this.paused = false;
+        this.playCalls += 1;
+        return Promise.resolve();
+      }
+      pause() { this.paused = true; }
+    }
+    class FakeImage { set src(value) { this.currentSrc = value; } }
+    const canvas = { getContext: () => ({ setTransform() {} }) };
+    const scope = {
+      document: {
+        querySelector: (selector) => selector === "#game" ? canvas : null,
+      },
+      window: {
+        location: { search },
+        innerWidth: 720,
+        innerHeight: 1280,
+        matchMedia: () => ({ matches: false }),
+        addEventListener() {},
+      },
+      Image: FakeImage,
+      Audio: FakeAudio,
+      fetch: async () => ({ ok: false }),
+    };
+    vm.createContext(scope);
+    for (const name of ["config", "assets"]) {
+      vm.runInContext(
+        fs.readFileSync(path.join(__dirname, "..", "js", `${name}.js`), "utf8"),
+        scope,
+        { filename: `${name}.js` },
+      );
+    }
+    assert.equal(vm.runInContext("stageMusicPaused", scope), expectedPaused);
+    assert.equal(musicInstances[0].playCalls, expectedPlayCalls);
+  }
 });

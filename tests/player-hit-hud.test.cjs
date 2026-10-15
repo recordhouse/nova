@@ -48,7 +48,7 @@ function createGame() {
 
 function read(scope, expression) { return vm.runInContext(expression, scope); }
 
-test("each real enemy or tower hit creates a large colored burst and stronger shake", () => {
+test("enemy, projectile, turret and boss hits keep the directional burst and stronger shake", () => {
   const accents = new Map([
     ["monster1", "#b0ff73"],
     ["monster2-fireball", "#ffae68"],
@@ -70,6 +70,22 @@ test("each real enemy or tower hit creates a large colored burst and stronger sh
     assert.equal(scope.takePlayerDamage(1, { kind, x: 300, y: 460 }), false);
     assert.equal(read(scope, "particles.length"), 33, "invincibility blocks duplicate bursts");
   }
+});
+
+test("player hit burst keeps its reach while using thin impact lines", () => {
+  const { scope, calls } = createGame();
+  scope.drawPlayerImpactFlash({
+    x: 400,
+    y: 460,
+    life: 0.3,
+    maxLife: 0.44,
+    color: "#ff83b9",
+  });
+  const lines = calls.filter((call) => call.operation === "fillRect");
+  assert.equal(lines.length, 32);
+  assert.ok(lines.every((line) => line.args[3] <= 2));
+  assert.ok(lines.some((line) => line.args[2] >= 30),
+    "the thinner hit lines keep their original reach");
 });
 
 test("monster fireballs and turret/monster3 lasers trigger the shared impact on contact", () => {
@@ -96,31 +112,131 @@ test("HUD numerals use a distinct nine-row pixel face for every digit", () => {
   assert.ok(calls.some((call) => call.operation === "fillRect" && call.color === "#a6cdd6"));
 });
 
-test("score, stage and ten hearts remain aligned without overlapping in both layouts", () => {
+test("five HUD regions keep score, hearts, map, empty ultimates and stage separated", () => {
   const { scope } = createGame();
   read(scope, `
     globalThis.hudLabels=[]; globalThis.hudNumbers=[]; globalThis.hudHearts=[];
+    globalThis.hudUltimates=[];
     drawPixelText=(text,x,y,scale,color)=>hudLabels.push({text,x,y,scale,color});
     drawHudNumerals=(text,x,y,scale)=>hudNumbers.push({text,x,y,scale});
     drawPixelHeart=(x,y,fill,scale)=>hudHearts.push({x,y,fill,scale});
+    drawPixelUltimateSlot=(x,y,filled,scale)=>hudUltimates.push({x,y,filled,scale});
     drawMinimap=()=>{};
-    player.maxHp=10; player.hp=9.5;
+    player.maxHp=3; player.hp=2.5;
   `);
   for (const [width, height] of [[540, 960], [720, 1280], [960, 540], [1280, 720]]) {
     read(scope, `WIDTH=${width}; HEIGHT=${height};
-      hudLabels.length=0; hudNumbers.length=0; hudHearts.length=0;`);
+      hudLabels.length=0; hudNumbers.length=0; hudHearts.length=0;
+      hudUltimates.length=0; player.ultimateCharges=0;`);
     scope.drawHud();
     const labels = read(scope, "hudLabels");
     const numbers = read(scope, "hudNumbers");
     const hearts = read(scope, "hudHearts");
-    assert.equal(hearts.length, 10);
+    const ultimates = read(scope, "hudUltimates");
+    const header = scope.hudHeaderLayout();
+    assert.equal(hearts.length, 3);
+    assert.equal(ultimates.length, 3);
+    assert.ok(ultimates.every((slot) => slot.filled === false));
     assert.equal(labels[0].color, labels[1].color);
-    assert.equal(labels[0].scale, numbers[0].scale);
+    assert.equal(labels[0].scale, 1);
+    assert.equal(numbers[0].scale, 7 / 9);
+    assert.ok(numbers.every((number) => number.scale === numbers[0].scale));
+    assert.equal(labels[0].scale * 7, numbers[0].scale * 9);
+    assert.ok(Math.abs(labels[0].y - numbers[0].y) <= 1);
+    assert.ok(Math.abs(labels[1].y - numbers[1].y) <= 1);
+    assert.ok(numbers[0].x > labels[0].x, "score stays on one line");
+    assert.ok(numbers[1].x > labels[1].x, "stage stays on one line");
+    assert.equal(read(scope, "HUD_INFO_TEXT_VISUAL_SCALE"), 1.6);
+    assert.ok(hearts.every((heart) => heart.scale === hearts[0].scale));
+    assert.ok(hearts[0].scale > 1.5 && hearts[0].scale <= 3);
+    assert.ok(ultimates.every((slot) => slot.scale === ultimates[0].scale));
+    assert.ok(ultimates[0].scale > 1.5 && ultimates[0].scale <= 3);
     const scoreEnd = numbers[0].x + scope.hudNumeralWidth(numbers[0].text, numbers[0].scale);
     const stageEnd = numbers[1].x + scope.hudNumeralWidth(numbers[1].text, numbers[1].scale);
-    assert.ok(scoreEnd + 5 <= labels[1].x, `${width}px score/stage overlap`);
-    assert.ok(stageEnd + 5 <= Math.min(...hearts.map((heart) => heart.x)),
-      `${width}px stage/hearts overlap`);
-    assert.equal(new Set(hearts.map((heart) => heart.y)).size, width < height ? 2 : 1);
+    assert.ok(scoreEnd <= header.score.x + header.score.width,
+      `${width}px score leaves its region`);
+    assert.ok(labels[0].x >= header.score.x, `${width}px score leaves its region`);
+    assert.ok(header.score.x >= width / 2,
+      `${width}px score is not in the right-side group`);
+    assert.equal(header.score.y, 14);
+    assert.equal(header.map.y, 7);
+    assert.ok(labels[1].x >= header.stage.x &&
+      stageEnd <= header.stage.x + header.stage.width,
+    `${width}px stage leaves its region`);
+    assert.ok(header.stage.x < header.score.x, `${width}px stage and score overlap`);
+    assert.ok(header.hearts.x < header.ultimate.x &&
+      header.ultimate.x + header.ultimate.width <= width / 2,
+    `${width}px hearts and ultimates are not grouped on the left`);
+    assert.ok(header.hearts.width <= 96 && header.ultimate.width <= 96,
+      `${width}px side icons stay in the inner safe regions`);
+    const layoutTolerance = 1e-9;
+    assert.ok(hearts.every((heart) =>
+      heart.x >= header.hearts.x - layoutTolerance &&
+      heart.x + 7 * heart.scale <=
+        header.hearts.x + header.hearts.width + layoutTolerance));
+    assert.ok(ultimates.every((slot) =>
+      slot.x >= header.ultimate.x - layoutTolerance &&
+      slot.x + 7 * slot.scale <=
+        header.ultimate.x + header.ultimate.width + layoutTolerance));
+    const rowCenterY = header.infoY + header.infoHeight / 2;
+    assert.ok(hearts.every((heart) =>
+      Math.abs(heart.y + 3 * heart.scale - rowCenterY) < 1e-9));
+    assert.ok(ultimates.every((slot) =>
+      Math.abs(slot.y + 3.5 * slot.scale - rowCenterY) < 1e-9));
   }
+});
+
+test("score fills the top meter and converts every fifteen hundred points into an ultimate", () => {
+  const { scope } = createGame();
+  for (const [width, height] of [[540, 960], [960, 540], [1280, 720]]) {
+    read(scope, `WIDTH=${width}; HEIGHT=${height}`);
+    const layout = scope.ultimateMeterLayout();
+    assert.equal(layout.x, 0);
+    assert.equal(layout.y, 0);
+    assert.equal(layout.width, width);
+    assert.equal(layout.height, 6);
+    assert.equal(layout.inset, 1);
+  }
+  assert.equal(read(scope, "ULTIMATE_SCORE_PER_CHARGE"), 1500);
+  scope.addPlayerScore(1400);
+  assert.equal(read(scope, "player.ultimateCharges"), 0);
+  assert.equal(read(scope, "player.ultimateMeterScore"), 1400);
+  assert.ok(Math.abs(read(scope, "ultimateMeterFillRatio()") - 14 / 15) < 1e-9);
+
+  scope.addPlayerScore(200);
+  assert.equal(read(scope, "player.ultimateCharges"), 1);
+  assert.equal(read(scope, "player.ultimateMeterScore"), 100);
+  assert.ok(Math.abs(read(scope, "ultimateMeterFillRatio()") - 1 / 15) < 1e-9);
+
+  scope.addPlayerScore(4400);
+  assert.equal(read(scope, "player.ultimateCharges"), 3);
+  assert.equal(read(scope, "player.ultimateMeterScore"), 0);
+  assert.equal(read(scope, "ultimateMeterFillRatio()"), 1);
+});
+
+test("gaining score changes only the numerals in discrete digital steps", () => {
+  const { scope, calls } = createGame();
+  read(scope, `
+    globalThis.hudNumbers=[];
+    drawHudNumerals=(text,x,y,scale)=>hudNumbers.push({text,x,y,scale});
+    drawMinimap=()=>{};
+    gameTime=2;
+  `);
+  scope.addPlayerScore(150);
+  assert.equal(read(scope, "player.score"), 150);
+  assert.equal(read(scope, "player.scoreGainAmount"), 150);
+  read(scope, "gameTime+=0.2");
+  calls.length = 0;
+  scope.drawHud();
+  const numbers = read(scope, "hudNumbers");
+  assert.equal(numbers.length, 2);
+  assert.ok(Number(numbers[0].text) > 0 && Number(numbers[0].text) < 150);
+  assert.equal(calls.filter((call) => call.operation === "rotate").length, 0);
+
+  read(scope, `gameTime+=HUD_SCORE_DIGITAL_DURATION; hudNumbers.length=0;`);
+  calls.length = 0;
+  scope.drawHud();
+  assert.equal(read(scope, "hudNumbers.length"), 2);
+  assert.equal(read(scope, "hudNumbers[0].text"), "150");
+  assert.equal(calls.filter((call) => call.operation === "rotate").length, 0);
 });

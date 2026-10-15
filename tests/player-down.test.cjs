@@ -69,6 +69,45 @@ function recover(scope) {
   scope.updatePlayer(2);
 }
 
+test("a successful revival plays resurrection.mp3 exactly once", () => {
+  const { scope } = createGame();
+  read(scope, `
+    globalThis.resurrectionSoundCalls=0;
+    playResurrectionSound=()=>{resurrectionSoundCalls+=1};
+  `);
+  scope.takePlayerDamage(1);
+  recover(scope);
+  assert.equal(read(scope, "resurrectionSoundCalls"), 1);
+  scope.updatePlayer(1);
+  assert.equal(read(scope, "resurrectionSoundCalls"), 1);
+
+  read(scope, `
+    resetPlayerDownState(); player.invincible=0; player.hp=1; gameOver=false;
+  `);
+  scope.takePlayerDamage(1);
+  recover(scope);
+  assert.equal(read(scope, "resurrectionSoundCalls"), 1,
+    "defeat must not play the revival sound");
+});
+
+test("taking damage plays the down cut-in once and recovery stops it", () => {
+  const { scope } = createGame();
+  read(scope, `
+    globalThis.downVideoPlayCalls=0;
+    globalThis.downVideoStopCalls=0;
+    playPlayerDownVideo=()=>{downVideoPlayCalls+=1};
+    stopPlayerDownVideo=()=>{downVideoStopCalls+=1};
+  `);
+
+  scope.takePlayerDamage(1);
+  assert.equal(read(scope, "downVideoPlayCalls"), 1);
+  scope.updatePlayer(downDuration(scope));
+  scope.updatePlayer(2);
+  assert.equal(read(scope, "downVideoPlayCalls"), 1,
+    "the hold pose must not restart the cut-in");
+  assert.equal(read(scope, "downVideoStopCalls"), 1);
+});
+
 test("down.png is loaded as five correctly bounded 400x500 frames", () => {
   const { scope } = createGame();
   const png = fs.readFileSync(path.join(__dirname, "..", "assets/images/main/stage/down.png"));
@@ -79,6 +118,23 @@ test("down.png is loaded as five correctly bounded 400x500 frames", () => {
   assert.ok(sprite.image.source.includes("/down.png?"));
   assert.equal(sprite.fps, 8);
   assert.equal(downDuration(scope), 0.625);
+  assert.deepEqual(Array.from(sprite.frames, (frame) => frame.x), [0, 402, 804, 1206, 1608]);
+  assert.ok(sprite.frames.every((frame) => frame.x + frame.width <= 2008 && frame.height === 500));
+});
+
+test("blast-run.png is loaded as five correctly bounded running-fire frames", () => {
+  const { scope } = createGame();
+  const png = fs.readFileSync(path.join(
+    __dirname,
+    "..",
+    "assets/images/main/stage/blast-run.png",
+  ));
+  assert.equal(png.readUInt32BE(16), 2008);
+  assert.equal(png.readUInt32BE(20), 500);
+  const sprite = read(scope, "playerSprites.blastRun");
+  assert.equal(sprite.loaded, true);
+  assert.ok(sprite.image.source.includes("/blast-run.png?"));
+  assert.equal(sprite.fps, 9);
   assert.deepEqual(Array.from(sprite.frames, (frame) => frame.x), [0, 402, 804, 1206, 1608]);
   assert.ok(sprite.frames.every((frame) => frame.x + frame.width <= 2008 && frame.height === 500));
 });
@@ -174,6 +230,48 @@ test("the running sprite uses its speed-scaled animation clock", () => {
   assert.equal(body(calls).args[1], 402, "the integrated run clock selects frame two");
 });
 
+test("pressing fire while running switches immediately to standing fire", () => {
+  const { scope, calls } = createGame();
+  const startX = read(scope, "player.x");
+  read(scope, "controls.right=true");
+  for (let frame = 0; frame < 30; frame += 1) scope.updatePlayer(1 / 60);
+
+  assert.equal(read(scope, "PLAYER_RUNNING_FIRE_ENABLED"), false);
+  assert.ok(read(scope, "player.x") > startX + 130);
+  assert.ok(read(scope, "player.runSpeed") > read(scope, "player.speed"));
+  assert.ok(read(scope, "player.runAnimationTime") > 0);
+  const fireX = read(scope, "player.x");
+  read(scope, "controls.fire=true");
+  scope.updatePlayer(1 / 60);
+  assert.equal(read(scope, "player.x"), fireX);
+  assert.equal(read(scope, "player.vx"), 0);
+  assert.equal(read(scope, "player.runSpeed"), read(scope, "player.speed"));
+  assert.equal(read(scope, "playerIsRunningOnGround()"), false);
+  assert.equal(read(scope, "bullets.length"), 1);
+  assert.equal(read(scope, "player.fireEnergy"),
+    read(scope, "PLAYER_FIRE_ENERGY_MAX - PLAYER_FIRE_ENERGY_PER_SHOT"));
+
+  calls.length = 0;
+  scope.drawPlayerSprite(read(scope, "player.x + player.width / 2"));
+  assert.ok(body(calls).args[0].source.includes("/blast.png?"));
+});
+
+test("pressing high fire while running stops and changes to high attack", () => {
+  const { scope, calls } = createGame();
+  read(scope, "controls.right=true");
+  for (let frame = 0; frame < 20; frame += 1) scope.updatePlayer(1 / 60);
+  read(scope, "controls.up=true; controls.fire=true");
+  scope.updatePlayer(1 / 60);
+
+  assert.equal(read(scope, "playerIsRunningOnGround()"), false);
+  assert.equal(read(scope, "playerIsAimingHigh()"), true);
+  assert.equal(read(scope, "bullets.length"), 1);
+  assert.ok(read(scope, "bullets[0].vy") < 0);
+  calls.length = 0;
+  scope.drawPlayerSprite(read(scope, "player.x + player.width / 2"));
+  assert.ok(body(calls).args[0].source.includes("/blast-high.png?"));
+});
+
 test("the projectile origin follows the lowered firing artwork", () => {
   const { scope } = createGame();
   read(scope, "controls.fire=true; player.fireBarrel=0");
@@ -186,6 +284,23 @@ test("the projectile origin follows the lowered firing artwork", () => {
   assert.equal(scope.shootPlayer(), true);
   const muzzleY = read(scope, "bullets[0].y");
   assert.equal(muzzleY - oldMuzzleY, read(scope, "PLAYER_FIRE_SPRITE_Y_OFFSET"));
+});
+
+test("direct fire is blocked while ground-running but remains available in the air", () => {
+  const { scope } = createGame();
+  read(scope, `
+    controls.right=true;
+    controls.fire=true;
+    player.vx=player.speed;
+    player.fireBarrel=0;
+  `);
+  assert.equal(scope.shootPlayer(), false);
+  assert.equal(read(scope, "bullets.length"), 0);
+  assert.equal(read(scope, "player.fireEnergy"), read(scope, "PLAYER_FIRE_ENERGY_MAX"));
+
+  read(scope, "player.grounded=false");
+  assert.equal(scope.shootPlayer(), true);
+  assert.equal(read(scope, "bullets.length"), 1);
 });
 
 test("damage starts a protected down animation and cancels crouching, movement and queued fire", () => {
@@ -310,6 +425,9 @@ test("movement, jumping and shooting are locked while down, then return after re
   read(scope, "controls.right=true");
   scope.updatePlayer(1 / 60);
   assert.ok(read(scope, "player.x") > x);
+  read(scope, "controls.right=false");
+  for (let i = 0; i < 30; i += 1) scope.updatePlayer(1 / 60);
+  assert.equal(read(scope, "player.vx"), 0);
   read(scope, "controls.fire=true");
   scope.updatePlayer(1 / 60);
   assert.equal(read(scope, "bullets.length"), 1);
@@ -346,6 +464,127 @@ test("monster1 jump contact and boss contact use the common damage sequence", ()
     assert.equal(read(scope, "player.hp"), 2);
     assert.equal(read(scope, "player.downPhase"), "fall");
   }
+});
+
+test("every monster body and turret contact removes exactly one heart", () => {
+  for (const kind of ["monster1", "monster2", "monster3", "monster4"]) {
+    const { scope } = createGame();
+    read(scope, `
+      globalThis.contactEnemy=addEnemy(fixtureRoad,player.x,'${kind}');
+      contactEnemy.x=player.x;
+      contactEnemy.y=player.y;
+      contactEnemy.hoverBaseY=player.y;
+      contactEnemy.hoverAnchorX=player.x;
+      contactEnemy.hoverAmplitude=0;
+    `);
+    scope.updateEnemies(0);
+    assert.equal(read(scope, "player.hp"), 2, `${kind} contact damage`);
+    assert.equal(read(scope, "player.downPhase"), "fall");
+    assert.equal(scope.contactEnemy.contactDamageTimer,
+      read(scope, "HOSTILE_CONTACT_COOLDOWN"));
+  }
+
+  const { scope } = createGame();
+  read(scope, "addTurret(fixtureRoad,player.x); globalThis.contactTurret=turrets[0]");
+  scope.updateTurrets(0);
+  assert.equal(read(scope, "player.hp"), 2, "turret contact damage");
+  assert.equal(read(scope, "player.downPhase"), "fall");
+  assert.equal(scope.contactTurret.contactDamageTimer,
+    read(scope, "HOSTILE_CONTACT_COOLDOWN"));
+});
+
+test("a shielded ground rush damages each monster type once and knocks it backward", () => {
+  for (const kind of ["monster1", "monster2", "monster3", "monster4"]) {
+    const { scope, calls } = createGame();
+    read(scope, `
+      player.vx=PLAYER_RUN_MAX_SPEED;
+      player.runSpeed=PLAYER_RUN_MAX_SPEED;
+      player.accelerationShieldStage=2;
+      player.accelerationShieldCharges=2;
+      player.accelerationShieldVisual=2;
+      globalThis.rammedEnemy=addEnemy(
+        fixtureRoad,
+        player.x+player.width-12,
+        '${kind}'
+      );
+      rammedEnemy.x=player.x+player.width-12;
+      if (rammedEnemy.kind==='monster3') {
+        rammedEnemy.y=player.y;
+        rammedEnemy.hoverBaseY=player.y;
+        rammedEnemy.hoverAnchorX=rammedEnemy.x;
+        rammedEnemy.hoverAmplitude=0;
+      }
+    `);
+
+    scope.updateEnemies(0);
+    assert.equal(read(scope, "player.hp"), 3, `${kind} rush keeps player health`);
+    assert.equal(read(scope, "player.downPhase"), "");
+    assert.equal(read(scope, "player.accelerationShieldCharges"), 1);
+    assert.equal(scope.rammedEnemy.hp, scope.rammedEnemy.maxHp - 1, `${kind} takes one damage`);
+    assert.equal(scope.rammedEnemy.hitDirection, 1);
+    assert.equal(
+      scope.rammedEnemy.hitKnockbackVelocity,
+      read(scope, "PLAYER_SHIELD_RAM_KNOCKBACK_SPEED"),
+    );
+    assert.ok(scope.rammedEnemy.hitTimer >= read(scope, "PLAYER_SHIELD_RAM_KNOCKBACK_DURATION"));
+    assert.equal(scope.rammedEnemy.contactDamageTimer,
+      read(scope, "HOSTILE_CONTACT_COOLDOWN"));
+    assert.ok(read(scope, "particles.some((particle)=>particle.shieldBreakFlash)"));
+    assert.equal(
+      read(scope, "particles.filter((particle)=>particle.shieldRamImpact).length"),
+      1,
+    );
+    const ramImpact = read(scope, "particles.find((particle)=>particle.shieldRamImpact)");
+    assert.equal(ramImpact.color, "#b86cff");
+    assert.equal(ramImpact.direction, 1);
+    calls.length = 0;
+    scope.drawPlayerShieldRamImpact(ramImpact);
+    assert.equal(calls.filter((call) => call.operation === "ellipse").length, 3);
+    assert.equal(calls.filter((call) => call.operation === "stroke").length, 3);
+    assert.equal(calls.filter((call) => call.operation === "rotate").length, 8);
+
+    const hpAfterRam = scope.rammedEnemy.hp;
+    scope.updateEnemies(0.01);
+    assert.equal(scope.rammedEnemy.hp, hpAfterRam, "contact cooldown prevents repeated ram damage");
+  }
+});
+
+test("shield contact while moving away blocks damage without becoming a ram attack", () => {
+  const { scope } = createGame();
+  read(scope, `
+    player.vx=-PLAYER_RUN_MAX_SPEED;
+    player.runSpeed=PLAYER_RUN_MAX_SPEED;
+    player.accelerationShieldStage=1;
+    player.accelerationShieldCharges=1;
+    player.accelerationShieldVisual=1;
+    globalThis.behindEnemy=addEnemy(
+      fixtureRoad,
+      player.x+player.width-12,
+      'monster2'
+    );
+    behindEnemy.x=player.x+player.width-12;
+  `);
+  scope.updateEnemies(0);
+  assert.equal(read(scope, "player.hp"), 3);
+  assert.equal(read(scope, "player.accelerationShieldCharges"), 0);
+  assert.equal(scope.behindEnemy.hp, scope.behindEnemy.maxHp);
+  assert.equal(scope.behindEnemy.hitKnockbackVelocity, 0);
+});
+
+test("body contact cooldown prevents frame-by-frame repeated damage", () => {
+  const { scope } = createGame();
+  read(scope, `
+    globalThis.contactEnemy=addEnemy(fixtureRoad,player.x,'monster2');
+    contactEnemy.x=player.x; contactEnemy.y=player.y;
+  `);
+  scope.updateEnemies(0);
+  assert.equal(read(scope, "player.hp"), 2);
+
+  read(scope, "resetPlayerDownState(); player.invincible=0; player.hp=3");
+  scope.updateEnemies(0.1);
+  assert.equal(read(scope, "player.hp"), 3);
+  scope.updateEnemies(read(scope, "HOSTILE_CONTACT_COOLDOWN"));
+  assert.equal(read(scope, "player.hp"), 2);
 });
 
 test("recovery immunity lasts three seconds without restoring health", () => {
@@ -519,7 +758,7 @@ test("a small set of revival orbs spirals outward and fades gradually", () => {
   recover(scope);
   const orbs = read(scope, "particles.filter(p=>p.revivalOrb)");
   assert.equal(orbs.length, 8);
-  assert.ok(orbs.every((orb) => orb.size >= 18 && orb.size <= 23 && orb.maxLife >= 0.92));
+  assert.ok(orbs.every((orb) => orb.size >= 14 && orb.size <= 17 && orb.maxLife >= 0.92));
   assert.ok(orbs.every((orb) => orb.color === "#d996ff" && orb.coreColor === "#f6ddff"));
   assert.ok(orbs.every((orb) => orb.angularVelocity > 5 && orb.radialVelocity > 90));
   const initialX = orbs[0].x;
@@ -531,7 +770,7 @@ test("a small set of revival orbs spirals outward and fades gradually", () => {
   assert.equal(circles.length, 8);
   assert.equal(read(scope, "particles.length"), 8, "rendering does not allocate more particles");
   const initialAlpha = calls.find((call) => call.operation === "fill").alpha;
-  assert.ok(initialAlpha >= 0.92, "the enlarged orbs start nearly opaque");
+  assert.ok(initialAlpha >= 0.94, "the compact orbs start crisp and nearly opaque");
   calls.length = 0;
   scope.updateParticles(0.4);
   scope.drawParticles();

@@ -98,6 +98,23 @@ test("normal mode hides MAP tools and cannot open or pause for the full map", ()
   assert.ok(vm.runInContext("gameTime", scope) > 0);
 });
 
+test("the active particle budget preserves critical effects during effect spikes", () => {
+  const { scope } = createGame(false);
+  vm.runInContext(`
+    particles.length=0;
+    particles.push({x:0,y:0,vx:0,vy:0,life:1,maxLife:1,
+      gravity:0,impactFlash:true,color:'#fff',size:1});
+    for(let index=0;index<700;index++) {
+      particles.push({x:index,y:0,vx:0,vy:0,life:1,maxLife:1,
+        gravity:0,color:'#fff',size:1});
+    }
+    updateParticles(0);
+  `, scope);
+  assert.ok(vm.runInContext("particles.length <= ACTIVE_PARTICLE_LIMIT", scope));
+  assert.equal(vm.runInContext(
+    "particles.some((particle)=>particle.impactFlash)", scope), true);
+});
+
 for (const [landscape, shortSide] of [[false, 540], [false, 720], [true, 540], [true, 720]]) {
   test(`full ${shortSide}px ${landscape ? "landscape" : "portrait"} map fits every road and shows player and boss gate`, () => {
     const { scope, strokes, clips, fills } = createGame(true, landscape);
@@ -146,6 +163,7 @@ test("full map skips world effects and is not hidden by the game-over overlay", 
 test("closed map keeps the small, cropped minimap", () => {
   const { scope, strokes, strokeRects, clips, gradients } = createGame();
   assert.equal(vm.runInContext("MINIMAP_LOCAL_WORLD_RATIO", scope), 0.33);
+  assert.equal(vm.runInContext("MINIMAP_VERTICAL_EXAGGERATION_MAX", scope), 2.5);
   scope.drawMinimap();
   const [x, y, width, height] = clips.at(-1);
   assert.ok(width < 282 && height <= 148);

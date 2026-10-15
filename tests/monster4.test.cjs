@@ -28,7 +28,11 @@ function createMonsterGame() {
       if (key in target) return target[key];
       if (key === "save") return () => stack.push({ ...target });
       if (key === "restore") return () => Object.assign(target, stack.pop());
-      return (...args) => calls.push({ operation: key, args });
+      return (...args) => calls.push({
+        operation: key,
+        args,
+        filter: target.filter,
+      });
     },
   });
   const canvas = { getContext: () => ctx, addEventListener() {} };
@@ -157,6 +161,106 @@ test("monster4 jumps farther than monster1 and its airborne body damages the pla
   scope.updateEnemies(0);
   assert.equal(vm.runInContext("player.hp", scope), 2);
   assert.equal(monster4.jumpHit, true);
+});
+
+test("monster4 turns red, charges, then fires one short-range crescent", () => {
+  const { scope, calls } = createMonsterGame();
+  const monster4 = scope.monster4;
+  vm.runInContext(`
+    monster1.alive=false;
+    cameraX=600;
+    monster4.state='chase'; monster4.attackTimer=0;
+    player.hp=3; player.invincible=0; player.downPhase='';
+    player.accelerationShieldCharges=0;
+    enemyBullets.length=0;
+    globalThis.attackVideoRequests=[];
+    playEnemyAttackVideo=(kind,now,source)=>attackVideoRequests.push({kind,now,source});
+  `, scope);
+
+  scope.updateEnemies(0);
+  assert.equal(monster4.state, "chase", "the spear must not charge from long range");
+  assert.equal(monster4.spearAttackRange, 180);
+  vm.runInContext("player.x=880", scope);
+  scope.updateEnemies(0);
+  assert.equal(monster4.state, "spear-charge");
+  assert.equal(vm.runInContext("attackVideoRequests.length", scope), 1);
+  assert.equal(vm.runInContext("attackVideoRequests[0].kind", scope), "monster4");
+  assert.equal(vm.runInContext("attackVideoRequests[0].source", scope), monster4);
+  assert.equal(vm.runInContext("enemyBullets.length", scope), 0);
+
+  monster4.stateTimer = monster4.spearChargeDuration / 2;
+  calls.length = 0;
+  scope.drawEnemy(monster4);
+  const chargedSprite = calls.find((call) => call.operation === "drawImage");
+  assert.match(chargedSprite.filter, /sepia\(1\).*hue-rotate/);
+
+  scope.updateEnemies(monster4.spearChargeDuration / 2 - 0.01);
+  assert.equal(vm.runInContext("enemyBullets.length", scope), 0);
+  scope.updateEnemies(0.02);
+  const spear = vm.runInContext("enemyBullets[0]", scope);
+  assert.equal(monster4.state, "spear-recover");
+  assert.equal(spear.kind, "monster4-crescent");
+  assert.equal(spear.maxRicochets, 0);
+  assert.equal(spear.radius, 13);
+  assert.equal(spear.remainingRange, 220);
+  assert.equal(spear.initialRange, 220);
+  assert.equal(Math.round(Math.hypot(spear.vx, spear.vy)), monster4.spearSpeed);
+  assert.equal(scope.sourceIsEnemyAttack(spear), true);
+  calls.length = 0;
+  scope.drawProjectiles();
+  assert.equal(calls.filter((call) => call.operation === "arc").length, 2,
+    "the projectile uses an outer arc and an offset cutout arc");
+  assert.ok(calls.some((call) =>
+    call.operation === "fill" && call.args[0] === "evenodd"),
+  "the offset inner disk is cut out to form a real crescent silhouette");
+  assert.ok(calls.filter((call) => call.operation === "fillRect").length >= 6,
+    "the crescent keeps bright pixel highlights and a short broken trail");
+
+  for (let frame = 0; frame < 90 && vm.runInContext("player.hp", scope) === 3; frame += 1) {
+    scope.updateBullets(1 / 60);
+  }
+  assert.equal(vm.runInContext("player.hp", scope), 2);
+  assert.equal(vm.runInContext("enemyBullets.length", scope), 0);
+});
+
+test("monster1 requests its attack video when a visible jump windup starts", () => {
+  const { scope } = createMonsterGame();
+  const monster1 = scope.monster1;
+  vm.runInContext(`
+    monster4.alive=false;
+    player.x=330; player.y=600-player.height;
+    monster1.state='chase'; monster1.jumpCooldown=0;
+    globalThis.attackVideoRequests=[];
+    playEnemyAttackVideo=(kind,now,source)=>attackVideoRequests.push({kind,now,source});
+  `, scope);
+
+  scope.updateEnemies(0);
+
+  assert.equal(monster1.state, "windup");
+  assert.equal(vm.runInContext("attackVideoRequests.length", scope), 1);
+  assert.equal(vm.runInContext("attackVideoRequests[0].kind", scope), "monster1");
+  assert.equal(vm.runInContext("attackVideoRequests[0].source", scope), monster1);
+});
+
+test("visible monster types request first-encounter introductions", () => {
+  const { scope } = createMonsterGame();
+  vm.runInContext(`
+    player.x=1200; cameraX=0; cameraY=0;
+    globalThis.introductionRequests=[];
+    queueEnemyIntroductionVideo=(kind,distance)=>introductionRequests.push({kind,distance});
+  `, scope);
+
+  scope.updateEnemies(0);
+
+  const kinds = vm.runInContext(
+    "introductionRequests.map(request=>request.kind).sort().join(',')",
+    scope,
+  );
+  assert.equal(kinds, "monster1,monster4");
+  assert.ok(vm.runInContext(
+    "introductionRequests.every(request=>Number.isFinite(request.distance))",
+    scope,
+  ));
 });
 
 test("natural ground groups mix monster4 at one third of monster1's frequency", () => {

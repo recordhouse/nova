@@ -10,9 +10,12 @@ function createGame() {
   const rectangles = [];
   const strokes = [];
   const connectors = [];
+  const soundCalls = [];
   let line = [];
   const ctx = {
     setTransform() {}, save() {}, restore() {},
+    clip() {},
+    createLinearGradient() { return { addColorStop() {} }; },
     beginPath() { line = []; },
     moveTo(x, y) { line.push({ x, y }); },
     lineTo(x, y) { line.push({ x, y }); },
@@ -29,6 +32,7 @@ function createGame() {
     document: { querySelector: (selector) => selector === "#game" ? canvas : null },
     window: { location: { search: "" }, innerWidth: 720, innerHeight: 1280,
       matchMedia: () => ({ matches: false }) },
+    playShieldSound: () => soundCalls.push("shield"),
   };
   vm.createContext(scope);
   for (const name of ["config", "state", "world", "combat", "player", "renderer"]) {
@@ -40,7 +44,7 @@ function createGame() {
     globalThis.fixtureRoad = {id:1,kind:'flat',start:0,end:600,y:200,features:[fixtureFeature]};
     platforms.push(fixtureRoad);
   `, scope);
-  return { scope, rectangles, strokes, connectors };
+  return { scope, rectangles, strokes, connectors, soundCalls };
 }
 
 function touchCable(scope) {
@@ -105,6 +109,40 @@ test("contact costs half a heart, grants invincibility, and the last half-heart 
   assert.equal(vm.runInContext("gameOver", scope), true);
   vm.runInContext("updateElectricWires()", scope);
   assert.equal(vm.runInContext("player.hp", scope), 0);
+});
+
+test("wire contact spends only one shield stage per valid hit before damaging health", () => {
+  const { scope, soundCalls } = createGame();
+  touchCable(scope);
+  vm.runInContext(`
+    player.accelerationShieldStage=3;
+    player.accelerationShieldCharges=3;
+    player.accelerationShieldVisual=3;
+  `, scope);
+
+  scope.updateElectricWires();
+  assert.equal(vm.runInContext("player.hp", scope), 3);
+  assert.equal(vm.runInContext("player.accelerationShieldCharges", scope), 2);
+  assert.equal(vm.runInContext("player.downPhase", scope), "");
+  assert.equal(soundCalls.length, 1);
+
+  scope.updateElectricWires();
+  assert.equal(vm.runInContext("player.accelerationShieldCharges", scope), 2,
+    "one continuous contact cannot spend several stages in the same hit window");
+  assert.equal(soundCalls.length, 1);
+
+  for (const remaining of [1, 0]) {
+    vm.runInContext("player.accelerationShieldBlockTimer=0", scope);
+    scope.updateElectricWires();
+    assert.equal(vm.runInContext("player.hp", scope), 3);
+    assert.equal(vm.runInContext("player.accelerationShieldCharges", scope), remaining);
+  }
+  assert.equal(soundCalls.length, 3);
+
+  vm.runInContext("player.accelerationShieldBlockTimer=0", scope);
+  scope.updateElectricWires();
+  assert.equal(vm.runInContext("player.hp", scope), 2.5);
+  assert.equal(vm.runInContext("player.downPhase", scope), "fall");
 });
 
 test("walking above a cable or touching a non-wire decoration is safe", () => {

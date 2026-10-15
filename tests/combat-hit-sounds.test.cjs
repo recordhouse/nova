@@ -18,6 +18,8 @@ function createGame() {
     playGunHitSound: () => soundCalls.push("gun_hit"),
     playMetalHitSound: () => soundCalls.push("metal"),
     playMonsterDie01Sound: () => soundCalls.push("monster_die_01"),
+    playMonsterDie04Sound: () => soundCalls.push("monster_die_04"),
+    playShieldSound: () => soundCalls.push("shield"),
   };
   vm.createContext(scope);
   for (const name of ["config", "state", "world", "combat", "enemies"]) {
@@ -76,4 +78,40 @@ test("monster death sound plays only for lethal hits on organic monsters", () =>
     "metal",
     "gun_hit", "monster_die_01",
   ]);
+});
+
+test("crimson monster1 explosions use monster_die_04 once per death, including chains", () => {
+  const { scope, soundCalls } = createGame();
+  vm.runInContext(`
+    globalThis.first=addEnemy(fixtureRoad,200,'monster1',{crimsonVariant:true});
+    globalThis.second=addEnemy(fixtureRoad,400,'monster1',{crimsonVariant:true});
+    first.hp=1; second.hp=1;
+  `, scope);
+
+  assert.equal(scope.resolveEnemyDeath(scope.first, true), true);
+  assert.equal(scope.first.alive, false);
+  assert.equal(scope.second.alive, false);
+  assert.deepEqual(soundCalls, ["monster_die_04", "monster_die_04"]);
+  assert.equal(scope.resolveEnemyDeath(scope.first, true), false);
+  assert.deepEqual(soundCalls, ["monster_die_04", "monster_die_04"]);
+});
+
+test("each broken shield stage uses the dedicated sound, independent of ram damage", () => {
+  const { scope, soundCalls } = createGame();
+  vm.runInContext(`
+    player.accelerationShieldStage=2;
+    player.accelerationShieldCharges=2;
+    player.accelerationShieldVisual=2;
+    globalThis.organic=addEnemy(fixtureRoad,200,'monster1');
+    globalThis.metallic=addEnemy(fixtureRoad,500,'monster3');
+  `, scope);
+
+  assert.equal(scope.takePlayerDamage(1, { kind: "monster1", x: 50, y: 500 }), true);
+  vm.runInContext("player.accelerationShieldBlockTimer=0", scope);
+  assert.equal(scope.takePlayerDamage(1, { kind: "monster3-laser", x: 50, y: 500 }), true);
+  assert.deepEqual(soundCalls, ["shield", "shield"]);
+
+  assert.equal(scope.damageEnemyWithPlayerShieldRam(scope.organic, 1), true);
+  assert.equal(scope.damageEnemyWithPlayerShieldRam(scope.metallic, -1), true);
+  assert.deepEqual(soundCalls, ["shield", "shield"]);
 });

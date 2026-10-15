@@ -9,6 +9,7 @@ const controls = {
   down: false,
   jump: false,
   fire: false,
+  ultimate: false,
 };
 const keyboardControls = { ...controls };
 const joystickControls = {
@@ -39,6 +40,7 @@ const player = {
   accelerationShieldCharges: 0,
   accelerationShieldVisual: 0,
   accelerationShieldHitTimer: 0,
+  accelerationShieldHitDirection: 0,
   accelerationShieldBlockTimer: 0,
   reversalDirection: 0,
   reversalSparkTimer: 0,
@@ -54,13 +56,21 @@ const player = {
   fireBarrel: 0,
   fireImpactGroup: null,
   fireWasActive: false,
+  fireVideoActive: false,
+  runVideoActive: false,
+  standVideoActive: false,
   fireEnergy: PLAYER_FIRE_ENERGY_MAX,
   invincible: 0,
   downPhase: "",
   downTime: 0,
   hp: 3,
   maxHp: 3,
+  ultimateCharges: 0,
+  ultimateMeterScore: 0,
+  ultimateChargeStartedAt: -Infinity,
   score: 0,
+  scoreGainAmount: 0,
+  scoreGainStartedAt: -Infinity,
   crouching: false,
   platform: null,
   jumpLatch: false,
@@ -89,6 +99,7 @@ function resetPlayerDownState() {
   player.accelerationShieldCharges = 0;
   player.accelerationShieldVisual = 0;
   player.accelerationShieldHitTimer = 0;
+  player.accelerationShieldHitDirection = 0;
   player.accelerationShieldBlockTimer = 0;
 }
 

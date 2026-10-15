@@ -5,7 +5,13 @@
 function particleGroundCollision(particle, previousX, previousY) {
   const bottomOffset = particle.debris ? particle.debrisHeight / 2 : 0;
   let nearest = null;
-  const candidates = typeof platforms === "undefined" ? platformsAt(particle.x) : platforms;
+  const preferredPlatform = particle.surfacePlatform;
+  const candidates = preferredPlatform &&
+      particle.x >= preferredPlatform.start && particle.x < preferredPlatform.end
+    ? [preferredPlatform]
+    : typeof platformsAt === "function"
+      ? platformsAt(particle.x)
+      : platforms;
   for (const platform of candidates) {
     if (particle.x < platform.start || particle.x >= platform.end) continue;
     const surfaceY = platformSurfaceY(platform, particle.x);
@@ -19,9 +25,49 @@ function particleGroundCollision(particle, previousX, previousY) {
   return nearest;
 }
 
+function particleHasGameplayPriority(particle) {
+  return Boolean(
+    particle.debris || particle.revivalOrb || particle.impactFlash ||
+    particle.shieldRamImpact ||
+    particle.heartPickupGlow || particle.heartPickupPop ||
+    particle.shieldBreakFlash || particle.crimsonGrenadeBlast
+  );
+}
+
+function trimActiveParticles() {
+  const particleLimit = typeof ACTIVE_PARTICLE_LIMIT === "number"
+    ? ACTIVE_PARTICLE_LIMIT : 520;
+  let excess = particles.length - particleLimit;
+  if (excess <= 0) return;
+  let writeIndex = 0;
+  for (let readIndex = 0; readIndex < particles.length; readIndex += 1) {
+    const particle = particles[readIndex];
+    if (excess > 0 && !particleHasGameplayPriority(particle)) {
+      excess -= 1;
+      continue;
+    }
+    particles[writeIndex] = particle;
+    writeIndex += 1;
+  }
+  particles.length = writeIndex;
+  if (excess > 0) particles.splice(0, Math.min(excess, particles.length));
+}
+
 function updateParticles(dt) {
+  trimActiveParticles();
   for (let i = particles.length - 1; i >= 0; i -= 1) {
     const particle = particles[i];
+    if (particle.shieldBreakShard) {
+      particle.x += particle.vx * dt;
+      particle.y += particle.vy * dt;
+      const drag = Math.exp(-3.2 * dt);
+      particle.vx *= drag;
+      particle.vy *= drag;
+      particle.angle += particle.angularVelocity * dt;
+      particle.life -= dt;
+      if (particle.life <= 0) particles.splice(i, 1);
+      continue;
+    }
     if (particle.revivalOrb) {
       particle.angularVelocity *= Math.exp(-0.85 * dt);
       particle.angle += particle.angularVelocity * dt;
@@ -111,9 +157,20 @@ function update(dt) {
   gameTime += dt;
   shake = Math.max(0, shake - dt * 48);
   if (gameOver) {
+    if (typeof stopEnemyAttackVideo === "function") {
+      stopEnemyAttackVideo();
+    }
     if (playerIsDown()) {
       updatePlayer(dt);
       updateParticles(dt);
+    } else if (typeof syncPlayerGunVideoPlayback === "function") {
+      syncPlayerGunVideoPlayback(false);
+      if (typeof syncPlayerRunVideoPlayback === "function") {
+        syncPlayerRunVideoPlayback(false);
+      }
+      if (typeof syncPlayerStandVideoPlayback === "function") {
+        syncPlayerStandVideoPlayback(false);
+      }
     }
     return;
   }
@@ -123,12 +180,17 @@ function update(dt) {
   updateMidBosses(dt);
   updateBullets(dt);
   updateEnemies(dt);
+  if (typeof playNextEnemyIntroductionVideo === "function") {
+    playNextEnemyIntroductionVideo(gameTime);
+  }
   updateElectricWires();
   updateParticles(dt);
 }
 
 function updateHeartItems() {
   if (playerIsDown()) return;
+  player.maxHp = Math.min(PLAYER_MAX_HEARTS, player.maxHp);
+  player.hp = Math.min(player.maxHp, player.hp);
   const hitbox = getPlayerHitbox();
   for (let index = heartItems.length - 1; index >= 0; index -= 1) {
     const heart = heartItems[index];
@@ -141,6 +203,7 @@ function updateHeartItems() {
     } else {
       continue;
     }
+    if (typeof playHeartPickupSound === "function") playHeartPickupSound();
     emitHeartPickupBurst(heart);
     heartItems.splice(index, 1);
   }

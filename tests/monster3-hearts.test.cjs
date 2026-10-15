@@ -117,10 +117,18 @@ test("M3 test spawning and collision-area drawing work for the flying body", () 
 test("monster3 charges its eye and fires exactly one aimed laser", () => {
   const { scope, calls } = createGame();
   const enemy = scope.fixtureEnemy;
-  read(scope, "globalThis.monster3LaserSoundCalls=0; playTurretLaserSound=()=>monster3LaserSoundCalls++");
+  read(scope, `
+    globalThis.monster3LaserSoundCalls=0;
+    globalThis.attackVideoRequests=[];
+    playTurretLaserSound=()=>monster3LaserSoundCalls++;
+    playEnemyAttackVideo=(kind,now,source)=>attackVideoRequests.push({kind,now,source});
+  `);
   enemy.attackTimer = 0;
   scope.updateEnemies(0.016);
   assert.equal(enemy.state, "charge");
+  assert.equal(read(scope, "attackVideoRequests.length"), 1);
+  assert.equal(read(scope, "attackVideoRequests[0].kind"), "monster3");
+  assert.equal(read(scope, "attackVideoRequests[0].source"), enemy);
   assert.equal(read(scope, "enemyBullets.length"), 0);
   scope.drawEnemy(enemy);
   assert.ok(calls.some((call) => call.operation === "arc"), "eye charge is visible");
@@ -165,21 +173,24 @@ test("five player hits destroy monster3 and grant its score", () => {
   assert.equal(read(scope, "player.score"), enemy.score);
 });
 
-test("heart pickups add capacity up to ten, then heal without exceeding it", () => {
+test("heart pickups heal only up to the three-heart maximum", () => {
   const { scope } = createGame();
-  for (let pickup = 0; pickup < 7; pickup += 1) {
-    read(scope, "heartItems.push({x:722,y:460,radius:14,phase:0})");
-    scope.updateHeartItems();
-  }
-  assert.equal(read(scope, "player.maxHp"), 10);
-  assert.equal(read(scope, "player.hp"), 10);
+  read(scope, "player.hp=2; heartItems.push({x:722,y:460,radius:14,phase:0})");
+  scope.updateHeartItems();
+  assert.equal(read(scope, "player.maxHp"), 3);
+  assert.equal(read(scope, "player.hp"), 3);
   read(scope, "heartItems.push({x:722,y:460,radius:14,phase:0})");
   scope.updateHeartItems();
   assert.equal(read(scope, "heartItems.length"), 1, "a full player leaves the pickup on the road");
-  read(scope, "player.hp=9.5");
+  read(scope, "player.hp=2.5");
   scope.updateHeartItems();
-  assert.equal(read(scope, "player.hp"), 10);
+  assert.equal(read(scope, "player.hp"), 3);
   assert.equal(read(scope, "heartItems.length"), 0);
+
+  read(scope, "player.maxHp=10; player.hp=10");
+  scope.updateHeartItems();
+  assert.equal(read(scope, "player.maxHp"), 3, "legacy health state is clamped to the new maximum");
+  assert.equal(read(scope, "player.hp"), 3);
   scope.resetGame();
   assert.equal(read(scope, "player.maxHp"), 3);
 });
@@ -217,39 +228,72 @@ test("larger heart pickups float visibly and cast a bright halo", () => {
   assert.equal(read(scope, "itemHeartDraws[1].y") - firstY, 9);
 });
 
-test("collecting a heart leaves a soft glow and floating clouds without flying hearts", () => {
+test("a collected heart pops brightly and bursts outward without smoke", () => {
   const { scope, calls } = createGame();
   read(scope, `
+    globalThis.heartPickupSoundCalls=0;
+    playHeartPickupSound=()=>{heartPickupSoundCalls+=1};
     player.hp=2; player.maxHp=3;
     heartItems.push({x:722,y:460,radius:26,phase:0});
   `);
   scope.updateHeartItems();
   assert.equal(read(scope, "heartItems.length"), 0);
+  assert.equal(read(scope, "heartPickupSoundCalls"), 1);
+  read(scope, "heartItems.push({x:722,y:460,radius:26,phase:0})");
+  scope.updateHeartItems();
+  assert.equal(read(scope, "heartItems.length"), 1);
+  assert.equal(read(scope, "heartPickupSoundCalls"), 1,
+    "a full-health player must not consume the pickup or play its sound");
+  read(scope, "heartItems.length=0");
   assert.equal(read(scope, "particles.filter(p=>p.heartPickupGlow).length"), 1);
-  assert.equal(read(scope, "particles.filter(p=>p.heartPickupCloud).length"), 16);
+  assert.equal(read(scope, "particles.filter(p=>p.heartPickupPop).length"), 1);
+  assert.equal(read(scope, "particles.filter(p=>p.heartPickupFloat).length"), 0);
+  assert.equal(read(scope, "particles.filter(p=>p.heartPickupImpact).length"), 0);
+  assert.equal(read(scope, "particles.filter(p=>p.heartPickupCloud).length"), 0);
   assert.equal(read(scope, "particles.filter(p=>p.heartPickupShard).length"), 0);
   assert.equal(read(scope, "particles.filter(p=>p.impactRay).length"), 0);
-  assert.ok(read(scope, "particles.filter(p=>p.heartPickupCloud).every(p=>p.vy<0)"));
-  assert.equal(read(scope, "shake"), 1.5);
+  assert.equal(read(scope, "particles.find(p=>p.heartPickupGlow).size"), 48);
+  assert.equal(read(scope, "particles.find(p=>p.heartPickupPop).vy"), 0);
+  assert.equal(read(scope, "particles.find(p=>p.heartPickupPop).size"), 6);
+  assert.equal(read(scope, "shake"), 1.4);
   const particleCount = read(scope, "particles.length");
+  read(scope, `globalThis.pickupHeartDraws=[];
+    drawPixelHeart=(...args)=>pickupHeartDraws.push(args)`);
   calls.length = 0;
   scope.drawParticles();
-  assert.ok(calls.some((call) => call.operation === "arc" && call.args[2] >= 25));
-  assert.ok(calls.filter((call) => call.operation === "arc").length >= 65);
+  assert.ok(calls.some((call) => call.operation === "arc" && call.args[2] >= 14));
+  assert.equal(calls.filter((call) => call.operation === "arc").length, 1);
+  assert.equal(calls.filter((call) => call.operation === "fillRect").length, 16);
+  assert.equal(read(scope, "pickupHeartDraws.length"), 1);
   assert.equal(read(scope, "particles.length"), particleCount,
-    "rendering the pickup burst should not allocate more particles");
+    "drawing the pickup should not allocate more particles");
+  const firstScale = calls.find((call) => call.operation === "scale").args[0];
+  scope.updateParticles(0.18);
+  calls.length = 0;
+  scope.drawParticles();
+  const expandedScale = calls.find((call) => call.operation === "scale").args[0];
+  assert.ok(expandedScale > firstScale * 1.4);
+  assert.equal(read(scope, "pickupHeartDraws[1][1]"), read(scope, "pickupHeartDraws[0][1]"),
+    "the heart should pop in place rather than float upward");
+  scope.updateParticles(0.3);
+  assert.equal(read(scope, "particles.length"), 0);
 });
 
-test("the portrait HUD arranges ten pixel hearts in two rows", () => {
+test("the portrait HUD keeps three pixel hearts on the shared top row", () => {
   const { scope } = createGame();
-  read(scope, `player.maxHp=10; player.hp=9.5;
+  read(scope, `player.maxHp=3; player.hp=2.5;
     globalThis.heartDraws=[];
     drawPixelHeart=(x,y,fill,scale)=>heartDraws.push({x,y,fill,scale});
     drawMinimap=()=>{};
   `);
   scope.drawHud();
   const draws = read(scope, "heartDraws");
-  assert.equal(draws.length, 10);
-  assert.equal(new Set(Array.from(draws, (draw) => draw.y)).size, 2);
+  const header = scope.hudHeaderLayout();
+  assert.equal(draws.length, 3);
+  assert.equal(new Set(Array.from(draws, (draw) => draw.y)).size, 1);
+  assert.equal(draws[0].scale, 3);
+  assert.ok(draws[0].x >= header.hearts.x);
+  assert.ok(draws.at(-1).x + 7 * draws.at(-1).scale <=
+    header.hearts.x + header.hearts.width);
   assert.equal(draws.at(-1).fill, 0.5);
 });
