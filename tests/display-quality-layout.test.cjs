@@ -79,6 +79,36 @@ test("backing resolution is capped for memory while remaining sharper than 1x", 
   assert.equal(canvas.height, 2560);
 });
 
+test("the looping space video replaces the generated star background", () => {
+  const { scope, calls, gradients } = createDisplay();
+  const video = {
+    videoWidth: 1280,
+    videoHeight: 720,
+    readyState: 4,
+  };
+  scope.spaceBackgroundVideoAsset = {
+    video,
+    loaded: true,
+    active: true,
+  };
+  calls.length = 0;
+  gradients.length = 0;
+
+  scope.drawBackground();
+
+  const draw = calls.find((call) =>
+    call.operation === "drawImage" && call.args[0] === video)?.args;
+  assert.ok(draw, "the space video should render as the game background");
+  assert.equal(draw[5], 0);
+  assert.equal(draw[6], 0);
+  assert.equal(draw[7], 720);
+  assert.equal(draw[8], 1280);
+  assert.equal(gradients.length, 0,
+    "the old generated-space gradient should not cover the video");
+  assert.equal(calls.some((call) => call.operation === "arc"), false,
+    "the old star layer should not be duplicated over the video");
+});
+
 test("the HUD groups hearts and ultimates left and stage and score right of the centered map", () => {
   const { scope } = createDisplay();
   for (const [width, height] of [[540, 960], [720, 1280], [960, 540], [1280, 720]]) {
@@ -87,6 +117,10 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
     const slots = scope.topVideoSlotLayout();
     assert.equal(header.map.y, header.top);
     assert.equal(header.map.x + header.map.width / 2, width / 2);
+    const portrait = height > width;
+    assert.equal(header.map.width, Math.round(width * (portrait ? 0.44 : 0.38)));
+    assert.equal(header.map.height, Math.round(slots.height * 0.9),
+      "the minimap is slightly shorter than the adjacent video slots");
     assert.ok(header.hearts.x + header.hearts.width < header.ultimate.x);
     assert.ok(header.stage.x + header.stage.width < header.score.x);
     assert.ok(header.hearts.x > slots.left[1].x,
@@ -109,8 +143,8 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
     assert.ok(header.infoY > 10, "status rows move down");
     assert.ok(header.map.y < 34, "the minimap moves up");
     assert.ok(header.map.y + header.map.height <= 170);
-    assert.ok(header.map.width / header.map.height >= 2.25,
-      "the minimap uses a wider horizontal aspect ratio");
+    assert.ok(header.map.width / header.map.height >= 1.7,
+      "the minimap remains horizontally oriented at the taller shared height");
   }
 });
 
@@ -230,6 +264,53 @@ test("the one-shot down video takes priority in the left protagonist slot", () =
     call.operation === "drawImage" && call.args[0] === downVideo).length, 1);
   assert.equal(calls.filter((call) =>
     call.operation === "drawImage" && call.args[0] === standVideo).length, 0);
+});
+
+test("the looping basic video fills the idle monster slot", () => {
+  const { scope, calls } = createDisplay();
+  const video = { videoWidth: 480, videoHeight: 480 };
+  scope.monsterBasicVideoAsset = { video, loaded: true, active: true };
+  const layout = scope.topVideoSlotLayout();
+
+  scope.drawTopVideoSlots();
+
+  const draw = calls.find((call) =>
+    call.operation === "drawImage" && call.args[0] === video)?.args;
+  const width = read(scope, "WIDTH");
+  const slotWidth = width - Math.min(layout.right[1].x, layout.right[2].x);
+  assert.ok(draw);
+  assert.equal(draw[5], width - slotWidth);
+  assert.equal(draw[7], slotWidth);
+  assert.equal(draw[8], layout.height);
+});
+
+test("enemy attacks crossfade over the looping basic video", () => {
+  const { scope, calls } = createDisplay();
+  const basicVideo = { videoWidth: 480, videoHeight: 480 };
+  const attackVideo = {
+    videoWidth: 480,
+    videoHeight: 480,
+    currentTime: 0.116,
+    duration: 3.4,
+    playbackRate: 2.9,
+  };
+  scope.monsterBasicVideoAsset = {
+    video: basicVideo,
+    loaded: true,
+    active: true,
+  };
+  const attackAsset = { video: attackVideo, loaded: true, active: true };
+  scope.activeEnemyAttackVideoAsset = () => attackAsset;
+
+  scope.drawTopVideoSlots();
+
+  const basicDraw = calls.find((call) =>
+    call.operation === "drawImage" && call.args[0] === basicVideo);
+  const attackDraw = calls.find((call) =>
+    call.operation === "drawImage" && call.args[0] === attackVideo);
+  assert.ok(basicDraw, "the idle loop remains behind the cut-in");
+  assert.ok(attackDraw.alpha > 0 && attackDraw.alpha < 1,
+    "the attack fades in over the idle loop");
 });
 
 test("an active enemy attack cut-in fills only the clipped right trapezoid", () => {

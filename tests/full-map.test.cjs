@@ -161,47 +161,53 @@ test("full map skips world effects and is not hidden by the game-over overlay", 
 });
 
 test("closed map keeps the small, cropped minimap", () => {
-  const { scope, strokes, strokeRects, clips, gradients } = createGame();
+  const { scope, strokes, strokeRects, clips } = createGame();
   assert.equal(vm.runInContext("MINIMAP_LOCAL_WORLD_RATIO", scope), 0.33);
   assert.equal(vm.runInContext("MINIMAP_VERTICAL_EXAGGERATION_MAX", scope), 2.5);
   scope.drawMinimap();
   const [x, y, width, height] = clips.at(-1);
-  assert.ok(width < 282 && height <= 148);
+  const header = scope.hudHeaderLayout();
+  assert.equal(header.map.width, Math.round(720 * 0.44));
+  assert.equal(header.map.height,
+    Math.round(scope.topVideoSlotLayout().height * 0.9));
+  assert.ok(width < header.map.width && height < header.map.height);
   const roads = strokes.filter((stroke) => stroke.color === "rgba(83, 221, 242, 0.62)");
   assert.ok(roads.length > 0);
   assert.ok(roads.length < vm.runInContext("platforms.length", scope),
     "the small map should still skip roads outside its wider local window");
-  const distanceFog = gradients.find((gradient) => gradient.stops.some((stop) =>
-    stop.color === "rgba(1, 3, 8, 0.9)"));
-  assert.ok(distanceFog, "the local minimap should darken paths farther from the player");
-  assert.deepEqual(distanceFog.stops.map((stop) => stop.offset), [0, 0.25, 0.55, 0.82, 1]);
-  assert.equal(distanceFog.args[0], distanceFog.args[3]);
-  assert.equal(distanceFog.args[1], distanceFog.args[4]);
-  const blendedBackground = gradients.find((gradient) => gradient.stops.some((stop) =>
-    stop.color === "rgba(3, 8, 14, 0)"));
-  assert.ok(blendedBackground, "the frameless minimap background should fade into space");
+  const gridLines = strokes.filter((stroke) =>
+    stroke.color === "rgba(108, 153, 170, 0.13)");
+  const verticalLines = gridLines.filter((line) => line.points[0].x === line.points[1].x);
+  const horizontalLines = gridLines.filter((line) => line.points[0].y === line.points[1].y);
+  const columnGap = verticalLines[0].points[0].x - verticalLines[1].points[0].x;
+  const rowGap = horizontalLines[1].points[0].y - horizontalLines[0].points[0].y;
+  assert.ok(Math.abs(Math.abs(columnGap) - Math.abs(rowGap)) < 1e-9,
+    "the minimap grid cells should be square");
   assert.equal(strokeRects.length, 0, "the minimap should not draw a rectangular border");
 });
 
-test("the local minimap mask fades all four edges to true transparency", () => {
+test("the local minimap fades its left, right and bottom edges but not its top", () => {
   const { scope, gradients } = createGame();
   vm.runInContext(
-    "applyMinimapEdgeMask(ctx, 0, 0, 200, 120, 10, 10, 180, 100)",
+    "applyMinimapSideAndBottomFade(ctx, 10, 20, 200, 120)",
     scope,
   );
-  const masks = gradients.slice(-2);
-  assert.equal(masks.length, 2);
-  assert.ok(masks.every((gradient) => gradient.type === "linear"));
-  for (const mask of masks) {
-    assert.equal(mask.stops[0].color, "rgba(0, 0, 0, 0)");
-    assert.equal(mask.stops.at(-1).color, "rgba(0, 0, 0, 0)");
-    assert.equal(mask.stops.filter((stop) => stop.color === "rgba(0, 0, 0, 1)").length, 2);
-  }
+  assert.equal(gradients.length, 2);
+  const [horizontalMask, bottomMask] = gradients;
+  assert.equal(horizontalMask.type, "linear");
+  assert.deepEqual(horizontalMask.stops.map((stop) => stop.color), [
+    "rgba(0, 0, 0, 0)",
+    "rgba(0, 0, 0, 1)",
+    "rgba(0, 0, 0, 1)",
+    "rgba(0, 0, 0, 0)",
+  ]);
+  assert.equal(bottomMask.type, "linear");
+  assert.equal(bottomMask.stops[0].color, "rgba(0, 0, 0, 1)");
+  assert.equal(bottomMask.stops.at(-1).color, "rgba(0, 0, 0, 0)");
 });
 
-test("test mode full map stays clear without the local distance fog", () => {
+test("test mode full map also stays clear without gradients", () => {
   const { scope, gradients } = createGame();
   scope.drawMinimap(true);
-  assert.equal(gradients.some((gradient) => gradient.stops.some((stop) =>
-    stop.color === "rgba(1, 3, 8, 0.9)")), false);
+  assert.equal(gradients.length, 0);
 });

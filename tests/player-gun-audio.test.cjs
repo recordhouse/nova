@@ -96,7 +96,9 @@ test("combat sounds preload and use their intended audio segments", async () => 
     metalHitSound.decode,
     turretLaserSound.decode,
     monsterDie01Sound.decode,
-    monsterDie04Sound.decode,
+    monsterDie03Sound.decode,
+    monsterDie0101Sound.decode,
+    turretDie01Sound.decode,
     monsterFire02Sound.decode,
     resurrectionSound.decode,
     heartPickupSound.decode,
@@ -108,7 +110,9 @@ test("combat sounds preload and use their intended audio segments", async () => 
   scope.playMetalHitSound();
   scope.playTurretLaserSound();
   scope.playMonsterDie01Sound();
-  scope.playMonsterDie04Sound();
+  scope.playMonsterDie03Sound();
+  scope.playMonsterDie0101Sound();
+  scope.playTurretDie01Sound();
   scope.playMonsterFire02Sound();
   scope.playResurrectionSound();
   scope.playHeartPickupSound();
@@ -142,7 +146,9 @@ test("combat sounds preload and use their intended audio segments", async () => 
   assert.ok(fetchedSources.includes("./assets/sound/gun_impact.mp3?v=20260924-1"));
   assert.ok(fetchedSources.includes("./assets/sound/gun_hit.mp3?v=20260924-1"));
   assert.ok(fetchedSources.includes("./assets/sound/heart.mp3"));
-  assert.ok(fetchedSources.includes("./assets/sound/monster_die_04.mp3"));
+  assert.ok(fetchedSources.includes("./assets/sound/monster_die_03.mp3"));
+  assert.ok(fetchedSources.includes("./assets/sound/monster_die_01_01.mp3"));
+  assert.ok(fetchedSources.includes("./assets/sound/turret_die_01.mp3"));
   assert.ok(fetchedSources.includes("./assets/sound/resurrection.mp3"));
   assert.ok(fetchedSources.includes("./assets/sound/shield.mp3"));
   assert.ok(impactOffset >= 0 && impactOffset < 0.339592);
@@ -158,10 +164,12 @@ test("combat sounds preload and use their intended audio segments", async () => 
     [10, 0],
     [10, 0],
     [10, 0],
+    [10, 0],
+    [10, 0],
   ]);
   assert.deepEqual(
-    outputGains.slice(0, 10).map((gain) => gain.value),
-    [0.3, 0.34, 0.28, 0.55, 0.38, 0.38, 0.3, 0.5, 0.44, 0.42],
+    outputGains.slice(0, 12).map((gain) => gain.value),
+    [0.3, 0.34, 0.28, 0.55, 0.38, 0.38, 0.38, 0.42, 0.3, 0.5, 0.44, 0.42],
   );
   assert.deepEqual(gainEvents, [
     ["set", 0.42, 10],

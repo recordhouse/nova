@@ -18,7 +18,9 @@ function createGame() {
     playGunHitSound: () => soundCalls.push("gun_hit"),
     playMetalHitSound: () => soundCalls.push("metal"),
     playMonsterDie01Sound: () => soundCalls.push("monster_die_01"),
-    playMonsterDie04Sound: () => soundCalls.push("monster_die_04"),
+    playMonsterDie03Sound: () => soundCalls.push("monster_die_03"),
+    playMonsterDie0101Sound: () => soundCalls.push("monster_die_01_01"),
+    playTurretDie01Sound: () => soundCalls.push("turret_die_01"),
     playShieldSound: () => soundCalls.push("shield"),
   };
   vm.createContext(scope);
@@ -65,7 +67,7 @@ test("organic and metal targets play their matching bullet-hit sounds", () => {
   assert.deepEqual(soundCalls, ["gun_hit", "gun_hit", "metal", "gun_hit", "metal"]);
 });
 
-test("monster death sound plays only for lethal hits on organic monsters", () => {
+test("each monster uses its assigned death sound on a lethal hit", () => {
   const { scope, soundCalls } = createGame();
   hitEnemy(scope, "monster1", 200, true);
   hitEnemy(scope, "monster2", 500, true);
@@ -75,12 +77,28 @@ test("monster death sound plays only for lethal hits on organic monsters", () =>
   assert.deepEqual(soundCalls, [
     "gun_hit", "monster_die_01",
     "gun_hit", "monster_die_01",
-    "metal",
+    "metal", "monster_die_03",
     "gun_hit", "monster_die_01",
   ]);
 });
 
-test("crimson monster1 explosions use monster_die_04 once per death, including chains", () => {
+test("turret death sound plays once regardless of repeated resolution", () => {
+  const { scope, soundCalls } = createGame();
+  vm.runInContext("addTurret(fixtureRoad,500); globalThis.target=turrets[0]", scope);
+  assert.equal(scope.resolveTurretDeath(scope.target), true);
+  assert.equal(scope.resolveTurretDeath(scope.target), false);
+  assert.deepEqual(soundCalls, ["turret_die_01"]);
+});
+
+test("monster3 death sound also plays for non-bullet death resolution", () => {
+  const { scope, soundCalls } = createGame();
+  vm.runInContext("globalThis.target=addEnemy(fixtureRoad,500,'monster3')", scope);
+  assert.equal(scope.resolveEnemyDeath(scope.target), true);
+  assert.equal(scope.resolveEnemyDeath(scope.target), false);
+  assert.deepEqual(soundCalls, ["monster_die_03"]);
+});
+
+test("crimson monster1 explosions use monster_die_01_01 once per death, including chains", () => {
   const { scope, soundCalls } = createGame();
   vm.runInContext(`
     globalThis.first=addEnemy(fixtureRoad,200,'monster1',{crimsonVariant:true});
@@ -91,9 +109,9 @@ test("crimson monster1 explosions use monster_die_04 once per death, including c
   assert.equal(scope.resolveEnemyDeath(scope.first, true), true);
   assert.equal(scope.first.alive, false);
   assert.equal(scope.second.alive, false);
-  assert.deepEqual(soundCalls, ["monster_die_04", "monster_die_04"]);
+  assert.deepEqual(soundCalls, ["monster_die_01_01", "monster_die_01_01"]);
   assert.equal(scope.resolveEnemyDeath(scope.first, true), false);
-  assert.deepEqual(soundCalls, ["monster_die_04", "monster_die_04"]);
+  assert.deepEqual(soundCalls, ["monster_die_01_01", "monster_die_01_01"]);
 });
 
 test("each broken shield stage uses the dedicated sound, independent of ram damage", () => {

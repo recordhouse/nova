@@ -9,6 +9,23 @@ function pixelSnap(value, grid = PIXEL_ART_GRID) {
 }
 
 function drawBackground() {
+  ctx.fillStyle = "#02030a";
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  const backgroundVideoAsset = typeof spaceBackgroundVideoAsset !== "undefined"
+    ? spaceBackgroundVideoAsset
+    : null;
+  const backgroundVideo = backgroundVideoAsset?.video;
+  if (
+    backgroundVideo &&
+    (backgroundVideoAsset.loaded || backgroundVideo.readyState >= 2) &&
+    drawVideoCover(backgroundVideo, 0, 0, WIDTH, HEIGHT)
+  ) {
+    ctx.fillStyle = "rgba(1, 3, 10, 0.16)";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    return;
+  }
+
   const spaceGradient = ctx.createLinearGradient(0, 0, 0, BASE_GROUND_Y);
   spaceGradient.addColorStop(0, "#02030a");
   spaceGradient.addColorStop(0.55, "#080b1d");
@@ -3098,6 +3115,7 @@ const TOP_VIDEO_SLOT_BOTTOM_RATIO = 0.88;
 const TOP_VIDEO_SLOT_REFERENCE_Y = 30;
 const HUD_ULTIMATE_FRAME_COLOR = "rgba(132, 92, 157, 0.42)";
 const MINIMAP_VERTICAL_EXAGGERATION_MAX = 2.5;
+const MINIMAP_HEIGHT_RATIO = 0.9;
 
 function topVideoSlotReferenceHeight(mapWidth) {
   return HEIGHT > WIDTH
@@ -3128,10 +3146,10 @@ function hudHeaderLayout() {
   const infoY = 14;
   const infoHeight = 20;
   const mapY = 7;
-  const mapWidth = Math.round(WIDTH * (portrait ? 0.32 : 0.28));
-  const mapHeight = Math.max(76, Math.min(96, Math.round(mapWidth * 0.42)));
+  const mapWidth = Math.round(WIDTH * (portrait ? 0.44 : 0.38));
   const mapX = (WIDTH - mapWidth) / 2;
   const video = topVideoSlotMetrics(mapX, mapWidth);
+  const mapHeight = Math.round(video.height * MINIMAP_HEIGHT_RATIO);
   const groupGap = WIDTH < 650 ? 4 : 6;
   const videoGap = WIDTH < 650 ? 6 : 8;
   const leftGroupX = video.topWidth + videoGap;
@@ -3263,7 +3281,14 @@ function monsterVideoCutInOpacity(asset) {
 
 const topVideoSlotLayers = { left: null, right: null };
 
-function prepareTopVideoSlotLayer(side, points, height, slotVideo, slotOpacity = 1) {
+function prepareTopVideoSlotLayer(
+  side,
+  points,
+  height,
+  slotVideo,
+  slotOpacity = 1,
+  backgroundVideo = null,
+) {
   const slotWidth = side === "left"
     ? Math.max(points[1].x, points[2].x)
     : WIDTH - Math.min(points[1].x, points[2].x);
@@ -3294,8 +3319,12 @@ function prepareTopVideoSlotLayer(side, points, height, slotVideo, slotOpacity =
     ? Math.max(0, Math.floor((slotVideo.currentTime ?? 0) * 30))
     : -1;
   const videoSource = slotVideo?.currentSrc || slotVideo?.src || "idle";
+  const backgroundFrame = backgroundVideo
+    ? Math.max(0, Math.floor((backgroundVideo.currentTime ?? 0) * 30))
+    : -1;
+  const backgroundSource = backgroundVideo?.currentSrc || backgroundVideo?.src || "none";
   const opacityFrame = Math.round(slotOpacity * 100);
-  const frameKey = `${pixelWidth}:${pixelHeight}:${videoSource}:${videoFrame}:${opacityFrame}`;
+  const frameKey = `${pixelWidth}:${pixelHeight}:${backgroundSource}:${backgroundFrame}:${videoSource}:${videoFrame}:${opacityFrame}`;
   if (!resized && layer.frameKey === frameKey) {
     return { surface, originX, slotWidth };
   }
@@ -3314,6 +3343,16 @@ function prepareTopVideoSlotLayer(side, points, height, slotVideo, slotOpacity =
   context.clip();
   context.fillStyle = "rgba(9, 5, 18, 0.36)";
   context.fillRect(0, 0, slotWidth, height);
+  if (backgroundVideo) {
+    drawVideoCover(
+      backgroundVideo,
+      0,
+      0,
+      slotWidth,
+      height,
+      context,
+    );
+  }
   if (slotVideo && slotOpacity > 0) {
     context.save();
     context.globalAlpha *= slotOpacity;
@@ -3363,9 +3402,16 @@ function drawTopVideoSlots() {
     const enemyVideoAsset = activeEnemyVideoAsset?.loaded && activeEnemyVideoAsset.active
       ? activeEnemyVideoAsset
       : null;
+    const basicEnemyVideo = typeof monsterBasicVideoAsset !== "undefined" &&
+      monsterBasicVideoAsset.loaded && monsterBasicVideoAsset.active
+      ? monsterBasicVideoAsset.video
+      : null;
     const slotVideo = side === "left"
       ? downVideo ?? gunVideo ?? runVideo ?? standVideo
-      : enemyVideoAsset?.video ?? null;
+      : enemyVideoAsset?.video ?? basicEnemyVideo;
+    const backgroundVideo = side === "right" && enemyVideoAsset
+      ? basicEnemyVideo
+      : null;
     const slotOpacity = side === "right" && enemyVideoAsset
       ? monsterVideoCutInOpacity(enemyVideoAsset)
       : 1;
@@ -3375,6 +3421,7 @@ function drawTopVideoSlots() {
       layout.height,
       slotVideo,
       slotOpacity,
+      backgroundVideo,
     );
     if (layer) {
       ctx.drawImage(
@@ -3395,6 +3442,15 @@ function drawTopVideoSlots() {
       ? Math.max(points[1].x, points[2].x)
       : WIDTH - Math.min(points[1].x, points[2].x);
     const originX = side === "left" ? 0 : WIDTH - slotWidth;
+    if (backgroundVideo) {
+      drawVideoCover(
+        backgroundVideo,
+        originX,
+        0,
+        slotWidth,
+        layout.height,
+      );
+    }
     if (slotVideo && slotOpacity > 0) {
       ctx.save();
       ctx.globalAlpha *= slotOpacity;
@@ -3410,34 +3466,6 @@ function drawTopVideoSlots() {
     ctx.restore();
     drawTopVideoSlotBorder(points);
   }
-}
-
-function drawMinimapDistanceFog(
-  renderContext,
-  playerMapX,
-  playerMapY,
-  plotX,
-  plotY,
-  plotWidth,
-  plotHeight,
-) {
-  const fadeRadius = Math.hypot(plotWidth, plotHeight) * 0.55;
-  const clearRadius = Math.max(4, Math.min(plotWidth, plotHeight) * 0.08);
-  const fog = renderContext.createRadialGradient(
-    playerMapX,
-    playerMapY,
-    clearRadius,
-    playerMapX,
-    playerMapY,
-    fadeRadius,
-  );
-  fog.addColorStop(0, "rgba(1, 3, 8, 0)");
-  fog.addColorStop(0.25, "rgba(1, 3, 8, 0.06)");
-  fog.addColorStop(0.55, "rgba(1, 3, 8, 0.38)");
-  fog.addColorStop(0.82, "rgba(1, 3, 8, 0.7)");
-  fog.addColorStop(1, "rgba(1, 3, 8, 0.9)");
-  renderContext.fillStyle = fog;
-  renderContext.fillRect(plotX, plotY, plotWidth, plotHeight);
 }
 
 const MINIMAP_RENDER_INTERVAL = 1 / 30;
@@ -3531,26 +3559,16 @@ function prepareMinimapLayer(panelX, panelY, panelWidth, panelHeight) {
   return minimapLayer;
 }
 
-function applyMinimapEdgeMask(
+function applyMinimapSideAndBottomFade(
   renderContext,
   panelX,
   panelY,
   panelWidth,
   panelHeight,
-  plotX,
-  plotY,
-  plotWidth,
-  plotHeight,
 ) {
-  const leftEdge = (plotX - panelX) / panelWidth;
-  const rightEdge = (plotX + plotWidth - panelX) / panelWidth;
-  const topEdge = (plotY - panelY) / panelHeight;
-  const bottomEdge = (plotY + plotHeight - panelY) / panelHeight;
-  const horizontalFade = Math.min(0.13, (rightEdge - leftEdge) * 0.3);
-  const verticalFade = Math.min(0.18, (bottomEdge - topEdge) * 0.3);
-
   renderContext.save();
   renderContext.globalCompositeOperation = "destination-in";
+
   const horizontalMask = renderContext.createLinearGradient(
     panelX,
     panelY,
@@ -3558,27 +3576,22 @@ function applyMinimapEdgeMask(
     panelY,
   );
   horizontalMask.addColorStop(0, "rgba(0, 0, 0, 0)");
-  horizontalMask.addColorStop(leftEdge, "rgba(0, 0, 0, 0)");
-  horizontalMask.addColorStop(leftEdge + horizontalFade, "rgba(0, 0, 0, 1)");
-  horizontalMask.addColorStop(rightEdge - horizontalFade, "rgba(0, 0, 0, 1)");
-  horizontalMask.addColorStop(rightEdge, "rgba(0, 0, 0, 0)");
+  horizontalMask.addColorStop(0.1, "rgba(0, 0, 0, 1)");
+  horizontalMask.addColorStop(0.9, "rgba(0, 0, 0, 1)");
   horizontalMask.addColorStop(1, "rgba(0, 0, 0, 0)");
   renderContext.fillStyle = horizontalMask;
   renderContext.fillRect(panelX, panelY, panelWidth, panelHeight);
 
-  const verticalMask = renderContext.createLinearGradient(
+  const bottomMask = renderContext.createLinearGradient(
     panelX,
     panelY,
     panelX,
     panelY + panelHeight,
   );
-  verticalMask.addColorStop(0, "rgba(0, 0, 0, 0)");
-  verticalMask.addColorStop(topEdge, "rgba(0, 0, 0, 0)");
-  verticalMask.addColorStop(topEdge + verticalFade, "rgba(0, 0, 0, 1)");
-  verticalMask.addColorStop(bottomEdge - verticalFade, "rgba(0, 0, 0, 1)");
-  verticalMask.addColorStop(bottomEdge, "rgba(0, 0, 0, 0)");
-  verticalMask.addColorStop(1, "rgba(0, 0, 0, 0)");
-  renderContext.fillStyle = verticalMask;
+  bottomMask.addColorStop(0, "rgba(0, 0, 0, 1)");
+  bottomMask.addColorStop(0.76, "rgba(0, 0, 0, 1)");
+  bottomMask.addColorStop(1, "rgba(0, 0, 0, 0)");
+  renderContext.fillStyle = bottomMask;
   renderContext.fillRect(panelX, panelY, panelWidth, panelHeight);
   renderContext.restore();
 }
@@ -3657,22 +3670,13 @@ function drawMinimap(fullMap = false) {
     ctx.fillStyle = "rgba(1, 4, 9, 0.86)";
     ctx.fillRect(0, 104, WIDTH, HEIGHT - 104);
   }
-  const panelCenterX = panelX + panelWidth / 2;
-  const panelCenterY = panelY + panelHeight / 2;
-  const panelBackground = ctx.createRadialGradient(
-    panelCenterX,
-    panelCenterY,
-    panelWidth * 0.08,
-    panelCenterX,
-    panelCenterY,
-    Math.hypot(panelWidth, panelHeight) * 0.56,
-  );
-  panelBackground.addColorStop(0, "rgba(3, 9, 15, 0.5)");
-  panelBackground.addColorStop(0.56, "rgba(3, 8, 14, 0.38)");
-  panelBackground.addColorStop(0.82, "rgba(3, 8, 14, 0.12)");
-  panelBackground.addColorStop(1, "rgba(3, 8, 14, 0)");
-  ctx.fillStyle = panelBackground;
+  ctx.fillStyle = expanded
+    ? "rgba(3, 9, 15, 0.72)"
+    : "rgba(3, 9, 15, 0.48)";
   ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+  ctx.beginPath();
+  ctx.rect(panelX, panelY, panelWidth, panelHeight);
+  ctx.clip();
 
   ctx.beginPath();
   ctx.rect(plotX, plotY, plotWidth, plotHeight);
@@ -3680,15 +3684,21 @@ function drawMinimap(fullMap = false) {
 
   ctx.strokeStyle = "rgba(108, 153, 170, 0.13)";
   ctx.lineWidth = 1;
-  for (let column = 1; column < 4; column += 1) {
-    const x = plotX + plotWidth * column / 4;
+  const gridCellSize = plotHeight / 3;
+  const gridCenterX = plotX + plotWidth / 2;
+  for (let x = gridCenterX; x > plotX; x -= gridCellSize) {
     ctx.beginPath();
     ctx.moveTo(x, plotY);
     ctx.lineTo(x, plotY + plotHeight);
     ctx.stroke();
   }
-  for (let row = 1; row < 3; row += 1) {
-    const y = plotY + plotHeight * row / 3;
+  for (let x = gridCenterX + gridCellSize; x < plotX + plotWidth; x += gridCellSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, plotY);
+    ctx.lineTo(x, plotY + plotHeight);
+    ctx.stroke();
+  }
+  for (let y = plotY + gridCellSize; y < plotY + plotHeight; y += gridCellSize) {
     ctx.beginPath();
     ctx.moveTo(plotX, y);
     ctx.lineTo(plotX + plotWidth, y);
@@ -3737,46 +3747,13 @@ function drawMinimap(fullMap = false) {
 
   const playerMapX = mapX(player.x + player.width / 2);
   const playerMapY = mapY(player.y + player.height);
-  // The normal minimap is local navigation: retain nearby detail and let
-  // distant paths disappear gradually. The test-only full map stays clear.
-  if (!expanded) {
-    drawMinimapDistanceFog(
-      ctx,
-      playerMapX,
-      playerMapY,
-      plotX,
-      plotY,
-      plotWidth,
-      plotHeight,
-    );
-  }
-  const playerGlow = ctx.createRadialGradient(
-    playerMapX,
-    playerMapY,
-    0,
-    playerMapX,
-    playerMapY,
-    8,
-  );
-  playerGlow.addColorStop(0, "rgba(255, 224, 113, 0.48)");
-  playerGlow.addColorStop(0.48, "rgba(255, 224, 113, 0.2)");
-  playerGlow.addColorStop(1, "rgba(255, 224, 113, 0)");
-  ctx.fillStyle = playerGlow;
+  ctx.fillStyle = "rgba(255, 224, 113, 0.18)";
   ctx.beginPath();
   ctx.arc(playerMapX, playerMapY, 8, 0, Math.PI * 2);
   ctx.fill();
 
-  const playerBorder = ctx.createLinearGradient(
-    playerMapX - 4,
-    playerMapY - 4,
-    playerMapX + 4,
-    playerMapY + 4,
-  );
-  playerBorder.addColorStop(0, "rgba(177, 231, 241, 0.12)");
-  playerBorder.addColorStop(0.5, "rgba(255, 250, 214, 0.52)");
-  playerBorder.addColorStop(1, "rgba(177, 231, 241, 0.14)");
   ctx.fillStyle = "#ffe071";
-  ctx.strokeStyle = playerBorder;
+  ctx.strokeStyle = "rgba(255, 250, 214, 0.52)";
   ctx.lineWidth = 0.9;
   ctx.beginPath();
   ctx.arc(playerMapX, playerMapY, 3.4, 0, Math.PI * 2);
@@ -3815,16 +3792,12 @@ function drawMinimap(fullMap = false) {
       return;
     }
     renderMap(layer.context);
-    applyMinimapEdgeMask(
+    applyMinimapSideAndBottomFade(
       layer.context,
       panelX,
       panelY,
       panelWidth,
       panelHeight,
-      plotX,
-      plotY,
-      plotWidth,
-      plotHeight,
     );
     minimapRenderCache = {
       signature: renderSignature,

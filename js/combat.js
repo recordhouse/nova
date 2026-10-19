@@ -82,8 +82,10 @@ function resolveEnemyDeath(enemy, playDeathSound = false) {
   enemy.hp = 0;
   enemy.alive = false;
   const isCrimsonMonster1 = enemy.kind === "monster1" && enemy.crimsonVariant;
-  if (isCrimsonMonster1 && typeof playMonsterDie04Sound === "function") {
-    playMonsterDie04Sound();
+  if (isCrimsonMonster1 && typeof playMonsterDie0101Sound === "function") {
+    playMonsterDie0101Sound();
+  } else if (enemy.kind === "monster3" && typeof playMonsterDie03Sound === "function") {
+    playMonsterDie03Sound();
   } else if (
     playDeathSound &&
     (enemy.kind === "monster1" || enemy.kind === "monster2" ||
@@ -97,6 +99,17 @@ function resolveEnemyDeath(enemy, playDeathSound = false) {
   if (isCrimsonMonster1) {
     emitCrimsonMonsterExplosion(enemy);
   }
+  return true;
+}
+
+function resolveTurretDeath(turret) {
+  if (!turret?.alive || turret.deathResolved) return false;
+  turret.deathResolved = true;
+  turret.hp = 0;
+  turret.alive = false;
+  if (typeof playTurretDie01Sound === "function") playTurretDie01Sound();
+  addPlayerScore(TURRET.score);
+  burstCombatantExplosion(turret, "turret");
   return true;
 }
 
@@ -432,9 +445,7 @@ function emitPlayerRevival() {
     turret.hitTimer = 0.18;
     burstTurretFragments(impact);
     if (turret.hp <= 0) {
-      turret.alive = false;
-      addPlayerScore(TURRET.score);
-      burstCombatantExplosion(turret, "turret");
+      resolveTurretDeath(turret);
     }
   }
 
@@ -1363,9 +1374,7 @@ function updateBullets(dt) {
         burstTurretFragments(bullet);
         shake = Math.max(shake, turret.hp <= 0 ? 11 : 5);
         if (turret.hp <= 0) {
-          turret.alive = false;
-          addPlayerScore(TURRET.score);
-          burstCombatantExplosion(turret, "turret");
+          resolveTurretDeath(turret);
         }
         break;
       }

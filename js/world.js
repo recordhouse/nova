@@ -2248,6 +2248,7 @@ function addTurret(platform, x) {
     attackVideoPrimed: false,
     animationPhase: mapRandom() * Math.PI * 2,
     active: false,
+    deathResolved: false,
     alive: true,
   });
 }

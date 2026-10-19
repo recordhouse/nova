@@ -61,16 +61,20 @@ test("the optimized gun video loops only while continuous fire is active", async
     runVideo,
     standVideo,
     downVideo,
+    basicVideo,
     monster1Video,
     monster2Video,
     monster3Video,
     monster4Video,
     turretVideo,
   ] = videos;
+  const spaceVideo = videos[10];
   assert.equal(video.src, "./assets/video/main/gun-optimized.mp4?v=20261015-1");
   assert.equal(runVideo.src, "./assets/video/main/run-optimized.mp4?v=20261015-1");
   assert.equal(standVideo.src, "./assets/video/main/stand-optimized.mp4?v=20261015-1");
   assert.equal(downVideo.src, "./assets/video/main/down-optimized.mp4?v=20261015-1");
+  assert.equal(basicVideo.src,
+    "./assets/video/monsters/basic-optimized.mp4?v=20261015-1");
   assert.equal(monster1Video.src,
     "./assets/video/monsters/monster1-attack-optimized.mp4?v=20261015-1");
   assert.equal(monster2Video.src,
@@ -81,12 +85,33 @@ test("the optimized gun video loops only while continuous fire is active", async
     "./assets/video/monsters/monster4-attack-optimized.mp4?v=20261015-1");
   assert.equal(turretVideo.src,
     "./assets/video/monsters/turret-attack-optimized.mp4?v=20261015-1");
+  assert.equal(spaceVideo.src,
+    "./assets/video/bg/space-optimized.mp4?v=20261018-1");
+  assert.equal(spaceVideo.muted, true);
+  assert.equal(spaceVideo.loop, true);
+  assert.equal(spaceVideo.loadCalls, 2,
+    "the space background is queued for autoplay immediately");
+  spaceVideo.readyState = 4;
+  spaceVideo.listeners.loadeddata();
+  await Promise.resolve();
+  assert.equal(spaceVideo.playCalls, 1);
+  assert.equal(vm.runInContext("spaceBackgroundVideoAsset.active", scope), true);
   assert.equal(runVideo.muted, true);
   assert.equal(runVideo.loop, true);
   assert.equal(standVideo.muted, true);
   assert.equal(standVideo.loop, true);
   assert.equal(downVideo.muted, true);
   assert.equal(downVideo.loop, false);
+  assert.equal(basicVideo.muted, true);
+  assert.equal(basicVideo.loop, true);
+  assert.equal(basicVideo.playbackRate, 1);
+  assert.equal(basicVideo.loadCalls, 2,
+    "the default monster loop is queued for autoplay immediately");
+  basicVideo.readyState = 4;
+  basicVideo.listeners.loadeddata();
+  await Promise.resolve();
+  assert.equal(basicVideo.playCalls, 1);
+  assert.equal(vm.runInContext("monsterBasicVideoAsset.active", scope), true);
   assert.equal(video.preload, "auto");
   assert.equal(video.muted, true);
   assert.equal(video.defaultMuted, true);

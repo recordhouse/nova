@@ -88,6 +88,9 @@ const playerDownVideoAsset = loadVideoAsset(
   "./assets/video/main/down-optimized.mp4?v=20261015-1",
   { loop: false },
 );
+const monsterBasicVideoAsset = loadVideoAsset(
+  "./assets/video/monsters/basic-optimized.mp4?v=20261015-1",
+);
 const ENEMY_ATTACK_VIDEO_COOLDOWN = 3;
 const ENEMY_ATTACK_VIDEO_PLAYBACK_RATES = Object.freeze({
   monster1: 2.4,
@@ -119,6 +122,9 @@ const enemyAttackVideoAssets = Object.freeze({
   ),
 });
 const monster2AttackVideoAsset = enemyAttackVideoAssets.monster2;
+const spaceBackgroundVideoAsset = loadVideoAsset(
+  "./assets/video/bg/space-optimized.mp4?v=20261018-1",
+);
 let enemyAttackVideoCooldownUntil = -Infinity;
 const introducedEnemyVideoKinds = new Set();
 const pendingEnemyIntroductionVideos = [];
@@ -195,6 +201,14 @@ function playPlayerDownVideo() {
 
 function stopPlayerDownVideo() {
   return stopVideoAsset(playerDownVideoAsset);
+}
+
+function playMonsterBasicVideo() {
+  return playVideoAsset(monsterBasicVideoAsset);
+}
+
+function playSpaceBackgroundVideo() {
+  return playVideoAsset(spaceBackgroundVideoAsset);
 }
 
 function activeEnemyAttackVideoAsset() {
@@ -288,6 +302,9 @@ function resetMonster2AttackVideo() {
   resetEnemyAttackVideo();
 }
 
+playMonsterBasicVideo();
+playSpaceBackgroundVideo();
+
 const GameAudioContext = window.AudioContext ?? window.webkitAudioContext;
 const stage01Music = typeof Audio === "function"
   ? new Audio("./assets/music/stage_01.mp3?v=20260924-1") : null;
@@ -336,7 +353,9 @@ const heartPickupSoundData = fetchSoundData("./assets/sound/heart.mp3");
 const metalHitSoundData = fetchSoundData("./assets/sound/metal.mp3");
 const turretLaserSoundData = fetchSoundData("./assets/sound/laser.mp3?v=20260922-2");
 const monsterDie01SoundData = fetchSoundData("./assets/sound/monster_die_01.mp3");
-const monsterDie04SoundData = fetchSoundData("./assets/sound/monster_die_04.mp3");
+const monsterDie03SoundData = fetchSoundData("./assets/sound/monster_die_03.mp3");
+const monsterDie0101SoundData = fetchSoundData("./assets/sound/monster_die_01_01.mp3");
+const turretDie01SoundData = fetchSoundData("./assets/sound/turret_die_01.mp3");
 const monsterFire02SoundData = fetchSoundData("./assets/sound/monster_fire_02.mp3?v=20260923-1");
 const resurrectionSoundData = fetchSoundData("./assets/sound/resurrection.mp3");
 const shieldSoundData = fetchSoundData("./assets/sound/shield.mp3");
@@ -408,13 +427,17 @@ const gunHitSound = createPreparedGameSound(gunHitSoundData, 0.34);
 const metalHitSound = createPreparedGameSound(metalHitSoundData, 0.28);
 const turretLaserSound = createPreparedGameSound(turretLaserSoundData, 0.55);
 const monsterDie01Sound = createPreparedGameSound(monsterDie01SoundData, 0.38);
-const monsterDie04Sound = createPreparedGameSound(monsterDie04SoundData, 0.38);
+const monsterDie03Sound = createPreparedGameSound(monsterDie03SoundData, 0.38);
+const monsterDie0101Sound = createPreparedGameSound(monsterDie0101SoundData, 0.38);
+const turretDie01Sound = createPreparedGameSound(turretDie01SoundData, 0.42);
 const monsterFire02Sound = createPreparedGameSound(monsterFire02SoundData, 0.3);
 const resurrectionSound = createPreparedGameSound(resurrectionSoundData, 0.5);
 const heartPickupSound = createPreparedGameSound(heartPickupSoundData, 0.44);
 const shieldSound = createPreparedGameSound(shieldSoundData, 0.42);
 
 function prepareGameAudio() {
+  playMonsterBasicVideo();
+  playSpaceBackgroundVideo();
   playCurrentStageMusic();
   if (!gameAudioContext) return null;
   if (gameAudioContext.state === "suspended") {
@@ -531,8 +554,16 @@ function playMonsterDie01Sound() {
   playPreparedGameSound(monsterDie01Sound);
 }
 
-function playMonsterDie04Sound() {
-  playPreparedGameSound(monsterDie04Sound);
+function playMonsterDie03Sound() {
+  playPreparedGameSound(monsterDie03Sound);
+}
+
+function playMonsterDie0101Sound() {
+  playPreparedGameSound(monsterDie0101Sound);
+}
+
+function playTurretDie01Sound() {
+  playPreparedGameSound(turretDie01Sound);
 }
 
 function playMonsterFire02Sound() {
