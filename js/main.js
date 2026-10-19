@@ -30,7 +30,8 @@ function particleHasGameplayPriority(particle) {
     particle.debris || particle.revivalOrb || particle.impactFlash ||
     particle.shieldRamImpact ||
     particle.heartPickupGlow || particle.heartPickupPop ||
-    particle.shieldBreakFlash || particle.crimsonGrenadeBlast
+    particle.shieldBreakFlash || particle.crimsonGrenadeBlast ||
+    particle.turretMushroomBlast
   );
 }
 

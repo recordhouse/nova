@@ -123,7 +123,7 @@ const enemyAttackVideoAssets = Object.freeze({
 });
 const monster2AttackVideoAsset = enemyAttackVideoAssets.monster2;
 const spaceBackgroundVideoAsset = loadVideoAsset(
-  "./assets/video/bg/space-optimized.mp4?v=20261018-1",
+  "./assets/video/bg/space-optimized.mp4?v=20261019-2",
 );
 let enemyAttackVideoCooldownUntil = -Infinity;
 const introducedEnemyVideoKinds = new Set();
@@ -347,8 +347,8 @@ function fetchSoundData(source) {
 }
 
 const playerGunSoundData = fetchSoundData("./assets/sound/gun.mp3");
-const playerGunImpactSoundData = fetchSoundData("./assets/sound/gun_impact.mp3?v=20260924-1");
-const gunHitSoundData = fetchSoundData("./assets/sound/gun_hit.mp3?v=20260924-1");
+const playerGunImpactSoundData = fetchSoundData("./assets/sound/gun_impact.mp3?v=20261019-1");
+const gunHitSoundData = fetchSoundData("./assets/sound/gun_hit.mp3?v=20261019-1");
 const heartPickupSoundData = fetchSoundData("./assets/sound/heart.mp3");
 const metalHitSoundData = fetchSoundData("./assets/sound/metal.mp3");
 const turretLaserSoundData = fetchSoundData("./assets/sound/laser.mp3?v=20260922-2");
@@ -424,7 +424,7 @@ function createPreparedGameSound(dataPromise, volume, offset = 0) {
 }
 
 const gunHitSound = createPreparedGameSound(gunHitSoundData, 0.34);
-const metalHitSound = createPreparedGameSound(metalHitSoundData, 0.28);
+const metalHitSound = createPreparedGameSound(metalHitSoundData, 0.4);
 const turretLaserSound = createPreparedGameSound(turretLaserSoundData, 0.55);
 const monsterDie01Sound = createPreparedGameSound(monsterDie01SoundData, 0.38);
 const monsterDie03Sound = createPreparedGameSound(monsterDie03SoundData, 0.38);

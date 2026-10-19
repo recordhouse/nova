@@ -86,7 +86,7 @@ test("the optimized gun video loops only while continuous fire is active", async
   assert.equal(turretVideo.src,
     "./assets/video/monsters/turret-attack-optimized.mp4?v=20261015-1");
   assert.equal(spaceVideo.src,
-    "./assets/video/bg/space-optimized.mp4?v=20261018-1");
+    "./assets/video/bg/space-optimized.mp4?v=20261019-2");
   assert.equal(spaceVideo.muted, true);
   assert.equal(spaceVideo.loop, true);
   assert.equal(spaceVideo.loadCalls, 2,

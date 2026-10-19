@@ -143,8 +143,8 @@ test("combat sounds preload and use their intended audio segments", async () => 
   scope.setCurrentStageMusicPaused(false);
   assert.equal(musicInstances[0].paused, false);
   assert.equal(musicInstances[0].playCalls, 2);
-  assert.ok(fetchedSources.includes("./assets/sound/gun_impact.mp3?v=20260924-1"));
-  assert.ok(fetchedSources.includes("./assets/sound/gun_hit.mp3?v=20260924-1"));
+  assert.ok(fetchedSources.includes("./assets/sound/gun_impact.mp3?v=20261019-1"));
+  assert.ok(fetchedSources.includes("./assets/sound/gun_hit.mp3?v=20261019-1"));
   assert.ok(fetchedSources.includes("./assets/sound/heart.mp3"));
   assert.ok(fetchedSources.includes("./assets/sound/monster_die_03.mp3"));
   assert.ok(fetchedSources.includes("./assets/sound/monster_die_01_01.mp3"));
@@ -169,7 +169,7 @@ test("combat sounds preload and use their intended audio segments", async () => 
   ]);
   assert.deepEqual(
     outputGains.slice(0, 12).map((gain) => gain.value),
-    [0.3, 0.34, 0.28, 0.55, 0.38, 0.38, 0.38, 0.42, 0.3, 0.5, 0.44, 0.42],
+    [0.3, 0.34, 0.4, 0.55, 0.38, 0.38, 0.38, 0.42, 0.3, 0.5, 0.44, 0.42],
   );
   assert.deepEqual(gainEvents, [
     ["set", 0.42, 10],

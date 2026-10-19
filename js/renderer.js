@@ -2395,6 +2395,121 @@ function drawCrimsonGrenadeBlast(particle) {
   ctx.restore();
 }
 
+function drawTurretMushroomBlast(particle) {
+  const remaining = Math.max(0, particle.life / particle.maxLife);
+  const progress = 1 - remaining;
+  const phase = particle.phase ?? 0;
+  const rise = 1 - (1 - progress) ** 2.2;
+  const capGrowth = Math.min(1, progress / 0.56);
+  const size = particle.size;
+  const capY = -size * (0.16 + rise * 0.46);
+  const capWidth = size * (0.22 + capGrowth * 0.65);
+  const stemHeight = Math.max(size * 0.12, -capY - size * 0.03);
+  const fade = Math.min(1, remaining * 3.4);
+
+  ctx.save();
+  ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
+  ctx.globalAlpha = fade;
+
+  if (progress < 0.36) {
+    const flashRemaining = 1 - progress / 0.36;
+    ctx.globalCompositeOperation = "lighter";
+    for (let ray = 0; ray < 12; ray += 1) {
+      const seed = phase * 83.1 + ray * 6.73;
+      const angle = Math.PI + (ray / 11) * Math.PI;
+      const reach = size * (0.14 + (1 - flashRemaining) * 0.25) *
+        (0.8 + crimsonGrenadeNoise(seed) * 0.35);
+      const thickness = Math.max(2, pixelSnap(size * (0.018 + flashRemaining * 0.018)));
+      ctx.save();
+      ctx.rotate(angle);
+      ctx.fillStyle = ray % 3 === 0 ? "#fff2a8"
+        : ray % 2 === 0 ? "#ffb12f" : "#ff5a2f";
+      ctx.fillRect(
+        pixelSnap(size * 0.04),
+        -thickness / 2,
+        Math.max(4, pixelSnap(reach)),
+        thickness,
+      );
+      ctx.restore();
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  for (let segment = 0; segment < 8; segment += 1) {
+    const segmentProgress = segment / 7;
+    const seed = phase * 51.7 + segment * 4.91;
+    const segmentWidth = size * (0.14 - segmentProgress * 0.045) *
+      (0.86 + crimsonGrenadeNoise(seed) * 0.24);
+    const segmentHeight = stemHeight / 7 + 3;
+    const offsetX = (crimsonGrenadeNoise(seed + 2.8) - 0.5) * size * 0.045;
+    const y = -segmentProgress * stemHeight;
+    ctx.fillStyle = segment % 2 === 0 ? "#552b35" : "#78302f";
+    ctx.fillRect(
+      pixelSnap(offsetX - segmentWidth / 2),
+      pixelSnap(y - segmentHeight),
+      Math.max(4, pixelSnap(segmentWidth)),
+      Math.max(4, pixelSnap(segmentHeight + 2)),
+    );
+    if (progress < 0.84) {
+      const coreWidth = segmentWidth * (0.28 + remaining * 0.26);
+      ctx.fillStyle = segment % 3 === 0 ? "#fff2a8"
+        : segment % 2 === 0 ? "#ffb12f" : "#f15a30";
+      ctx.fillRect(
+        pixelSnap(offsetX - coreWidth / 2),
+        pixelSnap(y - segmentHeight * 0.82),
+        Math.max(3, pixelSnap(coreWidth)),
+        Math.max(3, pixelSnap(segmentHeight * 0.68)),
+      );
+    }
+  }
+
+  const capRows = [0.42, 0.72, 0.96, 1, 0.82, 0.55];
+  const rowHeight = Math.max(5, pixelSnap(size * 0.055));
+  for (let row = 0; row < capRows.length; row += 1) {
+    const seed = phase * 67.3 + row * 8.17;
+    const width = capWidth * capRows[row];
+    const offsetX = (crimsonGrenadeNoise(seed) - 0.5) * size * 0.045;
+    const y = capY + (row - 2.4) * rowHeight;
+    ctx.fillStyle = row < 2 ? "#4b2b35"
+      : row % 2 === 0 ? "#6a3033" : "#893530";
+    ctx.fillRect(
+      pixelSnap(offsetX - width / 2),
+      pixelSnap(y),
+      Math.max(6, pixelSnap(width)),
+      rowHeight + 2,
+    );
+    if (progress < 0.78 && row > 0 && row < capRows.length - 1) {
+      const innerWidth = width * (0.4 + remaining * 0.18);
+      ctx.fillStyle = row % 2 === 0 ? "#ff6a30" : "#ffb12f";
+      ctx.fillRect(
+        pixelSnap(offsetX - innerWidth / 2),
+        pixelSnap(y + rowHeight * 0.18),
+        Math.max(4, pixelSnap(innerWidth)),
+        Math.max(3, pixelSnap(rowHeight * 0.62)),
+      );
+    }
+  }
+
+  for (let lobe = 0; lobe < 12; lobe += 1) {
+    const seed = phase * 39.4 + lobe * 7.53;
+    const across = lobe / 11 - 0.5;
+    const lobeSize = size * (0.055 + crimsonGrenadeNoise(seed) * 0.045);
+    const x = across * capWidth * 0.92;
+    const y = capY - Math.cos(across * Math.PI) * size * 0.12 +
+      (crimsonGrenadeNoise(seed + 4.2) - 0.5) * size * 0.035;
+    ctx.fillStyle = lobe % 3 === 0 ? "#3f2934"
+      : lobe % 2 === 0 ? "#672d31" : "#91352e";
+    ctx.fillRect(
+      pixelSnap(x - lobeSize / 2),
+      pixelSnap(y - lobeSize / 2),
+      Math.max(4, pixelSnap(lobeSize)),
+      Math.max(4, pixelSnap(lobeSize * 0.72)),
+    );
+  }
+
+  ctx.restore();
+}
+
 function drawPlayerImpactFlash(particle) {
   const remaining = Math.max(0, particle.life / particle.maxLife);
   const progress = 1 - remaining;
@@ -2699,7 +2814,8 @@ function drawPlayerShieldBreakShard(particle) {
 
 function drawParticles() {
   for (const particle of particles) {
-    const cullMargin = particle.crimsonGrenadeBlast ? particle.size + 48 : 120;
+    const cullMargin = particle.crimsonGrenadeBlast || particle.turretMushroomBlast
+      ? particle.size + 48 : 120;
     if (
       particle.x < cameraX - cullMargin ||
       particle.x > cameraX + WIDTH + cullMargin ||
@@ -2744,6 +2860,8 @@ function drawParticles() {
         ctx.fillRect(-particle.size * 0.65, -0.5, particle.size * 1.6, 1);
       }
       ctx.restore();
+    } else if (particle.turretMushroomBlast) {
+      drawTurretMushroomBlast(particle);
     } else if (particle.crimsonGrenadeBlast) {
       drawCrimsonGrenadeBlast(particle);
     } else if (particle.explosionFlash) {

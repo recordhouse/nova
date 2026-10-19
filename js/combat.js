@@ -110,6 +110,7 @@ function resolveTurretDeath(turret) {
   if (typeof playTurretDie01Sound === "function") playTurretDie01Sound();
   addPlayerScore(TURRET.score);
   burstCombatantExplosion(turret, "turret");
+  emitTurretDeathExplosion(turret);
   return true;
 }
 
@@ -725,10 +726,61 @@ function emitCrimsonMonsterExplosion(source) {
   });
   shake = Math.max(shake, 22);
 
+  damageNearbyMonstersFromExplosion({
+    source,
+    centerX,
+    centerY,
+    radius: MONSTER1_CRIMSON_EXPLOSION_RADIUS,
+    damage: MONSTER1_CRIMSON_EXPLOSION_DAMAGE,
+    knockbackSpeed: MONSTER1_CRIMSON_KNOCKBACK_SPEED,
+  });
+}
+
+function emitTurretDeathExplosion(source) {
+  if (source.deathExplosionTriggered) return;
+  source.deathExplosionTriggered = true;
+  const centerX = source.x + source.width / 2;
+  const centerY = source.y + source.height * 0.52;
+  const baseY = source.y + source.height * 0.88;
+  const life = 1.25;
+  particles.push({
+    x: centerX,
+    y: baseY,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life,
+    maxLife: life,
+    size: 220,
+    phase: source.animationPhase ?? 0,
+    color: "#ff6935",
+    turretMushroomBlast: true,
+  });
+  shake = Math.max(shake, 26);
+
+  damageNearbyMonstersFromExplosion({
+    source,
+    centerX,
+    centerY,
+    radius: TURRET_DEATH_EXPLOSION_RADIUS,
+    damage: TURRET_DEATH_EXPLOSION_DAMAGE,
+    knockbackSpeed: TURRET_DEATH_KNOCKBACK_SPEED,
+  });
+}
+
+function damageNearbyMonstersFromExplosion({
+  source,
+  centerX,
+  centerY,
+  radius,
+  damage,
+  knockbackSpeed,
+}) {
+
   const damageArea = {
     x: centerX,
     y: centerY,
-    radius: MONSTER1_CRIMSON_EXPLOSION_RADIUS,
+    radius,
   };
   for (const enemy of enemies) {
     if (
@@ -740,10 +792,10 @@ function emitCrimsonMonsterExplosion(source) {
     const impact = {
       x: enemyCenterX,
       y: enemy.y + enemy.height / 2,
-      vx: direction * MONSTER1_CRIMSON_KNOCKBACK_SPEED,
+      vx: direction * knockbackSpeed,
       vy: -180,
     };
-    enemy.hp = Math.max(0, enemy.hp - MONSTER1_CRIMSON_EXPLOSION_DAMAGE);
+    enemy.hp = Math.max(0, enemy.hp - damage);
     burstMonsterFragments(impact, enemy, enemy.hp <= 0);
     if (enemy.hp <= 0) {
       resolveEnemyDeath(enemy);
@@ -752,10 +804,10 @@ function emitCrimsonMonsterExplosion(source) {
 
     enemy.hitDirection = direction;
     enemy.hitTimer = PLAYER_REVIVAL_KNOCKBACK_DURATION;
-    enemy.hitKnockbackVelocity = direction * MONSTER1_CRIMSON_KNOCKBACK_SPEED;
+    enemy.hitKnockbackVelocity = direction * knockbackSpeed;
     enemy.revivalKnockback = true;
     if (enemy.state === "jump") {
-      enemy.jumpVx = direction * MONSTER1_CRIMSON_KNOCKBACK_SPEED;
+      enemy.jumpVx = direction * knockbackSpeed;
       enemy.jumpHit = true;
     } else {
       enemy.state = enemy.kind === "monster3" ? "hover" : "chase";

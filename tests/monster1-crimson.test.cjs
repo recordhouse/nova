@@ -143,3 +143,45 @@ test("crimson monster deaths can chain without resolving any death twice", () =>
   assert.equal(scope.resolveEnemyDeath(scope.first), false);
   assert.equal(read(scope, "player.score"), 300);
 });
+
+test("a destroyed turret raises a mushroom cloud and damages nearby monsters", () => {
+  const { scope, calls, ctx } = createGame();
+  read(scope, `
+    addTurret(fixtureRoad,200);
+    globalThis.sourceTurret=turrets[0];
+    globalThis.nearTurretTarget=addEnemy(fixtureRoad,400,'monster4');
+    globalThis.farTurretTarget=addEnemy(fixtureRoad,900,'monster2');
+    nearTurretTarget.hp=3;
+  `);
+  const farHp = scope.farTurretTarget.hp;
+
+  assert.equal(scope.resolveTurretDeath(scope.sourceTurret), true);
+  assert.equal(scope.sourceTurret.alive, false);
+  assert.equal(scope.nearTurretTarget.hp, 1);
+  assert.equal(scope.nearTurretTarget.hitKnockbackVelocity,
+    read(scope, "TURRET_DEATH_KNOCKBACK_SPEED"));
+  assert.equal(scope.nearTurretTarget.revivalKnockback, true);
+  assert.equal(scope.farTurretTarget.hp, farHp);
+  assert.equal(read(scope, "player.score"), read(scope, "TURRET.score"));
+  assert.equal(read(scope, "particles.filter(p=>p.turretMushroomBlast).length"), 1);
+  assert.equal(read(scope, "particles.filter(p=>p.debris).length"), 24);
+  assert.ok(read(scope, "shake") >= 26);
+
+  const particleCount = read(scope, "particles.length");
+  assert.equal(scope.resolveTurretDeath(scope.sourceTurret), false);
+  assert.equal(read(scope, "particles.length"), particleCount);
+  assert.equal(read(scope, "player.score"), read(scope, "TURRET.score"));
+
+  calls.length = 0;
+  const blast = read(scope, "particles.find(p=>p.turretMushroomBlast)");
+  blast.life = blast.maxLife * 0.62;
+  scope.drawTurretMushroomBlast(blast);
+  const rectangles = calls.filter((call) => call.operation === "fillRect");
+  assert.ok(rectangles.length >= 35);
+  assert.ok(rectangles.some((call) => call.color === "#fff2a8"));
+  assert.ok(rectangles.some((call) => call.color === "#3f2934"));
+  assert.equal(calls.filter((call) => call.operation.includes("Gradient")).length, 0);
+  assert.equal(calls.filter((call) => call.operation === "arc").length, 0);
+  assert.equal(ctx.globalAlpha, 1);
+  assert.equal(ctx.globalCompositeOperation, "source-over");
+});
