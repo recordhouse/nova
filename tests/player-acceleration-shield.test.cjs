@@ -103,6 +103,41 @@ test("two acceleration-shield charges each absorb one enemy attack", () => {
   assert.equal(read(scope, "player.downPhase"), "fall");
 });
 
+test("a maximum-speed shield hit plays the run voice once per consumed charge", () => {
+  const { scope } = createGame();
+  read(scope, `
+    globalThis.runVoiceCalls=0;
+    playFemaleRunVoice=()=>{runVoiceCalls+=1};
+    player.vx=PLAYER_RUN_MAX_SPEED;
+    player.runSpeed=PLAYER_RUN_MAX_SPEED;
+    player.accelerationShieldStage=3;
+    player.accelerationShieldCharges=3;
+    player.accelerationShieldVisual=3;
+  `);
+
+  assert.equal(scope.takePlayerDamage(1, {
+    kind: "monster2-fireball", x: 300, y: 450,
+  }), true);
+  assert.equal(read(scope, "runVoiceCalls"), 1);
+  assert.equal(read(scope, "player.accelerationShieldCharges"), 2);
+
+  assert.equal(scope.takePlayerDamage(1, {
+    kind: "monster2-fireball", x: 300, y: 450,
+  }), false);
+  assert.equal(read(scope, "runVoiceCalls"), 1,
+    "the grace window for one impact must not repeat the voice");
+
+  read(scope, `
+    player.accelerationShieldBlockTimer=0;
+    player.vx=PLAYER_RUN_MAX_SPEED-1;
+  `);
+  assert.equal(scope.takePlayerDamage(1, {
+    kind: "monster3-laser", x: 300, y: 450,
+  }), true);
+  assert.equal(read(scope, "runVoiceCalls"), 1,
+    "a shield hit below maximum speed must stay silent");
+});
+
 test("acceleration shield ignores environmental damage", () => {
   const { scope } = createGame();
   read(scope, `

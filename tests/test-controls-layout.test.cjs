@@ -15,3 +15,11 @@ test("test controls are centered at the very bottom of the screen", () => {
   assert.match(rule, /justify-content:\s*center/);
   assert.doesNotMatch(rule, /(?:^|;)\s*top\s*:/);
 });
+
+test("test controls include the dedicated turret spawn button", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+  assert.match(html, /data-test-spawn-turret/);
+  assert.match(html, /aria-label="포탑 한 기 생성"/);
+  assert.match(css, /\.test-monster-spawn-button\.turret\s*\{/);
+});

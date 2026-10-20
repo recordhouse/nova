@@ -224,6 +224,11 @@ button {
   border-color: rgb(255 102 67 / 82%);
 }
 
+.test-monster-spawn-button.turret {
+  color: #e7c6ff;
+  border-color: rgb(190 116 238 / 82%);
+}
+
 .test-area-button[aria-pressed="false"] {
   color: #737b81;
   border-color: rgb(115 123 129 / 48%);

@@ -93,6 +93,9 @@ function updatePlayerDown(dt) {
   player.deepFalling = false;
   player.fallAnimationTime = 0;
   if (typeof playResurrectionSound === "function") playResurrectionSound();
+  if (typeof playFemaleResurrectionVoice === "function") {
+    playFemaleResurrectionVoice();
+  }
   emitPlayerRevival();
 }
 
@@ -251,6 +254,15 @@ function syncPlayerStandVideoPlayback(standing) {
 
 function updatePlayer(dt) {
   const downForThisFrame = playerIsDown();
+  const playerControlActive = (
+    controls.left || controls.right || controls.up || controls.down ||
+    controls.jump || controls.fire || controls.ultimate
+  );
+  if (!downForThisFrame && !gameOver && !player.voiceControlStarted &&
+      playerControlActive) {
+    player.voiceControlStarted = true;
+    if (typeof playFemaleStartVoice === "function") playFemaleStartVoice();
+  }
   const knockbackDt = downForThisFrame
     ? Math.min(dt, player.hitKnockbackTime)
     : 0;
@@ -530,24 +542,34 @@ function updatePlayer(dt) {
   if (startedFiring) {
     player.fireBarrel = 0;
     player.fireTimer = 0;
+    player.fireVoicePlayedForHold = false;
   }
+  if (!firing) player.fireVoicePlayedForHold = false;
   player.fireWasActive = firing;
   player.fireTimer = Math.max(0, player.fireTimer - dt);
   const firingPose = firing && (
     player.fireEnergy >= PLAYER_FIRE_ENERGY_PER_SHOT || player.fireTimer > 0
   );
-  const runVideoPose = !firingPose && !downForThisFrame && (
+  const startVoiceStandVideo = !downForThisFrame &&
+    typeof isFemaleStartVoiceVideoActive === "function" &&
+    isFemaleStartVoiceVideoActive();
+  const runVideoPose = !startVoiceStandVideo && !firingPose && !downForThisFrame && (
     playerIsRunningOnGround() || !player.grounded
   );
-  syncPlayerGunVideoPlayback(firingPose);
+  syncPlayerGunVideoPlayback(firingPose && !startVoiceStandVideo);
   syncPlayerRunVideoPlayback(runVideoPose);
   syncPlayerStandVideoPlayback(
-    !firingPose && !runVideoPose && !downForThisFrame &&
-    player.grounded,
+    startVoiceStandVideo || (
+      !firingPose && !runVideoPose && !downForThisFrame && player.grounded
+    ),
   );
   player.fireAnimationTime = firingPose ? player.fireAnimationTime + dt : 0;
   if (firing && player.fireTimer <= 0 && player.fireEnergy >= PLAYER_FIRE_ENERGY_PER_SHOT) {
-    shootPlayer();
+    const fired = shootPlayer();
+    if (fired && !player.fireVoicePlayedForHold) {
+      player.fireVoicePlayedForHold = true;
+      if (typeof playFemaleAttackVoice === "function") playFemaleAttackVoice();
+    }
   }
 
   updateCameraLookDirection(dt);
@@ -567,6 +589,9 @@ function updatePlayer(dt) {
   cameraY += (targetCameraY - cameraY) * Math.min(1, dt * 4.2);
 
   if (player.y > lowestPlatformY + 430) {
+    if (!gameOver && typeof playFemaleDeathVoice === "function") {
+      playFemaleDeathVoice();
+    }
     gameOver = true;
     syncPlayerGunVideoPlayback(false);
     syncPlayerRunVideoPlayback(false);

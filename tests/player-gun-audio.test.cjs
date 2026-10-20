@@ -168,7 +168,7 @@ test("combat sounds preload and use their intended audio segments", async () => 
     [10, 0],
   ]);
   assert.deepEqual(
-    outputGains.slice(0, 12).map((gain) => gain.value),
+    outputGains.slice(2, 14).map((gain) => gain.value),
     [0.3, 0.34, 0.4, 0.55, 0.38, 0.38, 0.38, 0.42, 0.3, 0.5, 0.44, 0.42],
   );
   assert.deepEqual(gainEvents, [

@@ -190,6 +190,33 @@ test("the stand video plays while the grounded player is idle or crouching", () 
   assert.deepEqual(videoCalls, ["play"], "the firing video takes priority over stand");
 });
 
+test("the first start voice holds the stand video over movement and firing footage", () => {
+  const { scope, videoCalls, runVideoCalls, standVideoCalls } = createGame();
+  read(scope, `
+    globalThis.startVoiceVideoActive=true;
+    globalThis.isFemaleStartVoiceVideoActive=()=>startVoiceVideoActive;
+    player.voiceControlStarted=true;
+    controls.right=true;
+  `);
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(videoCalls, []);
+  assert.deepEqual(runVideoCalls, []);
+  assert.deepEqual(standVideoCalls, ["play"]);
+
+  read(scope, "controls.right=false; controls.fire=true");
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(videoCalls, [],
+    "changing from running to firing cannot replace the held start footage");
+  assert.deepEqual(runVideoCalls, []);
+  assert.deepEqual(standVideoCalls, ["play"]);
+
+  read(scope, "startVoiceVideoActive=false");
+  scope.updatePlayer(1 / 60);
+  assert.deepEqual(standVideoCalls, ["play", "stop"]);
+  assert.deepEqual(videoCalls, ["play"],
+    "the current action footage resumes as soon as the start voice ends");
+});
+
 test("purple gauge tracks the drawn sprite and never blinks with temporary immunity", () => {
   const { scope, calls } = createGame();
   scope.drawPlayer();

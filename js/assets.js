@@ -306,12 +306,15 @@ playMonsterBasicVideo();
 playSpaceBackgroundVideo();
 
 const GameAudioContext = window.AudioContext ?? window.webkitAudioContext;
+const STAGE_MUSIC_VOLUME = 0.18;
+const DEATH_VOICE_SFX_DUCK_LEVEL = 0.16;
+const DEATH_VOICE_MUSIC_DUCK_LEVEL = 0.04;
 const stage01Music = typeof Audio === "function"
   ? new Audio("./assets/music/stage_01.mp3?v=20260924-1") : null;
 let stageMusicPaused = TEST_MODE;
 if (stage01Music) {
   stage01Music.loop = true;
-  stage01Music.volume = 0.18;
+  stage01Music.volume = STAGE_MUSIC_VOLUME;
   stage01Music.preload = "auto";
   stage01Music.playsInline = true;
 }
@@ -359,6 +362,18 @@ const turretDie01SoundData = fetchSoundData("./assets/sound/turret_die_01.mp3");
 const monsterFire02SoundData = fetchSoundData("./assets/sound/monster_fire_02.mp3?v=20260923-1");
 const resurrectionSoundData = fetchSoundData("./assets/sound/resurrection.mp3");
 const shieldSoundData = fetchSoundData("./assets/sound/shield.mp3");
+const femaleStartVoiceData = fetchSoundData("./assets/sound/voice_female_start.mp3");
+const femaleRunVoiceData = fetchSoundData("./assets/sound/voice_female_run.mp3");
+const femaleAttackVoiceData = [1, 2, 3, 4, 5].map((index) =>
+  fetchSoundData(`./assets/sound/voice_female_attack_0${index}.mp3`));
+const femaleDeathVoiceData = [1, 2].map((index) =>
+  fetchSoundData(`./assets/sound/voice_female_die_0${index}.mp3`));
+const femaleEndVoiceData = fetchSoundData("./assets/sound/voice_female_end.mp3");
+const femaleFinishingVoiceData = [1, 2].map((index) =>
+  fetchSoundData(`./assets/sound/voice_female_finishing_0${index}.mp3`));
+const femaleResurrectionVoiceData = fetchSoundData(
+  "./assets/sound/voice_female_resurrection.mp3",
+);
 function createGameAudioContext() {
   if (!GameAudioContext) return null;
   try {
@@ -370,6 +385,16 @@ function createGameAudioContext() {
 
 // Decode during page loading; the first input only has to resume the context.
 const gameAudioContext = createGameAudioContext();
+const gameSfxOutput = gameAudioContext ? gameAudioContext.createGain() : null;
+const femaleVoiceOutput = gameAudioContext ? gameAudioContext.createGain() : null;
+if (gameSfxOutput) {
+  gameSfxOutput.gain.value = 1;
+  gameSfxOutput.connect(gameAudioContext.destination);
+}
+if (femaleVoiceOutput) {
+  femaleVoiceOutput.gain.value = 1;
+  femaleVoiceOutput.connect(gameAudioContext.destination);
+}
 let playerGunSoundBuffer = null;
 const playerGunSoundDecode = gameAudioContext
   ? playerGunSoundData
@@ -393,7 +418,7 @@ const playerGunImpactSoundDecode = gameAudioContext
 const playerGunImpactOutput = gameAudioContext ? gameAudioContext.createGain() : null;
 if (playerGunImpactOutput) {
   playerGunImpactOutput.gain.value = 0.3;
-  playerGunImpactOutput.connect(gameAudioContext.destination);
+  playerGunImpactOutput.connect(gameSfxOutput);
 }
 let playerGunSoundQueued = false;
 let playerGunImpactSoundQueued = false;
@@ -401,7 +426,12 @@ const PLAYER_GUN_SOUND_SLICE_DURATION = 0.115;
 const PLAYER_GUN_SOUND_FADE_DURATION = 0.025;
 const PLAYER_GUN_IMPACT_SOUND_OFFSET = 0.035;
 
-function createPreparedGameSound(dataPromise, volume, offset = 0) {
+function createPreparedGameSound(
+  dataPromise,
+  volume,
+  offset = 0,
+  destination = gameSfxOutput,
+) {
   const sound = {
     buffer: null,
     decode: Promise.resolve(null),
@@ -412,7 +442,7 @@ function createPreparedGameSound(dataPromise, volume, offset = 0) {
   if (!gameAudioContext) return sound;
   sound.output = gameAudioContext.createGain();
   sound.output.gain.value = volume;
-  sound.output.connect(gameAudioContext.destination);
+  sound.output.connect(destination);
   sound.decode = dataPromise
     .then((data) => data ? gameAudioContext.decodeAudioData(data) : null)
     .then((buffer) => {
@@ -434,6 +464,24 @@ const monsterFire02Sound = createPreparedGameSound(monsterFire02SoundData, 0.3);
 const resurrectionSound = createPreparedGameSound(resurrectionSoundData, 0.5);
 const heartPickupSound = createPreparedGameSound(heartPickupSoundData, 0.44);
 const shieldSound = createPreparedGameSound(shieldSoundData, 0.42);
+const femaleStartVoice = createPreparedGameSound(
+  femaleStartVoiceData, 0.72, 0, femaleVoiceOutput);
+const femaleRunVoice = createPreparedGameSound(
+  femaleRunVoiceData, 0.72, 0, femaleVoiceOutput);
+const femaleAttackVoices = femaleAttackVoiceData.map((data) =>
+  createPreparedGameSound(data, 0.72, 0, femaleVoiceOutput));
+const femaleDeathVoices = femaleDeathVoiceData.map((data) =>
+  createPreparedGameSound(data, 1.15, 0, femaleVoiceOutput));
+const femaleEndVoice = createPreparedGameSound(
+  femaleEndVoiceData, 0.78, 0, femaleVoiceOutput);
+const femaleFinishingVoices = femaleFinishingVoiceData.map((data) =>
+  createPreparedGameSound(data, 0.78, 0, femaleVoiceOutput));
+const femaleResurrectionVoice = createPreparedGameSound(
+  femaleResurrectionVoiceData,
+  0.78,
+  0,
+  femaleVoiceOutput,
+);
 
 function prepareGameAudio() {
   playMonsterBasicVideo();
@@ -461,7 +509,7 @@ function startPlayerGunSound() {
   gain.gain.setValueAtTime(0.42, fadeStart);
   gain.gain.linearRampToValueAtTime(0, startTime + duration);
   source.connect(gain);
-  gain.connect(gameAudioContext.destination);
+  gain.connect(gameSfxOutput);
   source.onended = () => {
     source.disconnect();
     gain.disconnect();
@@ -514,14 +562,18 @@ function playPlayerGunImpactSound() {
   });
 }
 
-function startPreparedGameSound(sound) {
+function startPreparedGameSound(sound, onEnded = null) {
   if (!gameAudioContext || !sound.buffer || !sound.output) return;
   const source = gameAudioContext.createBufferSource();
   const offset = Math.min(sound.offset, Math.max(0, sound.buffer.duration - 0.01));
   source.buffer = sound.buffer;
   source.connect(sound.output);
-  source.onended = () => source.disconnect();
+  source.onended = () => {
+    source.disconnect();
+    if (onEnded) onEnded(source);
+  };
   source.start(gameAudioContext.currentTime, offset);
+  return source;
 }
 
 function playPreparedGameSound(sound) {
@@ -536,6 +588,226 @@ function playPreparedGameSound(sound) {
     sound.queued = false;
     if (buffer) startPreparedGameSound(sound);
   });
+}
+
+let activeFemaleVoiceSource = null;
+let activeFemaleVoicePriority = 0;
+let activeFemaleVoiceSound = null;
+let queuedFemaleVoiceRequest = null;
+let femaleVoiceAfterCurrentRequest = null;
+let femaleStartVoiceVideoActive = false;
+let femaleStartVoiceVideoHoldUntil = -Infinity;
+let lastFemaleAttackVoiceIndex = -1;
+let lastFemaleDeathVoiceIndex = -1;
+let lastFemaleFinishingVoiceIndex = -1;
+const FEMALE_DEATH_VOICE_PRIORITY = 100;
+
+function setDeathVoiceDucking(active) {
+  if (gameSfxOutput) {
+    gameSfxOutput.gain.value = active ? DEATH_VOICE_SFX_DUCK_LEVEL : 1;
+  }
+  if (stage01Music) {
+    stage01Music.volume = active
+      ? DEATH_VOICE_MUSIC_DUCK_LEVEL
+      : STAGE_MUSIC_VOLUME;
+  }
+}
+
+function stopActiveFemaleVoice() {
+  const source = activeFemaleVoiceSource;
+  const priority = activeFemaleVoicePriority;
+  const sound = activeFemaleVoiceSound;
+  activeFemaleVoiceSource = null;
+  activeFemaleVoicePriority = 0;
+  activeFemaleVoiceSound = null;
+  if (sound === femaleStartVoice) {
+    femaleStartVoiceVideoActive = false;
+    femaleStartVoiceVideoHoldUntil = -Infinity;
+  }
+  if (priority === FEMALE_DEATH_VOICE_PRIORITY) {
+    setDeathVoiceDucking(false);
+  }
+  if (!source) return;
+  try {
+    if (typeof source.stop === "function") {
+      source.stop();
+      return;
+    }
+  } catch {
+    // An already-ended source cannot be stopped again.
+  }
+  try {
+    source.disconnect();
+  } catch {
+    // Some browsers disconnect the source as part of its ended callback.
+  }
+}
+
+function startPreparedFemaleVoice(sound, priority, interrupt) {
+  if (activeFemaleVoiceSource) {
+    if (!interrupt || priority < activeFemaleVoicePriority) return false;
+    femaleVoiceAfterCurrentRequest = null;
+    stopActiveFemaleVoice();
+  }
+  const isDeathVoice = priority === FEMALE_DEATH_VOICE_PRIORITY;
+  const isStartVoice = sound === femaleStartVoice;
+  if (isDeathVoice) setDeathVoiceDucking(true);
+  let source = null;
+  source = startPreparedGameSound(sound, (endedSource) => {
+    if (activeFemaleVoiceSource !== endedSource) return;
+    activeFemaleVoiceSource = null;
+    activeFemaleVoicePriority = 0;
+    activeFemaleVoiceSound = null;
+    if (isStartVoice) {
+      femaleStartVoiceVideoActive = false;
+      femaleStartVoiceVideoHoldUntil = gameAudioContext.currentTime + 1;
+    }
+    if (isDeathVoice) setDeathVoiceDucking(false);
+    playFemaleVoiceAfterCurrent();
+  });
+  if (!source) {
+    if (isDeathVoice) setDeathVoiceDucking(false);
+    return false;
+  }
+  activeFemaleVoiceSource = source;
+  activeFemaleVoicePriority = priority;
+  activeFemaleVoiceSound = sound;
+  if (isStartVoice) {
+    femaleStartVoiceVideoActive = true;
+    femaleStartVoiceVideoHoldUntil = -Infinity;
+  }
+  return true;
+}
+
+function isFemaleStartVoiceVideoActive() {
+  return femaleStartVoiceVideoActive || Boolean(
+    gameAudioContext && gameAudioContext.currentTime < femaleStartVoiceVideoHoldUntil
+  );
+}
+
+function playPreparedFemaleVoice(sound, priority = 1, interrupt = false) {
+  prepareGameAudio();
+  if (activeFemaleVoiceSource &&
+      (!interrupt || priority < activeFemaleVoicePriority)) return false;
+  if (sound.buffer) {
+    queuedFemaleVoiceRequest = null;
+    return startPreparedFemaleVoice(sound, priority, interrupt);
+  }
+  if (queuedFemaleVoiceRequest &&
+      (!interrupt || priority < queuedFemaleVoiceRequest.priority)) return false;
+  const request = { sound, priority, interrupt };
+  queuedFemaleVoiceRequest = request;
+  sound.decode.then((buffer) => {
+    if (queuedFemaleVoiceRequest !== request) return;
+    queuedFemaleVoiceRequest = null;
+    if (buffer) {
+      startPreparedFemaleVoice(sound, priority, interrupt);
+    } else {
+      playFemaleVoiceAfterCurrent();
+    }
+  });
+  return true;
+}
+
+function playFemaleVoiceAfterCurrent() {
+  if (activeFemaleVoiceSource || queuedFemaleVoiceRequest ||
+      !femaleVoiceAfterCurrentRequest) return false;
+  const request = femaleVoiceAfterCurrentRequest;
+  femaleVoiceAfterCurrentRequest = null;
+  return playPreparedFemaleVoice(
+    request.sound,
+    request.priority,
+    request.interrupt,
+  );
+}
+
+function queueFemaleVoiceAfterCurrent(sound, priority, interrupt) {
+  prepareGameAudio();
+  femaleVoiceAfterCurrentRequest = { sound, priority, interrupt };
+  return true;
+}
+
+function randomVoiceIndex(voices, previousIndex) {
+  if (voices.length <= 1) return 0;
+  if (previousIndex < 0) return Math.floor(Math.random() * voices.length);
+  const indexWithoutPrevious = Math.floor(Math.random() * (voices.length - 1));
+  return indexWithoutPrevious >= previousIndex
+    ? indexWithoutPrevious + 1
+    : indexWithoutPrevious;
+}
+
+function playRandomFemaleVoice(voices, previousIndex, priority, interrupt) {
+  const index = randomVoiceIndex(voices, previousIndex);
+  return {
+    index,
+    played: playPreparedFemaleVoice(voices[index], priority, interrupt),
+  };
+}
+
+function playFemaleStartVoice() {
+  return playPreparedFemaleVoice(femaleStartVoice, 2, false);
+}
+
+function playFemaleRunVoice() {
+  return playPreparedFemaleVoice(femaleRunVoice, 2, false);
+}
+
+function playFemaleAttackVoice() {
+  const result = playRandomFemaleVoice(
+    femaleAttackVoices,
+    lastFemaleAttackVoiceIndex,
+    1,
+    false,
+  );
+  if (result.played) lastFemaleAttackVoiceIndex = result.index;
+  return result.played;
+}
+
+function playFemaleDeathVoice() {
+  const result = playRandomFemaleVoice(
+    femaleDeathVoices,
+    lastFemaleDeathVoiceIndex,
+    FEMALE_DEATH_VOICE_PRIORITY,
+    true,
+  );
+  if (result.played) lastFemaleDeathVoiceIndex = result.index;
+  return result.played;
+}
+
+function playFemaleEndVoice() {
+  if (activeFemaleVoicePriority === FEMALE_DEATH_VOICE_PRIORITY ||
+      queuedFemaleVoiceRequest?.priority === FEMALE_DEATH_VOICE_PRIORITY) {
+    return queueFemaleVoiceAfterCurrent(femaleEndVoice, 5, true);
+  }
+  return playPreparedFemaleVoice(femaleEndVoice, 5, true);
+}
+
+// The ultimate action is not implemented yet. Its future handler can call this
+// directly without adding another audio path.
+function playFemaleFinishingVoice() {
+  const result = playRandomFemaleVoice(
+    femaleFinishingVoices,
+    lastFemaleFinishingVoiceIndex,
+    5,
+    true,
+  );
+  if (result.played) lastFemaleFinishingVoiceIndex = result.index;
+  return result.played;
+}
+
+function playFemaleResurrectionVoice() {
+  return playPreparedFemaleVoice(femaleResurrectionVoice, 4, true);
+}
+
+function resetFemaleVoicePlayback() {
+  queuedFemaleVoiceRequest = null;
+  femaleVoiceAfterCurrentRequest = null;
+  stopActiveFemaleVoice();
+  femaleStartVoiceVideoActive = false;
+  femaleStartVoiceVideoHoldUntil = -Infinity;
+  lastFemaleAttackVoiceIndex = -1;
+  lastFemaleDeathVoiceIndex = -1;
+  lastFemaleFinishingVoiceIndex = -1;
 }
 
 function playGunHitSound() {

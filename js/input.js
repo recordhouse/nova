@@ -293,6 +293,11 @@ testSpawnMonster4Button?.addEventListener("click", (event) => {
   spawnTestMonster("monster4");
 });
 
+testSpawnTurretButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  spawnTestTurret();
+});
+
 function updateTestAreaButton(button, enabled, subject) {
   if (!button || !TEST_MODE) return;
   button.setAttribute("aria-pressed", String(enabled));

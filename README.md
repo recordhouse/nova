@@ -87,3 +87,30 @@
 16대 9 비율로 우주를 가로형태로 만들어줘.
 아래에는 밤인 지구가 떠있고 아주 약간만 보인다.
 전체적으로 어둡게 표현한다.
+
+
+별들과 은하수가 반짝인다.
+지구의 야경도 반짝인다.
+
+
+
+- 게임 처음 시작되고 여자 처음 컨트롤 시작되면
+voice_female_start
+
+- 여자 달려서 가속도 최고 속도가 되었을때
+voice_female_run
+
+- 총을 쏘면 아래 01 ~ 05 랜덤 재생
+voice_female_attack_01 ~ 05
+
+- 여자 죽을떄 아래 파일 랜덤
+voice_female_die_01
+
+- 게임 오버 화면 뜰떄
+voice_female_end
+
+- 여자 필살기떄 아래 랜덤(필살기 아직 추가 안함)
+voice_female_finishing_01 ~ 02
+
+- 여자 부활할때
+voice_female_resurrection

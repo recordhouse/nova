@@ -153,15 +153,28 @@ test("five HUD regions keep score, hearts, map, empty ultimates and stage separa
     assert.ok(ultimates[0].scale > 1.5 && ultimates[0].scale <= 3);
     const scoreEnd = numbers[0].x + scope.hudNumeralWidth(numbers[0].text, numbers[0].scale);
     const stageEnd = numbers[1].x + scope.hudNumeralWidth(numbers[1].text, numbers[1].scale);
-    assert.ok(scoreEnd <= header.score.x + header.score.width,
+    const scoreRowWidth = scoreEnd - labels[0].x;
+    const stageRowWidth = stageEnd - labels[1].x;
+    const infoVisualScale = Math.min(
+      read(scope, "HUD_INFO_TEXT_VISUAL_SCALE"),
+      (header.score.width - 4) / scoreRowWidth,
+      (header.stage.width - 4) / stageRowWidth,
+    );
+    const scoreCenterX = header.score.x + header.score.width / 2;
+    const stageCenterX = header.stage.x + header.stage.width / 2;
+    const visualScoreStart = scoreCenterX + (labels[0].x - scoreCenterX) * infoVisualScale;
+    const visualScoreEnd = scoreCenterX + (scoreEnd - scoreCenterX) * infoVisualScale;
+    const visualStageStart = stageCenterX + (labels[1].x - stageCenterX) * infoVisualScale;
+    const visualStageEnd = stageCenterX + (stageEnd - stageCenterX) * infoVisualScale;
+    assert.ok(visualScoreEnd <= header.score.x + header.score.width,
       `${width}px score leaves its region`);
-    assert.ok(labels[0].x >= header.score.x, `${width}px score leaves its region`);
+    assert.ok(visualScoreStart >= header.score.x, `${width}px score leaves its region`);
     assert.ok(header.score.x >= width / 2,
       `${width}px score is not in the right-side group`);
     assert.equal(header.score.y, 14);
     assert.equal(header.map.y, 7);
-    assert.ok(labels[1].x >= header.stage.x &&
-      stageEnd <= header.stage.x + header.stage.width,
+    assert.ok(visualStageStart >= header.stage.x &&
+      visualStageEnd <= header.stage.x + header.stage.width,
     `${width}px stage leaves its region`);
     assert.ok(header.stage.x < header.score.x, `${width}px stage and score overlap`);
     assert.ok(header.hearts.x < header.ultimate.x &&

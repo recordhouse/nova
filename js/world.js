@@ -2577,6 +2577,7 @@ function resetPlayerPosition() {
   player.fireAnimationTime = 0;
   player.fireBarrel = 0;
   player.fireWasActive = false;
+  player.fireVoicePlayedForHold = false;
   if (typeof syncPlayerGunVideoPlayback === "function") {
     syncPlayerGunVideoPlayback(false);
   } else {
@@ -2610,19 +2611,16 @@ function resetPlayerPosition() {
   player.fallReferenceY = player.y + player.height;
   player.deepFalling = false;
   player.fallAnimationTime = 0;
+  player.voiceControlStarted = false;
+  player.gameOverVoicePlayed = false;
   jumpQueued = false;
 }
 
-function spawnTestMonster(kind) {
-  if (!TEST_MODE || !MONSTER_TYPES[kind]) return null;
-
-  const definition = MONSTER_TYPES[kind];
+function findTestCombatantSpawn(definition, kind, desiredDistance) {
   const playerCenterX = player.x + player.width / 2;
   const playerFeetY = player.y + player.height;
   const facing = player.facing || 1;
-  const desiredCenterX = (
-    playerCenterX + facing * Math.min(240, WIDTH * 0.22)
-  );
+  const desiredCenterX = playerCenterX + facing * desiredDistance;
   const candidates = platforms
     .filter((platform) => (
       platform.kind === "flat" &&
@@ -2699,9 +2697,22 @@ function spawnTestMonster(kind) {
     })
     .filter((candidate) => candidate.valid)
     .sort((first, second) => first.score - second.score);
-  const spawn = candidates[0];
+  return candidates[0] ?? null;
+}
+
+function spawnTestMonster(kind) {
+  if (!TEST_MODE || !MONSTER_TYPES[kind]) return null;
+
+  const definition = MONSTER_TYPES[kind];
+  const spawn = findTestCombatantSpawn(
+    definition,
+    kind,
+    Math.min(240, WIDTH * 0.22),
+  );
   if (!spawn) return null;
 
+  const playerCenterX = player.x + player.width / 2;
+  const facing = player.facing || 1;
   const enemy = addEnemy(spawn.platform, spawn.x, kind, {
     rollCrimson: kind === "monster1",
   });
@@ -2718,6 +2729,28 @@ function spawnTestMonster(kind) {
     145,
   );
   return enemy;
+}
+
+function spawnTestTurret() {
+  if (!TEST_MODE) return null;
+
+  const spawn = findTestCombatantSpawn(TURRET, "turret", Math.min(300, WIDTH * 0.26));
+  if (!spawn) return null;
+
+  const previousCount = turrets.length;
+  addTurret(spawn.platform, spawn.x);
+  const turret = turrets[previousCount] ?? null;
+  if (!turret) return null;
+  const playerCenterX = player.x + player.width / 2;
+  turret.facing = Math.sign(playerCenterX - spawn.centerX) || -(player.facing || 1);
+  burst(
+    turret.x + turret.width / 2,
+    turret.y + turret.height / 2,
+    "#d77cff",
+    18,
+    155,
+  );
+  return turret;
 }
 
 function horizontalJumpTestRoutes() {
@@ -2802,6 +2835,7 @@ function movePlayerToHorizontalJumpPath() {
   player.fireTimer = 0;
   player.fireAnimationTime = 0;
   player.fireWasActive = false;
+  player.fireVoicePlayedForHold = false;
   player.fireEnergy = PLAYER_FIRE_ENERGY_MAX;
   player.invincible = 1;
   resetPlayerDownState();
@@ -2974,6 +3008,9 @@ function toggleTestMap() {
 }
 
 function resetGame() {
+  if (typeof resetFemaleVoicePlayback === "function") {
+    resetFemaleVoicePlayback();
+  }
   bullets.length = 0;
   enemyBullets.length = 0;
   particles.length = 0;

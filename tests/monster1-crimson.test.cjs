@@ -176,12 +176,16 @@ test("a destroyed turret raises a mushroom cloud and damages nearby monsters", (
   const blast = read(scope, "particles.find(p=>p.turretMushroomBlast)");
   blast.life = blast.maxLife * 0.62;
   scope.drawTurretMushroomBlast(blast);
-  const rectangles = calls.filter((call) => call.operation === "fillRect");
-  assert.ok(rectangles.length >= 35);
-  assert.ok(rectangles.some((call) => call.color === "#fff2a8"));
-  assert.ok(rectangles.some((call) => call.color === "#3f2934"));
-  assert.equal(calls.filter((call) => call.operation.includes("Gradient")).length, 0);
-  assert.equal(calls.filter((call) => call.operation === "arc").length, 0);
+  const ellipses = calls.filter((call) => call.operation === "ellipse");
+  const embers = calls.filter((call) => call.operation === "arc");
+  assert.ok(ellipses.length >= 45, "overlapping rounded blobs form the smoke cloud");
+  assert.equal(embers.length, 14);
+  assert.ok(calls.some((call) => call.operation === "stroke"),
+    "a soft ground shockwave remains visible");
+  assert.equal(calls.filter((call) => call.operation === "fillRect").length, 0,
+    "the active smoke renderer no longer builds the cloud from square blocks");
+  assert.ok(calls.some((call) => call.color === "#29242d"));
+  assert.ok(calls.some((call) => call.color === "#8b4a3c"));
   assert.equal(ctx.globalAlpha, 1);
   assert.equal(ctx.globalCompositeOperation, "source-over");
 });

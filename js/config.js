@@ -16,6 +16,7 @@ const testSpawnMonster1Button = document.querySelector("[data-test-spawn-monster
 const testSpawnMonster2Button = document.querySelector("[data-test-spawn-monster2]");
 const testSpawnMonster3Button = document.querySelector("[data-test-spawn-monster3]");
 const testSpawnMonster4Button = document.querySelector("[data-test-spawn-monster4]");
+const testSpawnTurretButton = document.querySelector("[data-test-spawn-turret]");
 const ultimateControlButton = document.querySelector("[data-ultimate-control]");
 const gameShellElement = document.querySelector(".game-shell");
 if (testControlsElement) testControlsElement.hidden = !TEST_MODE;

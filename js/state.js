@@ -56,6 +56,7 @@ const player = {
   fireBarrel: 0,
   fireImpactGroup: null,
   fireWasActive: false,
+  fireVoicePlayedForHold: false,
   fireVideoActive: false,
   runVideoActive: false,
   standVideoActive: false,
@@ -82,6 +83,8 @@ const player = {
   fallReferenceY: BASE_GROUND_Y,
   deepFalling: false,
   fallAnimationTime: 0,
+  voiceControlStarted: false,
+  gameOverVoicePlayed: false,
 };
 
 function playerIsDown() {

@@ -173,6 +173,10 @@ function update(dt) {
         syncPlayerStandVideoPlayback(false);
       }
     }
+    if (!playerIsDown() && !player.gameOverVoicePlayed) {
+      player.gameOverVoicePlayed = true;
+      if (typeof playFemaleEndVoice === "function") playFemaleEndVoice();
+    }
     return;
   }
   updatePlayer(dt);
@@ -186,6 +190,10 @@ function update(dt) {
   }
   updateElectricWires();
   updateParticles(dt);
+  if (gameOver && !playerIsDown() && !player.gameOverVoicePlayed) {
+    player.gameOverVoicePlayed = true;
+    if (typeof playFemaleEndVoice === "function") playFemaleEndVoice();
+  }
 }
 
 function updateHeartItems() {

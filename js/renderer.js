@@ -2395,7 +2395,7 @@ function drawCrimsonGrenadeBlast(particle) {
   ctx.restore();
 }
 
-function drawTurretMushroomBlast(particle) {
+function drawTurretMushroomBlastPixel(particle) {
   const remaining = Math.max(0, particle.life / particle.maxLife);
   const progress = 1 - remaining;
   const phase = particle.phase ?? 0;
@@ -2410,6 +2410,29 @@ function drawTurretMushroomBlast(particle) {
   ctx.save();
   ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
   ctx.globalAlpha = fade;
+
+  if (progress < 0.52) {
+    const shockProgress = progress / 0.52;
+    const shockFade = 1 - shockProgress;
+    ctx.globalCompositeOperation = "lighter";
+    for (const direction of [-1, 1]) {
+      for (let layer = 0; layer < 3; layer += 1) {
+        const length = size * (0.1 + shockProgress * (0.22 + layer * 0.08));
+        const thickness = Math.max(2, pixelSnap(5 - layer + shockFade * 3));
+        ctx.globalAlpha = fade * shockFade * (0.92 - layer * 0.18);
+        ctx.fillStyle = layer === 0 ? "#fff2a8"
+          : layer === 1 ? "#ff9c2f" : "#e54432";
+        ctx.fillRect(
+          pixelSnap(direction > 0 ? size * 0.06 : -size * 0.06 - length),
+          pixelSnap(layer * 5 - 2),
+          Math.max(4, pixelSnap(length)),
+          thickness,
+        );
+      }
+    }
+    ctx.globalAlpha = fade;
+    ctx.globalCompositeOperation = "source-over";
+  }
 
   if (progress < 0.36) {
     const flashRemaining = 1 - progress / 0.36;
@@ -2461,6 +2484,21 @@ function drawTurretMushroomBlast(particle) {
         Math.max(3, pixelSnap(segmentHeight * 0.68)),
       );
     }
+    const veinX = offsetX + (crimsonGrenadeNoise(seed + 6.4) - 0.5) * segmentWidth * 0.58;
+    ctx.fillStyle = segment % 3 === 0 ? "#ffd36a" : "#b74432";
+    ctx.fillRect(
+      pixelSnap(veinX),
+      pixelSnap(y - segmentHeight * 0.58),
+      Math.max(2, pixelSnap(segmentWidth * 0.13)),
+      Math.max(2, pixelSnap(segmentHeight * 0.22)),
+    );
+    ctx.fillStyle = "#322630";
+    ctx.fillRect(
+      pixelSnap(offsetX - segmentWidth * 0.42),
+      pixelSnap(y - segmentHeight * (0.25 + crimsonGrenadeNoise(seed + 9.3) * 0.45)),
+      Math.max(2, pixelSnap(segmentWidth * 0.11)),
+      Math.max(2, pixelSnap(segmentHeight * 0.18)),
+    );
   }
 
   const capRows = [0.42, 0.72, 0.96, 1, 0.82, 0.55];
@@ -2488,6 +2526,22 @@ function drawTurretMushroomBlast(particle) {
         Math.max(3, pixelSnap(rowHeight * 0.62)),
       );
     }
+    for (let detail = 0; detail < 3; detail += 1) {
+      const detailSeed = seed + 12.4 + detail * 3.77;
+      const detailX = offsetX + (crimsonGrenadeNoise(detailSeed) - 0.5) * width * 0.82;
+      const detailY = y + rowHeight * (0.16 + crimsonGrenadeNoise(detailSeed + 1.9) * 0.56);
+      const detailWidth = Math.max(2, pixelSnap(
+        2 + crimsonGrenadeNoise(detailSeed + 5.1) * size * 0.025,
+      ));
+      ctx.fillStyle = detail === 0 && progress < 0.72 ? "#ffc85a"
+        : detail % 2 === 0 ? "#b54334" : "#2b2430";
+      ctx.fillRect(
+        pixelSnap(detailX),
+        pixelSnap(detailY),
+        detailWidth,
+        Math.max(2, pixelSnap(detailWidth * 0.58)),
+      );
+    }
   }
 
   for (let lobe = 0; lobe < 12; lobe += 1) {
@@ -2505,8 +2559,356 @@ function drawTurretMushroomBlast(particle) {
       Math.max(4, pixelSnap(lobeSize)),
       Math.max(4, pixelSnap(lobeSize * 0.72)),
     );
+    if (lobe % 2 === 0) {
+      ctx.fillStyle = lobe % 4 === 0 ? "#c34d38" : "#552832";
+      ctx.fillRect(
+        pixelSnap(x - lobeSize * 0.12),
+        pixelSnap(y - lobeSize * 0.2),
+        Math.max(2, pixelSnap(lobeSize * 0.28)),
+        Math.max(2, pixelSnap(lobeSize * 0.18)),
+      );
+    }
   }
 
+  const rimY = capY + rowHeight * 3.12;
+  ctx.globalCompositeOperation = "lighter";
+  for (let rim = 0; rim < 11; rim += 1) {
+    const seed = phase * 73.6 + rim * 6.19;
+    const across = rim / 10 - 0.5;
+    const rimWidth = size * (0.034 + crimsonGrenadeNoise(seed) * 0.025);
+    const rimHeight = size * (0.025 + crimsonGrenadeNoise(seed + 3.1) * 0.025);
+    const x = across * capWidth * 0.83;
+    const y = rimY + Math.abs(across) * rowHeight * 0.5;
+    ctx.fillStyle = rim % 3 === 0 ? "#fff0a0"
+      : rim % 2 === 0 ? "#ffb12f" : "#f05a30";
+    ctx.fillRect(
+      pixelSnap(x - rimWidth / 2),
+      pixelSnap(y),
+      Math.max(3, pixelSnap(rimWidth)),
+      Math.max(3, pixelSnap(rimHeight)),
+    );
+    if (rim % 2 === 0) {
+      ctx.fillStyle = "#ffe57c";
+      ctx.fillRect(
+        pixelSnap(x - rimWidth * 0.18),
+        pixelSnap(y + rimHeight),
+        Math.max(2, pixelSnap(rimWidth * 0.36)),
+        Math.max(2, pixelSnap(rimHeight * 0.65)),
+      );
+    }
+  }
+
+  if (progress < 0.82) {
+    const cinderFade = 1 - progress / 0.82;
+    ctx.globalAlpha = fade * (0.5 + cinderFade * 0.5);
+    for (let cinder = 0; cinder < 14; cinder += 1) {
+      const seed = phase * 91.2 + cinder * 9.73;
+      const direction = crimsonGrenadeNoise(seed) < 0.5 ? -1 : 1;
+      const travel = size * progress *
+        (0.2 + crimsonGrenadeNoise(seed + 1.8) * 0.55);
+      const x = direction * (capWidth * 0.16 + travel) +
+        (crimsonGrenadeNoise(seed + 4.2) - 0.5) * size * 0.08;
+      const y = -size * (0.04 + crimsonGrenadeNoise(seed + 7.5) * 0.55) -
+        progress * size * 0.18;
+      const cinderSize = Math.max(2, pixelSnap(2 + crimsonGrenadeNoise(seed + 11.1) * 5));
+      ctx.fillStyle = cinder % 4 === 0 ? "#fff3ad"
+        : cinder % 2 === 0 ? "#ff9e31" : "#e84631";
+      ctx.fillRect(pixelSnap(x), pixelSnap(y), cinderSize * 1.6, cinderSize);
+    }
+  }
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = fade;
+
+  if (progress > 0.22) {
+    for (let wisp = 0; wisp < 8; wisp += 1) {
+      const seed = phase * 44.9 + wisp * 10.31;
+      const drift = (crimsonGrenadeNoise(seed) - 0.5) * capWidth * 0.82;
+      const lift = size * (0.1 + progress * 0.16 +
+        crimsonGrenadeNoise(seed + 5.7) * 0.14);
+      const wispSize = size * (0.025 + crimsonGrenadeNoise(seed + 9.2) * 0.035);
+      ctx.fillStyle = wisp % 3 === 0 ? "#362a35"
+        : wisp % 2 === 0 ? "#4c2c35" : "#653032";
+      ctx.fillRect(
+        pixelSnap(drift - wispSize / 2),
+        pixelSnap(capY - lift),
+        Math.max(3, pixelSnap(wispSize)),
+        Math.max(3, pixelSnap(wispSize * 0.72)),
+      );
+      ctx.fillStyle = wisp % 2 === 0 ? "#2b2630" : "#4a2931";
+      ctx.fillRect(
+        pixelSnap(drift + wispSize * 0.18),
+        pixelSnap(capY - lift - wispSize * 0.72),
+        Math.max(2, pixelSnap(wispSize * 0.45)),
+        Math.max(2, pixelSnap(wispSize * 0.36)),
+      );
+    }
+  }
+
+  if (progress < 0.74) {
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = fade * (1 - progress / 0.74) * 0.86;
+    for (let ember = 0; ember < 10; ember += 1) {
+      const seed = phase * 106.7 + ember * 5.83;
+      const direction = ember % 2 === 0 ? -1 : 1;
+      const x = direction * size *
+        (0.08 + crimsonGrenadeNoise(seed) * (0.24 + progress * 0.34));
+      const y = size * (0.015 + crimsonGrenadeNoise(seed + 3.4) * 0.045);
+      const emberWidth = Math.max(2, pixelSnap(2 + crimsonGrenadeNoise(seed + 6.8) * 5));
+      ctx.fillStyle = ember % 3 === 0 ? "#fff0a0"
+        : ember % 2 === 0 ? "#ff9d32" : "#e84a31";
+      ctx.fillRect(
+        pixelSnap(x),
+        pixelSnap(y),
+        emberWidth,
+        Math.max(2, pixelSnap(emberWidth * 0.5)),
+      );
+    }
+  }
+
+  ctx.restore();
+}
+
+const turretExplosionBlobCache = new Map();
+
+function turretExplosionBlobSprite(tone) {
+  const palette = {
+    charcoal: ["rgba(37, 34, 42, 0.96)", "rgba(71, 59, 65, 0.72)"],
+    smoke: ["rgba(72, 63, 69, 0.94)", "rgba(118, 91, 83, 0.68)"],
+    warm: ["rgba(112, 58, 46, 0.94)", "rgba(190, 82, 45, 0.64)"],
+    fire: ["rgba(255, 245, 190, 0.98)", "rgba(255, 104, 36, 0.74)"],
+  }[tone] ?? ["rgba(72, 63, 69, 0.94)", "rgba(118, 91, 83, 0.68)"];
+  return cachedCanvasSprite(
+    turretExplosionBlobCache,
+    `turret-explosion-${tone}`,
+    96,
+    96,
+    (spriteContext) => {
+      const gradient = spriteContext.createRadialGradient(48, 52, 4, 48, 48, 45);
+      gradient.addColorStop(0, palette[0]);
+      gradient.addColorStop(0.48, palette[1]);
+      gradient.addColorStop(0.8, palette[1].replace(/0\.(?:64|68|72|74)/, "0.28"));
+      gradient.addColorStop(1, "rgba(20, 16, 24, 0)");
+      spriteContext.fillStyle = gradient;
+      spriteContext.fillRect(2, 2, 92, 92);
+    },
+  );
+}
+
+function drawTurretExplosionBlob(x, y, width, height, tone, alpha = 1) {
+  const sprite = turretExplosionBlobSprite(tone);
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  if (sprite) {
+    ctx.drawImage(sprite, x - width / 2, y - height / 2, width, height);
+  } else {
+    ctx.fillStyle = tone === "fire" ? "#ff8b38"
+      : tone === "warm" ? "#8b4a3c"
+        : tone === "charcoal" ? "#29242d" : "#574b50";
+    ctx.beginPath();
+    ctx.ellipse(x, y, width / 2, height / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawTurretMushroomBlast(particle) {
+  const remaining = Math.max(0, particle.life / particle.maxLife);
+  const progress = 1 - remaining;
+  const phase = particle.phase ?? 0;
+  const size = particle.size;
+  const rise = 1 - (1 - progress) ** 2.25;
+  const capGrowth = 1 - (1 - Math.min(1, progress / 0.62)) ** 2;
+  const fade = Math.min(1, remaining * 3.2);
+  const capY = -size * (0.18 + rise * 0.48);
+  const capWidth = size * (0.28 + capGrowth * 0.72);
+  const stemHeight = Math.max(size * 0.18, -capY - size * 0.02);
+  const heat = Math.max(0, 1 - progress / 0.78);
+
+  ctx.save();
+  ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
+
+  if (progress < 0.48) {
+    const shockProgress = progress / 0.48;
+    const shockFade = (1 - shockProgress) * fade;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = shockFade * 0.9;
+    for (let ring = 0; ring < 2; ring += 1) {
+      ctx.beginPath();
+      ctx.ellipse(
+        0,
+        size * 0.025,
+        size * (0.16 + shockProgress * (0.5 + ring * 0.14)),
+        size * (0.035 + shockProgress * 0.025),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.strokeStyle = ring === 0 ? "#ffe7a0" : "#ef6038";
+      ctx.lineWidth = Math.max(1.5, size * (0.018 - ring * 0.004));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  for (let glow = 0; glow < 6; glow += 1) {
+    const seed = phase * 51.9 + glow * 7.17;
+    const vertical = glow / 5;
+    const glowWidth = size * (0.18 + (1 - vertical) * 0.07) * (0.8 + heat * 0.35);
+    drawTurretExplosionBlob(
+      (crimsonGrenadeNoise(seed) - 0.5) * size * 0.08,
+      -vertical * stemHeight * 0.86,
+      glowWidth,
+      glowWidth * 1.35,
+      "fire",
+      fade * heat * (0.55 + (1 - vertical) * 0.25),
+    );
+  }
+  ctx.restore();
+
+  for (let segment = 0; segment < 10; segment += 1) {
+    const vertical = segment / 9;
+    const seed = phase * 63.4 + segment * 5.83;
+    const sway = Math.sin(vertical * Math.PI * 1.3 + phase) * size * 0.028 +
+      (crimsonGrenadeNoise(seed) - 0.5) * size * 0.045;
+    const width = size * (0.16 + vertical * 0.08) *
+      (0.82 + crimsonGrenadeNoise(seed + 2.4) * 0.26);
+    const height = stemHeight / 4.8 * (0.9 + crimsonGrenadeNoise(seed + 6.7) * 0.3);
+    const tone = progress < 0.5 && segment < 7 ? "warm"
+      : segment % 3 === 0 ? "charcoal" : "smoke";
+    drawTurretExplosionBlob(
+      sway,
+      -vertical * stemHeight,
+      width,
+      height,
+      tone,
+      fade * (0.78 + vertical * 0.18),
+    );
+  }
+
+  for (let lobe = 0; lobe < 20; lobe += 1) {
+    const seed = phase * 78.2 + lobe * 6.31;
+    const across = lobe / 19 - 0.5;
+    const x = across * capWidth * 0.9 +
+      (crimsonGrenadeNoise(seed) - 0.5) * size * 0.045;
+    const arch = Math.cos(across * Math.PI);
+    const y = capY - arch * size * 0.13 +
+      (crimsonGrenadeNoise(seed + 3.8) - 0.5) * size * 0.055;
+    const width = size * (0.16 + crimsonGrenadeNoise(seed + 7.2) * 0.1);
+    const height = width * (0.72 + crimsonGrenadeNoise(seed + 10.5) * 0.3);
+    const tone = progress < 0.48 && lobe % 3 !== 0 ? "warm"
+      : lobe % 4 === 0 ? "charcoal" : "smoke";
+    drawTurretExplosionBlob(x, y, width, height, tone, fade * 0.96);
+  }
+
+  for (let crown = 0; crown < 10; crown += 1) {
+    const seed = phase * 42.7 + crown * 9.13;
+    const across = crown / 9 - 0.5;
+    const width = size * (0.14 + crimsonGrenadeNoise(seed) * 0.1);
+    drawTurretExplosionBlob(
+      across * capWidth * 0.68,
+      capY - size * (0.13 + crimsonGrenadeNoise(seed + 3.6) * 0.11),
+      width,
+      width * (0.78 + crimsonGrenadeNoise(seed + 7.1) * 0.28),
+      crown % 3 === 0 ? "charcoal" : "smoke",
+      fade * 0.86,
+    );
+  }
+
+  if (progress > 0.18) {
+    for (let wisp = 0; wisp < 8; wisp += 1) {
+      const seed = phase * 94.6 + wisp * 8.47;
+      const drift = (crimsonGrenadeNoise(seed) - 0.5) * capWidth *
+        (0.55 + progress * 0.32);
+      const wispSize = size * (0.065 + crimsonGrenadeNoise(seed + 5.4) * 0.075);
+      drawTurretExplosionBlob(
+        drift,
+        capY - size * (0.2 + progress * 0.28 + crimsonGrenadeNoise(seed + 2.2) * 0.18),
+        wispSize,
+        wispSize * 0.82,
+        wisp % 3 === 0 ? "charcoal" : "smoke",
+        fade * remaining * 0.72,
+      );
+    }
+  }
+
+  if (progress < 0.76) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = fade * (1 - progress / 0.76);
+    for (let ember = 0; ember < 14; ember += 1) {
+      const seed = phase * 107.3 + ember * 5.91;
+      const direction = ember % 2 === 0 ? -1 : 1;
+      const distance = size * (0.1 + crimsonGrenadeNoise(seed) * (0.3 + progress * 0.34));
+      const radius = 1.5 + crimsonGrenadeNoise(seed + 4.6) * 3.5;
+      ctx.fillStyle = ember % 3 === 0 ? "#fff2b2"
+        : ember % 2 === 0 ? "#ff9d3b" : "#e94d33";
+      ctx.beginPath();
+      ctx.arc(
+        direction * distance,
+        size * 0.02 - crimsonGrenadeNoise(seed + 8.1) * size * 0.28,
+        radius,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function drawPurpleBulletHitElectricity(particle) {
+  const remaining = Math.max(0, particle.life / particle.maxLife);
+  const progress = 1 - remaining;
+  const flickerFrame = Math.floor(progress * 5);
+  const phase = (particle.phase ?? 0) + flickerFrame * 1.73;
+  const travelAngle = particle.travelAngle ?? 0;
+  const reachScale = 0.82 + Math.sin(progress * Math.PI) * 0.28;
+
+  ctx.save();
+  ctx.translate(pixelSnap(particle.x, 1), pixelSnap(particle.y, 1));
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = Math.pow(remaining, 0.62);
+  ctx.rotate(travelAngle);
+
+  for (let bolt = 0; bolt < 7; bolt += 1) {
+    const seed = phase * 37.9 + bolt * 8.41;
+    const angle = (bolt / 7) * Math.PI * 2 +
+      (crimsonGrenadeNoise(seed) - 0.5) * 0.7;
+    const reach = particle.size * reachScale *
+      (0.58 + crimsonGrenadeNoise(seed + 2.6) * 0.5);
+    ctx.save();
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    for (let segment = 1; segment <= 4; segment += 1) {
+      const segmentSeed = seed + segment * 5.27;
+      const x = reach * segment / 4;
+      const y = (crimsonGrenadeNoise(segmentSeed) - 0.5) *
+        particle.size * (segment === 4 ? 0.12 : 0.3);
+      ctx.lineTo(pixelSnap(x, 1), pixelSnap(y, 1));
+    }
+    ctx.lineCap = "square";
+    ctx.lineJoin = "miter";
+    ctx.strokeStyle = bolt % 2 === 0 ? "#8f2dff" : "#c447ff";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.strokeStyle = bolt % 3 === 0 ? "#fff2ff" : "#e8b5ff";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  const flashSize = Math.max(3, pixelSnap(particle.size * (0.16 + remaining * 0.08), 1));
+  ctx.fillStyle = "#f8dcff";
+  ctx.fillRect(-flashSize, -1, flashSize * 2, 2);
+  ctx.fillRect(-1, -flashSize, 2, flashSize * 2);
+  ctx.fillStyle = "#b53cff";
+  ctx.fillRect(-2, -2, 4, 4);
   ctx.restore();
 }
 
@@ -2864,6 +3266,8 @@ function drawParticles() {
       drawTurretMushroomBlast(particle);
     } else if (particle.crimsonGrenadeBlast) {
       drawCrimsonGrenadeBlast(particle);
+    } else if (particle.bulletHitElectric) {
+      drawPurpleBulletHitElectricity(particle);
     } else if (particle.explosionFlash) {
       drawCombatExplosionFlash(particle);
     } else if (particle.explosionSmoke) {
@@ -3228,6 +3632,7 @@ function drawHeartItems() {
 
 const TOP_VIDEO_SLOT_SCALE = 1.28;
 const TOP_VIDEO_SLOT_SIZE_RATIO = 2 / 3;
+const TOP_VIDEO_SLOT_ENLARGEMENT = 1.3;
 const TOP_VIDEO_SLOT_TOP_ASPECT = 1.04;
 const TOP_VIDEO_SLOT_BOTTOM_RATIO = 0.88;
 const TOP_VIDEO_SLOT_REFERENCE_Y = 30;
@@ -3246,12 +3651,14 @@ function topVideoSlotMetrics(mapX, mapWidth) {
   const baseHeight = TOP_VIDEO_SLOT_REFERENCE_Y +
     topVideoSlotReferenceHeight(mapWidth) + 12;
   const maximumTopWidth = Math.max(1, mapX - centerGap);
-  const height = Math.min(
+  const originalHeight = Math.min(
     maximumTopWidth / TOP_VIDEO_SLOT_TOP_ASPECT,
     baseHeight * TOP_VIDEO_SLOT_SCALE * TOP_VIDEO_SLOT_SIZE_RATIO,
   );
+  const height = originalHeight * TOP_VIDEO_SLOT_ENLARGEMENT;
   return {
     centerGap,
+    originalHeight,
     height,
     topWidth: height * TOP_VIDEO_SLOT_TOP_ASPECT,
     bottomWidth: height * TOP_VIDEO_SLOT_BOTTOM_RATIO,
@@ -3267,9 +3674,10 @@ function hudHeaderLayout() {
   const mapWidth = Math.round(WIDTH * (portrait ? 0.44 : 0.38));
   const mapX = (WIDTH - mapWidth) / 2;
   const video = topVideoSlotMetrics(mapX, mapWidth);
-  const mapHeight = Math.round(video.height * MINIMAP_HEIGHT_RATIO);
-  const groupGap = WIDTH < 650 ? 4 : 6;
-  const videoGap = WIDTH < 650 ? 6 : 8;
+  const mapHeight = Math.round(video.originalHeight * MINIMAP_HEIGHT_RATIO);
+  const compactSideLayout = WIDTH < 800;
+  const groupGap = compactSideLayout ? 1 : 6;
+  const videoGap = compactSideLayout ? 1 : 8;
   const leftGroupX = video.topWidth + videoGap;
   const halfInnerEdge = WIDTH / 2 - video.centerGap;
   const sideAvailableWidth = Math.max(2, halfInnerEdge - leftGroupX);
@@ -3314,11 +3722,12 @@ function hudHeaderLayout() {
 
 function topVideoSlotLayout() {
   const header = hudHeaderLayout();
-  const { height, topWidth, bottomWidth } = topVideoSlotMetrics(
+  const { originalHeight, height, topWidth, bottomWidth } = topVideoSlotMetrics(
     header.map.x,
     header.map.width,
   );
   return {
+    originalHeight,
     height,
     left: [
       { x: 0, y: 0 },
@@ -3492,6 +3901,9 @@ function prepareTopVideoSlotLayer(
 
 function drawTopVideoSlots() {
   const layout = topVideoSlotLayout();
+  const forceStartStandVideo =
+    typeof isFemaleStartVoiceVideoActive === "function" &&
+    isFemaleStartVoiceVideoActive();
   for (const [side, points] of [
     ["left", layout.left],
     ["right", layout.right],
@@ -3506,6 +3918,11 @@ function drawTopVideoSlots() {
       : null;
     const standVideo = typeof playerStandVideoAsset !== "undefined" &&
       playerStandVideoAsset.loaded && playerStandVideoAsset.active
+      ? playerStandVideoAsset.video
+      : null;
+    const forcedStartStandVideo = forceStartStandVideo &&
+      typeof playerStandVideoAsset !== "undefined" &&
+      playerStandVideoAsset.loaded
       ? playerStandVideoAsset.video
       : null;
     const downVideo = typeof playerDownVideoAsset !== "undefined" &&
@@ -3525,7 +3942,7 @@ function drawTopVideoSlots() {
       ? monsterBasicVideoAsset.video
       : null;
     const slotVideo = side === "left"
-      ? downVideo ?? gunVideo ?? runVideo ?? standVideo
+      ? forcedStartStandVideo ?? downVideo ?? gunVideo ?? runVideo ?? standVideo
       : enemyVideoAsset?.video ?? basicEnemyVideo;
     const backgroundVideo = side === "right" && enemyVideoAsset
       ? basicEnemyVideo
@@ -4366,16 +4783,17 @@ function drawHud() {
     );
   }
 
+  const ultimateGapUnits = WIDTH < 650 ? 1.7 : 2;
   const ultimateScale = Math.min(
     3,
     header.ultimate.width / Math.max(
       1,
       PLAYER_MAX_ULTIMATE_CHARGES * 7 +
-      (PLAYER_MAX_ULTIMATE_CHARGES - 1) * 2,
+      (PLAYER_MAX_ULTIMATE_CHARGES - 1) * ultimateGapUnits,
     ),
   );
   const ultimateWidth = 7 * ultimateScale;
-  const ultimateGap = 2 * ultimateScale;
+  const ultimateGap = ultimateGapUnits * ultimateScale;
   const ultimateRowWidth = PLAYER_MAX_ULTIMATE_CHARGES * ultimateWidth +
     (PLAYER_MAX_ULTIMATE_CHARGES - 1) * ultimateGap;
   const ultimateX = header.ultimate.x +

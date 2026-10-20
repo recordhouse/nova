@@ -91,3 +91,28 @@ test("cracks mirror with turret facing and stay stable across redraws and hit fl
   assert.equal(JSON.stringify(crackStrokes(calls)), first);
   assert.equal(vm.runInContext("particles.length", scope), 0);
 });
+
+test("bullet impacts draw crisp two-tone purple electric arcs", () => {
+  const { scope, calls } = createGame();
+  calls.length = 0;
+  scope.drawPurpleBulletHitElectricity({
+    x: 420,
+    y: 360,
+    life: 0.12,
+    maxLife: 0.18,
+    size: 26,
+    phase: 0.5,
+    travelAngle: 0,
+  });
+
+  const strokes = calls.filter((call) => call.operation === "stroke");
+  assert.equal(strokes.length, 14);
+  assert.equal(strokes.filter((call) => call.lineWidth === 3).length, 7);
+  assert.equal(strokes.filter((call) => call.lineWidth === 1).length, 7);
+  assert.ok(strokes.some((call) => call.strokeStyle === "#8f2dff"));
+  assert.ok(strokes.some((call) => call.strokeStyle === "#c447ff"));
+  assert.ok(strokes.some((call) => call.strokeStyle === "#fff2ff"));
+  assert.equal(calls.filter((call) => call.operation === "lineTo").length, 28);
+  assert.equal(calls.filter((call) => call.operation === "fillRect").length, 3);
+  assert.equal(calls.filter((call) => call.operation === "arc").length, 0);
+});

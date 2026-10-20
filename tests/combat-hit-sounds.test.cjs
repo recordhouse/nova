@@ -67,6 +67,49 @@ test("organic and metal targets play their matching bullet-hit sounds", () => {
   assert.deepEqual(soundCalls, ["gun_hit", "gun_hit", "metal", "gun_hit", "metal"]);
 });
 
+test("player bullets add one purple electric hit effect to every enemy class", () => {
+  const { scope } = createGame();
+  for (const [kind, x] of [
+    ["monster1", 200],
+    ["monster2", 500],
+    ["monster3", 800],
+    ["monster4", 1050],
+  ]) hitEnemy(scope, kind, x);
+
+  assert.equal(vm.runInContext(
+    "particles.filter(p=>p.bulletHitElectric).length",
+    scope,
+  ), 4);
+  assert.equal(vm.runInContext(
+    "particles.filter(p=>p.bulletHitElectric&&p.size===34).length",
+    scope,
+  ), 4);
+
+  vm.runInContext(`
+    enemies.length=0; turrets.length=0; bullets.length=0;
+    addTurret(fixtureRoad,1200);
+    const turret=turrets[0];
+    bullets.push({kind:'player-bullet',x:turret.x+turret.width/2,
+      y:turret.y+turret.height/2,vx:0,vy:0,radius:4,ricochets:0});
+  `, scope);
+  scope.updateBullets(0);
+  assert.equal(vm.runInContext(
+    "particles.filter(p=>p.bulletHitElectric&&p.size===42).length",
+    scope,
+  ), 1);
+
+  vm.runInContext(`
+    turrets.length=0; bullets.length=0;
+    midBosses.push({x:1450,y:480,width:118,height:96,hp:28,alive:true});
+    bullets.push({kind:'player-bullet',x:1500,y:520,vx:0,vy:0,radius:4,ricochets:0});
+  `, scope);
+  scope.updateBullets(0);
+  assert.equal(vm.runInContext(
+    "particles.filter(p=>p.bulletHitElectric&&p.size===50).length",
+    scope,
+  ), 1);
+});
+
 test("each monster uses its assigned death sound on a lethal hit", () => {
   const { scope, soundCalls } = createGame();
   hitEnemy(scope, "monster1", 200, true);

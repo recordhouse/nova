@@ -18,8 +18,21 @@
     <link rel="preload" href="./assets/sound/monster_fire_02.mp3?v=20260923-1" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/resurrection.mp3" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/shield.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_start.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_run.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_attack_01.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_attack_02.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_attack_03.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_attack_04.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_attack_05.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_die_01.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_die_02.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_end.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_finishing_01.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_finishing_02.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_resurrection.mp3" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/music/stage_01.mp3?v=20260924-1" as="audio" />
-    <link rel="stylesheet" href="./styles.css?v=20261014-2" />
+    <link rel="stylesheet" href="./styles.css?v=20261020-1" />
   </head>
   <body>
     <main class="game-shell" aria-label="NOVA 게임 프로토타입">
@@ -127,6 +140,14 @@
         >
           M4
         </button>
+        <button
+          type="button"
+          class="test-monster-spawn-button turret"
+          data-test-spawn-turret
+          aria-label="포탑 한 기 생성"
+        >
+          T
+        </button>
       </section>
 
       <section class="touch-controls" aria-label="터치 조작 버튼">
@@ -159,15 +180,15 @@
       </section>
     </main>
 
-    <script src="./js/config.js?v=20261019-1"></script>
-    <script src="./js/assets.js?v=20261019-5"></script>
-    <script src="./js/state.js?v=20261014-1"></script>
-    <script src="./js/world.js?v=20261019-1"></script>
-    <script src="./js/combat.js?v=20261019-1"></script>
-    <script src="./js/player.js?v=20261015-1"></script>
+    <script src="./js/config.js?v=20261020-1"></script>
+    <script src="./js/assets.js?v=20261020-7"></script>
+    <script src="./js/state.js?v=20261020-3"></script>
+    <script src="./js/world.js?v=20261020-3"></script>
+    <script src="./js/combat.js?v=20261020-7"></script>
+    <script src="./js/player.js?v=20261020-5"></script>
     <script src="./js/enemies.js?v=20261015-4"></script>
-    <script src="./js/renderer.js?v=20261019-1"></script>
-    <script src="./js/input.js?v=20261015-2"></script>
-    <script src="./js/main.js?v=20261019-1"></script>
+    <script src="./js/renderer.js?v=20261020-6"></script>
+    <script src="./js/input.js?v=20261020-1"></script>
+    <script src="./js/main.js?v=20261020-1"></script>
   </body>
 </html>

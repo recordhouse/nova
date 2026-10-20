@@ -114,6 +114,21 @@ test("M3 test spawning and collision-area drawing work for the flying body", () 
     call.args[0] === hitbox.x && call.args[1] === hitbox.y));
 });
 
+test("T test spawning places one turret safely near the player", () => {
+  const { scope } = createGame();
+  const spawned = scope.spawnTestTurret();
+  assert.ok(spawned);
+  assert.equal(spawned.kind, "turret");
+  assert.equal(spawned.hp, read(scope, "TURRET.hp"));
+  assert.equal(spawned.platform, scope.fixtureRoad);
+  assert.equal(read(scope, "turrets.length"), 1);
+  assert.ok(Math.abs(
+    spawned.x + spawned.width / 2 -
+    (read(scope, "player.x") + read(scope, "player.width") / 2)
+  ) > (spawned.width + read(scope, "player.width")) / 2);
+  assert.equal(read(scope, "particles.length"), 18);
+});
+
 test("monster3 charges its eye and fires exactly one aimed laser", () => {
   const { scope, calls } = createGame();
   const enemy = scope.fixtureEnemy;

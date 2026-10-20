@@ -634,6 +634,29 @@ test("the revival wave deals two damage to nearby hostiles and knocks surviving 
   assert.ok(scope.right.x > rightX);
 });
 
+test("revival damage uses the same organic and metal hit sounds as bullets", () => {
+  const { scope } = createGame();
+  read(scope, `
+    globalThis.revivalHitSounds=[];
+    playGunHitSound=()=>{revivalHitSounds.push('gun_hit')};
+    playMetalHitSound=()=>{revivalHitSounds.push('metal')};
+    globalThis.organicLeft=addEnemy(fixtureRoad,840,'monster1');
+    globalThis.organicRight=addEnemy(fixtureRoad,1080,'monster2');
+    globalThis.metalEnemy=addEnemy(fixtureRoad,980,'monster3');
+    metalEnemy.y=player.y;
+    turrets.push({x:950,y:350,width:108,height:156,alive:true,hp:15,hitTimer:0});
+  `);
+
+  scope.takePlayerDamage(1);
+  recover(scope);
+
+  assert.deepEqual(Array.from(read(scope, "revivalHitSounds")), ["gun_hit", "metal"]);
+  assert.equal(scope.organicLeft.hp, 0);
+  assert.equal(scope.organicRight.hp, 8);
+  assert.equal(scope.metalEnemy.hp, 3);
+  assert.equal(read(scope, "turrets[0].hp"), 13);
+});
+
 test("a close monster group is pushed outwards without body overlap", () => {
   const { scope } = createGame();
   const group = read(scope, "[1080,1152,1224].map(x=>addEnemy(fixtureRoad,x,'monster1'))");

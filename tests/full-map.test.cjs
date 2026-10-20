@@ -169,7 +169,7 @@ test("closed map keeps the small, cropped minimap", () => {
   const header = scope.hudHeaderLayout();
   assert.equal(header.map.width, Math.round(720 * 0.44));
   assert.equal(header.map.height,
-    Math.round(scope.topVideoSlotLayout().height * 0.9));
+    Math.round(scope.topVideoSlotLayout().originalHeight * 0.9));
   assert.ok(width < header.map.width && height < header.map.height);
   const roads = strokes.filter((stroke) => stroke.color === "rgba(83, 221, 242, 0.62)");
   assert.ok(roads.length > 0);

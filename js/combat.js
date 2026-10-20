@@ -249,6 +249,10 @@ function absorbEnemyAttackWithPlayerShield(source) {
   ) return false;
   const brokenTier = player.accelerationShieldCharges;
   player.accelerationShieldCharges -= 1;
+  if (Math.abs(player.vx) >= PLAYER_RUN_MAX_SPEED - 0.001 &&
+      typeof playFemaleRunVoice === "function") {
+    playFemaleRunVoice();
+  }
   emitPlayerShieldBlock(source, brokenTier);
   return true;
 }
@@ -294,6 +298,7 @@ function takePlayerDamage(amount, source = null) {
   player.crouching = false;
   player.fireAnimationTime = 0;
   player.fireWasActive = false;
+  player.fireVoicePlayedForHold = false;
   if (typeof syncPlayerGunVideoPlayback === "function") {
     syncPlayerGunVideoPlayback(false);
   }
@@ -307,7 +312,10 @@ function takePlayerDamage(amount, source = null) {
     playPlayerDownVideo();
   }
   jumpQueued = false;
-  if (player.hp <= 0) gameOver = true;
+  if (player.hp <= 0) {
+    if (typeof playFemaleDeathVoice === "function") playFemaleDeathVoice();
+    gameOver = true;
+  }
   return true;
 }
 
@@ -372,6 +380,31 @@ function emitPlayerHitImpact(source) {
   shake = Math.max(shake, sourceKind === "boss" ? 26 : 22);
 }
 
+function combatantHitSoundGroup(kind) {
+  if (kind === "monster3" || kind === "turret") return "metal";
+  if (kind === "monster1" || kind === "monster2" || kind === "monster4") {
+    return "organic";
+  }
+  return null;
+}
+
+function playCombatantHitSound(kind) {
+  const group = combatantHitSoundGroup(kind);
+  if (group === "metal") {
+    if (typeof playMetalHitSound === "function") playMetalHitSound();
+  } else if (group === "organic") {
+    if (typeof playGunHitSound === "function") playGunHitSound();
+  }
+  return group;
+}
+
+function playGroupedCombatantHitSound(kind, playedGroups) {
+  const group = combatantHitSoundGroup(kind);
+  if (!group || playedGroups.has(group)) return;
+  playedGroups.add(group);
+  playCombatantHitSound(kind);
+}
+
 function emitPlayerRevival() {
   const hitbox = getPlayerHitbox();
   const centerX = player.x + player.width / 2;
@@ -401,6 +434,7 @@ function emitPlayerRevival() {
     });
   }
   const knockbackArea = { x: centerX, y: centerY, radius: PLAYER_REVIVAL_RADIUS };
+  const playedHitSoundGroups = new Set();
   for (const enemy of enemies) {
     if (
       !enemy.alive || !MONSTER_TYPES[enemy.kind] ||
@@ -414,6 +448,7 @@ function emitPlayerRevival() {
       vy: 0,
     };
     enemy.hp = Math.max(0, enemy.hp - PLAYER_REVIVAL_DAMAGE);
+    playGroupedCombatantHitSound(enemy.kind, playedHitSoundGroups);
     burstMonsterFragments(impact, enemy, enemy.hp <= 0);
     if (enemy.hp <= 0) {
       resolveEnemyDeath(enemy);
@@ -443,6 +478,7 @@ function emitPlayerRevival() {
       vy: 0,
     };
     turret.hp = Math.max(0, turret.hp - PLAYER_REVIVAL_DAMAGE);
+    playGroupedCombatantHitSound("turret", playedHitSoundGroups);
     turret.hitTimer = 0.18;
     burstTurretFragments(impact);
     if (turret.hp <= 0) {
@@ -582,6 +618,24 @@ function burstTurretFragments(bullet) {
     color: "#e89cff",
     size: 16,
     explosionFlash: true,
+  });
+}
+
+function emitPurpleBulletHitElectricity(bullet, targetKind) {
+  const life = targetKind === "boss" ? 0.22 : 0.18;
+  particles.push({
+    x: bullet.x,
+    y: bullet.y,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life,
+    maxLife: life,
+    size: targetKind === "boss" ? 50 : targetKind === "turret" ? 42 : 34,
+    phase: Math.random() * Math.PI * 2,
+    travelAngle: Math.atan2(bullet.vy, bullet.vx),
+    color: "#c75cff",
+    bulletHitElectric: true,
   });
 }
 
@@ -1390,16 +1444,10 @@ function updateBullets(dt) {
       ) continue;
       enemy.hp -= 1;
       hit = true;
-      if (enemy.kind === "monster3") {
-        if (typeof playMetalHitSound === "function") playMetalHitSound();
-      } else if (
-        enemy.kind === "monster1" || enemy.kind === "monster2" ||
-        enemy.kind === "monster4"
-      ) {
-        if (typeof playGunHitSound === "function") playGunHitSound();
-      }
+      playCombatantHitSound(enemy.kind);
       applyEnemyBulletImpact(enemy, bullet);
       burstMonsterFragments(bullet, enemy, enemy.hp <= 0);
+      emitPurpleBulletHitElectricity(bullet, enemy.kind);
       burst(
         bullet.x,
         bullet.y,
@@ -1422,8 +1470,9 @@ function updateBullets(dt) {
         turret.hp -= 1;
         turret.hitTimer = 0.18;
         hit = true;
-        if (typeof playMetalHitSound === "function") playMetalHitSound();
+        playCombatantHitSound("turret");
         burstTurretFragments(bullet);
+        emitPurpleBulletHitElectricity(bullet, "turret");
         shake = Math.max(shake, turret.hp <= 0 ? 11 : 5);
         if (turret.hp <= 0) {
           resolveTurretDeath(turret);
@@ -1437,6 +1486,7 @@ function updateBullets(dt) {
         if (!boss.alive || !overlapsCircleRect(bullet, boss)) continue;
         boss.hp -= 1;
         hit = true;
+        emitPurpleBulletHitElectricity(bullet, "boss");
         burst(bullet.x, bullet.y, "#ff8bf2", 9, 185);
         if (boss.hp <= 0) {
           boss.alive = false;

@@ -119,8 +119,8 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
     assert.equal(header.map.x + header.map.width / 2, width / 2);
     const portrait = height > width;
     assert.equal(header.map.width, Math.round(width * (portrait ? 0.44 : 0.38)));
-    assert.equal(header.map.height, Math.round(slots.height * 0.9),
-      "the minimap is slightly shorter than the adjacent video slots");
+    assert.equal(header.map.height, Math.round(slots.originalHeight * 0.9),
+      "enlarging the videos does not also enlarge the minimap");
     assert.ok(header.hearts.x + header.hearts.width < header.ultimate.x);
     assert.ok(header.stage.x + header.stage.width < header.score.x);
     assert.ok(header.hearts.x > slots.left[1].x,
@@ -148,7 +148,7 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
   }
 });
 
-test("two mirrored video slots are reduced near-square trapezoids with wider tops", () => {
+test("two mirrored video slots are enlarged thirty percent and keep wider tops", () => {
   const { scope, calls } = createDisplay();
   for (const [width, height] of [[540, 960], [720, 1280], [960, 540], [1280, 720]]) {
     read(scope, `WIDTH=${width}; HEIGHT=${height}`);
@@ -158,6 +158,9 @@ test("two mirrored video slots are reduced near-square trapezoids with wider top
     assert.equal(slots.right[0].x, width);
     assert.equal(read(scope, "TOP_VIDEO_SLOT_SCALE"), 1.28);
     assert.equal(read(scope, "TOP_VIDEO_SLOT_SIZE_RATIO"), 2 / 3);
+    assert.equal(read(scope, "TOP_VIDEO_SLOT_ENLARGEMENT"), 1.3);
+    assert.ok(Math.abs(slots.height - slots.originalHeight * 1.3) < 1e-9,
+      "the video slot is exactly thirty percent larger");
     assert.ok(slots.left[1].x > slots.height,
       "the top is slightly wider than the slot height");
     assert.ok(slots.left[1].x < slots.height * 1.08,
@@ -166,7 +169,10 @@ test("two mirrored video slots are reduced near-square trapezoids with wider top
       "the top edge is wider than the bottom edge");
     assert.ok(Math.abs(width - slots.right[1].x - slots.left[1].x) < 1e-9);
     assert.ok(Math.abs(width - slots.right[2].x - slots.left[2].x) < 1e-9);
-    assert.ok(slots.left[1].x <= header.map.x - (width < 650 ? 8 : 12));
+    assert.ok(header.hearts.x > slots.left[1].x,
+      "left status items automatically clear the enlarged video");
+    assert.ok(header.score.x + header.score.width < slots.right[1].x,
+      "right status items automatically clear the enlarged video");
     assert.equal(slots.left.length, 4);
     assert.equal(slots.right.length, 4);
     assert.equal(slots.left[0].x, slots.left[3].x);
@@ -249,6 +255,26 @@ test("the active stand video shares the left protagonist slot", () => {
   assert.equal(draw[6], 0);
   assert.equal(draw[7], Math.max(layout.left[1].x, layout.left[2].x));
   assert.equal(draw[8], layout.height);
+});
+
+test("the start voice forces stand footage over every active action video", () => {
+  const { scope, calls } = createDisplay();
+  const gunVideo = { videoWidth: 480, videoHeight: 480 };
+  const runVideo = { videoWidth: 480, videoHeight: 480 };
+  const standVideo = { videoWidth: 480, videoHeight: 480 };
+  const downVideo = { videoWidth: 480, videoHeight: 480 };
+  scope.playerGunVideoAsset = { video: gunVideo, loaded: true, active: true };
+  scope.playerRunVideoAsset = { video: runVideo, loaded: true, active: true };
+  scope.playerStandVideoAsset = { video: standVideo, loaded: true, active: true };
+  scope.playerDownVideoAsset = { video: downVideo, loaded: true, active: true };
+  scope.isFemaleStartVoiceVideoActive = () => true;
+
+  scope.drawTopVideoSlots();
+
+  assert.equal(calls.filter((call) =>
+    call.operation === "drawImage" && call.args[0] === standVideo).length, 1);
+  assert.equal(calls.some((call) => call.operation === "drawImage" &&
+    [gunVideo, runVideo, downVideo].includes(call.args[0])), false);
 });
 
 test("the one-shot down video takes priority in the left protagonist slot", () => {
