@@ -307,8 +307,6 @@ playSpaceBackgroundVideo();
 
 const GameAudioContext = window.AudioContext ?? window.webkitAudioContext;
 const STAGE_MUSIC_VOLUME = 0.18;
-const DEATH_VOICE_SFX_DUCK_LEVEL = 0.16;
-const DEATH_VOICE_MUSIC_DUCK_LEVEL = 0.04;
 const stage01Music = typeof Audio === "function"
   ? new Audio("./assets/music/stage_01.mp3?v=20260924-1") : null;
 let stageMusicPaused = TEST_MODE;
@@ -471,7 +469,7 @@ const femaleRunVoice = createPreparedGameSound(
 const femaleAttackVoices = femaleAttackVoiceData.map((data) =>
   createPreparedGameSound(data, 0.72, 0, femaleVoiceOutput));
 const femaleDeathVoices = femaleDeathVoiceData.map((data) =>
-  createPreparedGameSound(data, 1.15, 0, femaleVoiceOutput));
+  createPreparedGameSound(data, 0.72, 0, femaleVoiceOutput));
 const femaleEndVoice = createPreparedGameSound(
   femaleEndVoiceData, 0.78, 0, femaleVoiceOutput);
 const femaleFinishingVoices = femaleFinishingVoiceData.map((data) =>
@@ -594,28 +592,15 @@ let activeFemaleVoiceSource = null;
 let activeFemaleVoicePriority = 0;
 let activeFemaleVoiceSound = null;
 let queuedFemaleVoiceRequest = null;
-let femaleVoiceAfterCurrentRequest = null;
 let femaleStartVoiceVideoActive = false;
 let femaleStartVoiceVideoHoldUntil = -Infinity;
 let lastFemaleAttackVoiceIndex = -1;
 let lastFemaleDeathVoiceIndex = -1;
 let lastFemaleFinishingVoiceIndex = -1;
-const FEMALE_DEATH_VOICE_PRIORITY = 100;
-
-function setDeathVoiceDucking(active) {
-  if (gameSfxOutput) {
-    gameSfxOutput.gain.value = active ? DEATH_VOICE_SFX_DUCK_LEVEL : 1;
-  }
-  if (stage01Music) {
-    stage01Music.volume = active
-      ? DEATH_VOICE_MUSIC_DUCK_LEVEL
-      : STAGE_MUSIC_VOLUME;
-  }
-}
+const FEMALE_DAMAGE_VOICE_PRIORITY = 3;
 
 function stopActiveFemaleVoice() {
   const source = activeFemaleVoiceSource;
-  const priority = activeFemaleVoicePriority;
   const sound = activeFemaleVoiceSound;
   activeFemaleVoiceSource = null;
   activeFemaleVoicePriority = 0;
@@ -623,9 +608,6 @@ function stopActiveFemaleVoice() {
   if (sound === femaleStartVoice) {
     femaleStartVoiceVideoActive = false;
     femaleStartVoiceVideoHoldUntil = -Infinity;
-  }
-  if (priority === FEMALE_DEATH_VOICE_PRIORITY) {
-    setDeathVoiceDucking(false);
   }
   if (!source) return;
   try {
@@ -646,12 +628,9 @@ function stopActiveFemaleVoice() {
 function startPreparedFemaleVoice(sound, priority, interrupt) {
   if (activeFemaleVoiceSource) {
     if (!interrupt || priority < activeFemaleVoicePriority) return false;
-    femaleVoiceAfterCurrentRequest = null;
     stopActiveFemaleVoice();
   }
-  const isDeathVoice = priority === FEMALE_DEATH_VOICE_PRIORITY;
   const isStartVoice = sound === femaleStartVoice;
-  if (isDeathVoice) setDeathVoiceDucking(true);
   let source = null;
   source = startPreparedGameSound(sound, (endedSource) => {
     if (activeFemaleVoiceSource !== endedSource) return;
@@ -662,13 +641,8 @@ function startPreparedFemaleVoice(sound, priority, interrupt) {
       femaleStartVoiceVideoActive = false;
       femaleStartVoiceVideoHoldUntil = gameAudioContext.currentTime + 1;
     }
-    if (isDeathVoice) setDeathVoiceDucking(false);
-    playFemaleVoiceAfterCurrent();
   });
-  if (!source) {
-    if (isDeathVoice) setDeathVoiceDucking(false);
-    return false;
-  }
+  if (!source) return false;
   activeFemaleVoiceSource = source;
   activeFemaleVoicePriority = priority;
   activeFemaleVoiceSound = sound;
@@ -702,28 +676,8 @@ function playPreparedFemaleVoice(sound, priority = 1, interrupt = false) {
     queuedFemaleVoiceRequest = null;
     if (buffer) {
       startPreparedFemaleVoice(sound, priority, interrupt);
-    } else {
-      playFemaleVoiceAfterCurrent();
     }
   });
-  return true;
-}
-
-function playFemaleVoiceAfterCurrent() {
-  if (activeFemaleVoiceSource || queuedFemaleVoiceRequest ||
-      !femaleVoiceAfterCurrentRequest) return false;
-  const request = femaleVoiceAfterCurrentRequest;
-  femaleVoiceAfterCurrentRequest = null;
-  return playPreparedFemaleVoice(
-    request.sound,
-    request.priority,
-    request.interrupt,
-  );
-}
-
-function queueFemaleVoiceAfterCurrent(sound, priority, interrupt) {
-  prepareGameAudio();
-  femaleVoiceAfterCurrentRequest = { sound, priority, interrupt };
   return true;
 }
 
@@ -767,7 +721,7 @@ function playFemaleDeathVoice() {
   const result = playRandomFemaleVoice(
     femaleDeathVoices,
     lastFemaleDeathVoiceIndex,
-    FEMALE_DEATH_VOICE_PRIORITY,
+    FEMALE_DAMAGE_VOICE_PRIORITY,
     true,
   );
   if (result.played) lastFemaleDeathVoiceIndex = result.index;
@@ -775,10 +729,6 @@ function playFemaleDeathVoice() {
 }
 
 function playFemaleEndVoice() {
-  if (activeFemaleVoicePriority === FEMALE_DEATH_VOICE_PRIORITY ||
-      queuedFemaleVoiceRequest?.priority === FEMALE_DEATH_VOICE_PRIORITY) {
-    return queueFemaleVoiceAfterCurrent(femaleEndVoice, 5, true);
-  }
   return playPreparedFemaleVoice(femaleEndVoice, 5, true);
 }
 
@@ -801,7 +751,6 @@ function playFemaleResurrectionVoice() {
 
 function resetFemaleVoicePlayback() {
   queuedFemaleVoiceRequest = null;
-  femaleVoiceAfterCurrentRequest = null;
   stopActiveFemaleVoice();
   femaleStartVoiceVideoActive = false;
   femaleStartVoiceVideoHoldUntil = -Infinity;

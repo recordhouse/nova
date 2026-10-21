@@ -274,6 +274,7 @@ function takePlayerDamage(amount, source = null) {
     ? Math.sign(playerCenterX - sourceCenterX) || Math.sign(impactSource.vx ?? 0) || -player.facing
     : 0;
   if (impactSource) emitPlayerHitImpact(impactSource);
+  const previousHp = player.hp;
   player.hp = Math.max(0, player.hp - amount);
   player.downPhase = "fall";
   player.downTime = 0;
@@ -312,8 +313,10 @@ function takePlayerDamage(amount, source = null) {
     playPlayerDownVideo();
   }
   jumpQueued = false;
+  if (player.hp < previousHp && typeof playFemaleDeathVoice === "function") {
+    playFemaleDeathVoice();
+  }
   if (player.hp <= 0) {
-    if (typeof playFemaleDeathVoice === "function") playFemaleDeathVoice();
     gameOver = true;
   }
   return true;

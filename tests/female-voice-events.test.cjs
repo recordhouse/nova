@@ -147,6 +147,8 @@ test("female voice files preload and share one non-overlapping priority channel"
     "voice_female_resurrection.mp3",
   ].map((file) => `./assets/sound/${file}`);
   for (const file of expectedFiles) assert.ok(fetched.includes(file), `${file} was not fetched`);
+  assert.equal(read(scope, "femaleDeathVoices[0].output.gain.value"), 0.72,
+    "the damage voice uses the same volume as the regular character voices");
 
   const finishLatest = () => started.at(-1).node.onended();
   assert.equal(scope.playFemaleStartVoice(), true);
@@ -171,31 +173,29 @@ test("female voice files preload and share one non-overlapping priority channel"
     "death speech interrupts a lower-priority attack line");
   assert.equal(scope.playFemaleDeathVoice(), true);
   assert.equal(scope.playFemaleEndVoice(), true);
-  assert.equal(started.at(-1).source, "./assets/sound/voice_female_die_02.mp3",
-    "game-over speech waits instead of cutting off death speech");
-  finishLatest();
-  assert.equal(started.at(-1).source, "./assets/sound/voice_female_end.mp3");
+  assert.equal(started.at(-1).source, "./assets/sound/voice_female_end.mp3",
+    "the higher regular cue replaces the damage voice without a special wait");
   finishLatest();
   assert.equal(scope.playFemaleResurrectionVoice(), true);
   finishLatest();
   assert.equal(scope.playFemaleFinishingVoice(), true);
   assert.equal(scope.playFemaleFinishingVoice(), true);
-  assert.equal(scope.playFemaleDeathVoice(), true,
-    "death speech must immediately interrupt even the finishing voice");
-  assert.equal(started.at(-1).source, "./assets/sound/voice_female_die_01.mp3");
-  assert.equal(read(scope, "gameSfxOutput.gain.value"), 0.16,
-    "active effects are immediately ducked under the death voice");
-  assert.equal(read(scope, "stage01Music.volume"), 0.04,
-    "background music is immediately ducked under the death voice");
-  assert.equal(scope.playFemaleEndVoice(), true);
-  assert.equal(started.at(-1).source, "./assets/sound/voice_female_die_01.mp3",
-    "game-over speech must still wait behind the highest-priority death line");
+  assert.equal(scope.playFemaleDeathVoice(), false,
+    "the damage voice does not override a higher-priority finishing voice");
   finishLatest();
+  assert.equal(scope.playFemaleDeathVoice(), true);
+  assert.equal(started.at(-1).source, "./assets/sound/voice_female_die_01.mp3");
+  assert.equal(read(scope, "gameSfxOutput.gain.value"), 1,
+    "the damage voice does not lower gameplay effects");
+  assert.equal(read(scope, "stage01Music.volume"), 0.18,
+    "the damage voice does not lower background music");
+  assert.equal(scope.playFemaleEndVoice(), true);
   assert.equal(started.at(-1).source, "./assets/sound/voice_female_end.mp3");
   assert.equal(read(scope, "gameSfxOutput.gain.value"), 1,
-    "effects return to full volume when the death voice ends");
+    "effects remain at full volume when the damage voice ends");
   assert.equal(read(scope, "stage01Music.volume"), 0.18,
-    "background music returns after the death voice ends");
+    "background music remains unchanged when the damage voice ends");
+  finishLatest();
 
   assert.deepEqual(started.map(({ source: file }) => file), [
     "./assets/sound/voice_female_start.mp3",
@@ -211,7 +211,7 @@ test("female voice files preload and share one non-overlapping priority channel"
     "./assets/sound/voice_female_die_01.mp3",
     "./assets/sound/voice_female_end.mp3",
   ]);
-  assert.equal(stopped.length, 4);
+  assert.equal(stopped.length, 5);
 });
 
 test("control start, maximum-speed collision and new firing holds emit their voice cues", () => {
@@ -290,7 +290,7 @@ test("control start, maximum-speed collision and new firing holds emit their voi
     "pressing fire with no shot available must not request an attack line");
 });
 
-test("death, game over and resurrection cues fire once at their exact state changes", () => {
+test("damage, game over and resurrection cues fire once at their exact state changes", () => {
   const scope = createGame();
   read(scope, `
     globalThis.deathVoiceCalls=0;
@@ -302,14 +302,19 @@ test("death, game over and resurrection cues fire once at their exact state chan
   `);
 
   assert.equal(scope.takePlayerDamage(1), true);
+  assert.equal(read(scope, "deathVoiceCalls"), 1,
+    "losing a heart immediately plays the damage voice");
+  assert.equal(scope.takePlayerDamage(1), false,
+    "the protected down state rejects repeated damage");
+  assert.equal(read(scope, "deathVoiceCalls"), 1,
+    "rejected damage cannot replay the voice");
   scope.updatePlayer(read(scope,
     "PLAYER_DOWN_ANIMATION_DURATION + PLAYER_DOWN_HOLD_DURATION + 0.01"));
   assert.equal(read(scope, "revivalVoiceCalls"), 1);
-  assert.equal(read(scope, "deathVoiceCalls"), 0);
 
   read(scope, "player.invincible=0; player.hp=1; gameOver=false");
   assert.equal(scope.takePlayerDamage(1), true);
-  assert.equal(read(scope, "deathVoiceCalls"), 1);
+  assert.equal(read(scope, "deathVoiceCalls"), 2);
   assert.equal(read(scope, "endVoiceCalls"), 0,
     "game-over speech waits for the down animation to finish");
 
