@@ -2559,6 +2559,7 @@ function startingPlatform() {
 
 function resetPlayerPosition() {
   resetPlayerDownState();
+  playerRevivalWave = null;
   if (typeof stopPlayerDownVideo === "function") stopPlayerDownVideo();
   player.x = 110;
   player.platform = startingPlatform();
@@ -2578,6 +2579,14 @@ function resetPlayerPosition() {
   player.fireBarrel = 0;
   player.fireWasActive = false;
   player.fireVoicePlayedForHold = false;
+  player.ultimateActive = false;
+  player.ultimateTime = 0;
+  player.ultimateStartY = player.y;
+  player.ultimateTargetY = player.y;
+  player.ultimateLasersFired = false;
+  player.ultimateLaserStep = 0;
+  player.ultimateImpactSoundGroup = null;
+  player.ultimateWasActive = false;
   if (typeof syncPlayerGunVideoPlayback === "function") {
     syncPlayerGunVideoPlayback(false);
   } else {
@@ -2931,7 +2940,11 @@ function resizeGameResolution(width, height) {
   }
   for (const bullet of bullets) bullet.y += verticalShift;
   for (const bullet of enemyBullets) bullet.y += verticalShift;
-  for (const particle of particles) particle.y += verticalShift;
+  for (const particle of particles) {
+    particle.y += verticalShift;
+    if (Number.isFinite(particle.originY)) particle.originY += verticalShift;
+  }
+  if (playerRevivalWave) playerRevivalWave.centerY += verticalShift;
   stars.length = 0;
   buildStars();
   lowestPlatformY += verticalShift;

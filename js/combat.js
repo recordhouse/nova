@@ -76,7 +76,375 @@ function addUltimateMeterScore(amount) {
   updateUltimateControlButton();
 }
 
-function resolveEnemyDeath(enemy, playDeathSound = false) {
+function startPlayerUltimate(force = false) {
+  if (gameOver || playerIsDown() || player.ultimateActive) return false;
+  if (!force && (player.ultimateCharges ?? 0) <= 0) return false;
+
+  if (!force) {
+    player.ultimateCharges = Math.max(0, player.ultimateCharges - 1);
+    updateUltimateControlButton();
+  }
+  player.ultimateActive = true;
+  player.ultimateTime = 0;
+  player.ultimateStartY = player.y;
+  player.ultimateTargetY = Math.max(
+    cameraY + 138,
+    player.y - PLAYER_ULTIMATE_LIFT_HEIGHT,
+  );
+  player.ultimateLasersFired = false;
+  player.ultimateLaserStep = 0;
+  player.ultimateImpactSoundGroup = { playedRicochetMask: 0 };
+  player.grounded = false;
+  player.platform = null;
+  player.vx = 0;
+  player.vy = 0;
+  player.crouching = false;
+  player.deepFalling = false;
+  player.fallAnimationTime = 0;
+  player.jumpAnimationTime = 0;
+  player.fireWasActive = false;
+  player.fireVoicePlayedForHold = false;
+  player.fireAnimationTime = 0;
+  if (typeof syncPlayerGunVideoPlayback === "function") syncPlayerGunVideoPlayback(false);
+  if (typeof syncPlayerRunVideoPlayback === "function") syncPlayerRunVideoPlayback(false);
+  if (typeof syncPlayerStandVideoPlayback === "function") syncPlayerStandVideoPlayback(false);
+  if (typeof playFemaleFinishingVoice === "function") playFemaleFinishingVoice();
+  burst(
+    player.x + player.width / 2,
+    player.y + player.height / 2,
+    "#bd68ff",
+    16,
+    210,
+  );
+  shake = Math.max(shake, 8);
+  return true;
+}
+
+function firePlayerUltimateLaserStep(step) {
+  if (!player.ultimateActive) return 0;
+  const lastStep = PLAYER_ULTIMATE_LASER_STEPS - 1;
+  const clampedStep = Math.max(0, Math.min(lastStep, step));
+  const sweepProgress = lastStep > 0 ? clampedStep / lastStep : 0;
+  const centerX = player.x + player.width / 2;
+  const standDrawHeight = PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_STAND_SPRITE_SCALE;
+  const standTopY = player.y + player.height + PLAYER_STAND_SPRITE_Y_OFFSET -
+    standDrawHeight;
+  const centerY = standTopY +
+    standDrawHeight * PLAYER_ULTIMATE_CHEST_HEIGHT_RATIO;
+  const rightAngle = -Math.PI / 2 + sweepProgress * Math.PI;
+  const angles = clampedStep === 0 || clampedStep === lastStep
+    ? [rightAngle]
+    : [rightAngle, -Math.PI - rightAngle];
+
+  for (const angle of angles) {
+    const directionX = Math.cos(angle);
+    const directionY = Math.sin(angle);
+    bullets.push({
+      kind: "player-ultimate-laser",
+      x: centerX + directionX * 10,
+      y: centerY + directionY * 10,
+      vx: directionX * PLAYER_ULTIMATE_LASER_SPEED,
+      vy: directionY * PLAYER_ULTIMATE_LASER_SPEED,
+      radius: PLAYER_ULTIMATE_LASER_RADIUS,
+      beamLength: PLAYER_ULTIMATE_LASER_LENGTH,
+      visibleLength: 10,
+      damage: PLAYER_ULTIMATE_LASER_DAMAGE,
+      ricochets: 0,
+      maxRicochets: PLAYER_ULTIMATE_LASER_MAX_RICOCHETS,
+      ricochetScreenEdges: true,
+      ricochetColor: "#c996ff",
+      impactSoundGroup: player.ultimateImpactSoundGroup,
+      contactTargets: new Set(),
+      ultimateLane: clampedStep,
+    });
+    burst(
+      centerX + directionX * 15,
+      centerY + directionY * 15,
+      "#c996ff",
+      2,
+      90,
+    );
+  }
+  shake = Math.max(shake, clampedStep === 0 ? 10 : 5);
+  return angles.length;
+}
+
+function updatePlayerUltimateLaserSweep() {
+  if (!player.ultimateActive || player.ultimateLasersFired) return 0;
+  const elapsed = player.ultimateTime - PLAYER_ULTIMATE_LIFT_DURATION;
+  if (elapsed < 0) return 0;
+  const lastStep = PLAYER_ULTIMATE_LASER_STEPS - 1;
+  const stepInterval = lastStep > 0
+    ? PLAYER_ULTIMATE_LASER_SWEEP_DURATION / lastStep
+    : 0;
+  const dueStep = stepInterval > 0
+    ? Math.min(lastStep, Math.floor(elapsed / stepInterval))
+    : lastStep;
+  let fired = 0;
+  while (player.ultimateLaserStep <= dueStep) {
+    fired += firePlayerUltimateLaserStep(player.ultimateLaserStep);
+    player.ultimateLaserStep += 1;
+  }
+  if (player.ultimateLaserStep >= PLAYER_ULTIMATE_LASER_STEPS) {
+    player.ultimateLasersFired = true;
+  }
+  return fired;
+}
+
+function playerUltimateLaserSegment(laser) {
+  const speed = Math.hypot(laser.vx, laser.vy);
+  const length = laser.visibleLength ??
+    laser.beamLength ?? PLAYER_ULTIMATE_LASER_LENGTH;
+  const directionX = speed > 0 ? laser.vx / speed : 0;
+  const directionY = speed > 0 ? laser.vy / speed : 0;
+  return {
+    speed,
+    startX: laser.x,
+    startY: laser.y,
+    deltaX: -directionX * length,
+    deltaY: -directionY * length,
+  };
+}
+
+function playerUltimateLaserOverlapsRect(
+  laser,
+  rect,
+  segment = playerUltimateLaserSegment(laser),
+) {
+  if (segment.speed <= 0) return overlapsCircleRect(laser, rect);
+  const minimumX = rect.x - laser.radius;
+  const maximumX = rect.x + rect.width + laser.radius;
+  const minimumY = rect.y - laser.radius;
+  const maximumY = rect.y + rect.height + laser.radius;
+  let entryTime = 0;
+  let exitTime = 1;
+
+  for (const [start, delta, minimum, maximum] of [
+    [segment.startX, segment.deltaX, minimumX, maximumX],
+    [segment.startY, segment.deltaY, minimumY, maximumY],
+  ]) {
+    if (Math.abs(delta) < 1e-9) {
+      if (start < minimum || start > maximum) return false;
+      continue;
+    }
+    const first = (minimum - start) / delta;
+    const second = (maximum - start) / delta;
+    entryTime = Math.max(entryTime, Math.min(first, second));
+    exitTime = Math.min(exitTime, Math.max(first, second));
+    if (entryTime > exitTime) return false;
+  }
+  return true;
+}
+
+function createPlayerUltimateTargetGroup() {
+  return {
+    buckets: new Map(),
+    maxHalfWidth: 0,
+    maxHalfHeight: 0,
+  };
+}
+
+function addPlayerUltimateTarget(snapshot, groupName, target, rect) {
+  const group = snapshot[groupName];
+  const centerX = rect.x + rect.width / 2;
+  const centerY = rect.y + rect.height / 2;
+  const cellX = Math.floor(centerX / snapshot.cellSize);
+  const cellY = Math.floor(centerY / snapshot.cellSize);
+  const key = `${cellX}:${cellY}`;
+  let bucket = group.buckets.get(key);
+  if (!bucket) {
+    bucket = [];
+    group.buckets.set(key, bucket);
+  }
+  bucket.push({ target, rect });
+  group.maxHalfWidth = Math.max(group.maxHalfWidth, rect.width / 2);
+  group.maxHalfHeight = Math.max(group.maxHalfHeight, rect.height / 2);
+}
+
+function playerUltimateLaserTargetSnapshot() {
+  const margin = PLAYER_ULTIMATE_LASER_LENGTH + PLAYER_ULTIMATE_LASER_RADIUS;
+  const visible = (rect) => (
+    rect.x + rect.width >= cameraX - margin &&
+    rect.x <= cameraX + WIDTH + margin &&
+    rect.y + rect.height >= cameraY - margin &&
+    rect.y <= cameraY + HEIGHT + margin
+  );
+  const snapshot = {
+    cellSize: PLAYER_ULTIMATE_TARGET_CELL_SIZE,
+    enemies: createPlayerUltimateTargetGroup(),
+    turrets: createPlayerUltimateTargetGroup(),
+    bosses: createPlayerUltimateTargetGroup(),
+  };
+  for (const enemy of enemies) {
+    if (!enemy.alive) continue;
+    const rect = getEnemyHitbox(enemy);
+    if (visible(rect)) addPlayerUltimateTarget(snapshot, "enemies", enemy, rect);
+  }
+  for (const turret of turrets) {
+    if (turret.alive && visible(turret)) {
+      addPlayerUltimateTarget(snapshot, "turrets", turret, turret);
+    }
+  }
+  for (const boss of midBosses) {
+    if (boss.alive && visible(boss)) {
+      addPlayerUltimateTarget(snapshot, "bosses", boss, boss);
+    }
+  }
+  return snapshot;
+}
+
+function playerUltimateTargetCandidatesForGroup(snapshot, group, laser, segment) {
+  if (Array.isArray(group)) return group;
+  const endX = segment.startX + segment.deltaX;
+  const endY = segment.startY + segment.deltaY;
+  const horizontalMargin = laser.radius + group.maxHalfWidth;
+  const verticalMargin = laser.radius + group.maxHalfHeight;
+  const firstCellX = Math.floor(
+    (Math.min(segment.startX, endX) - horizontalMargin) / snapshot.cellSize,
+  );
+  const lastCellX = Math.floor(
+    (Math.max(segment.startX, endX) + horizontalMargin) / snapshot.cellSize,
+  );
+  const firstCellY = Math.floor(
+    (Math.min(segment.startY, endY) - verticalMargin) / snapshot.cellSize,
+  );
+  const lastCellY = Math.floor(
+    (Math.max(segment.startY, endY) + verticalMargin) / snapshot.cellSize,
+  );
+  const candidates = [];
+  for (let cellX = firstCellX; cellX <= lastCellX; cellX += 1) {
+    for (let cellY = firstCellY; cellY <= lastCellY; cellY += 1) {
+      const bucket = group.buckets.get(`${cellX}:${cellY}`);
+      if (bucket) candidates.push(...bucket);
+    }
+  }
+  return candidates;
+}
+
+function playerUltimateLaserTargetCandidates(laser, snapshot, segment) {
+  if (!snapshot?.cellSize) return snapshot;
+  return {
+    enemies: playerUltimateTargetCandidatesForGroup(
+      snapshot, snapshot.enemies, laser, segment,
+    ),
+    turrets: playerUltimateTargetCandidatesForGroup(
+      snapshot, snapshot.turrets, laser, segment,
+    ),
+    bosses: playerUltimateTargetCandidatesForGroup(
+      snapshot, snapshot.bosses, laser, segment,
+    ),
+  };
+}
+
+function playerUltimateHitFeedbackGroup(laser) {
+  const group = laser.impactSoundGroup;
+  if (!group) return null;
+  if (group.hitFeedbackFrame !== gameTime) {
+    group.hitFeedbackFrame = gameTime;
+    group.hitEffectTargets = new Set();
+    group.hitEffectCount = 0;
+    group.playedHitSoundGroups = new Set();
+  }
+  return group;
+}
+
+function shouldEmitPlayerUltimateHitFeedback(group, target) {
+  if (!group) return true;
+  if (
+    group.hitEffectTargets.has(target) ||
+    group.hitEffectCount >= PLAYER_ULTIMATE_HIT_EFFECT_LIMIT_PER_FRAME
+  ) return false;
+  group.hitEffectTargets.add(target);
+  group.hitEffectCount += 1;
+  return true;
+}
+
+function updatePlayerUltimateLaserHits(
+  laser,
+  targets = playerUltimateLaserTargetSnapshot(),
+) {
+  const previousContacts = laser.contactTargets ?? new Set();
+  const currentContacts = new Set();
+  const damage = laser.damage ?? PLAYER_ULTIMATE_LASER_DAMAGE;
+  const effectDensity = PLAYER_ULTIMATE_EFFECT_DENSITY;
+  const segment = playerUltimateLaserSegment(laser);
+  const candidates = playerUltimateLaserTargetCandidates(laser, targets, segment);
+  const feedbackGroup = playerUltimateHitFeedbackGroup(laser);
+  const playedHitSoundGroups = feedbackGroup?.playedHitSoundGroups ?? new Set();
+
+  for (const { target: enemy, rect } of candidates.enemies) {
+    if (!enemy.alive) continue;
+    if (!playerUltimateLaserOverlapsRect(laser, rect, segment)) continue;
+    currentContacts.add(enemy);
+    if (previousContacts.has(enemy)) continue;
+    enemy.hp = Math.max(0, enemy.hp - damage);
+    if (shouldEmitPlayerUltimateHitFeedback(feedbackGroup, enemy)) {
+      playGroupedPlayerUltimateHitSound(enemy.kind, playedHitSoundGroups);
+      applyEnemyBulletImpact(enemy, laser);
+      burstMonsterFragments(laser, enemy, enemy.hp <= 0, effectDensity);
+      emitPurpleBulletHitElectricity(laser, enemy.kind);
+      burst(
+        laser.x,
+        laser.y,
+        "#b35cff",
+        scaledEffectCount(12, effectDensity),
+        210,
+      );
+      shake = Math.max(shake, enemy.hp <= 0 ? 13 : 7);
+    }
+    if (enemy.hp <= 0) resolveEnemyDeath(enemy, true, effectDensity);
+  }
+
+  for (const { target: turret, rect } of candidates.turrets) {
+    if (!turret.alive) continue;
+    if (!playerUltimateLaserOverlapsRect(laser, rect, segment)) continue;
+    currentContacts.add(turret);
+    if (previousContacts.has(turret)) continue;
+    turret.hp = Math.max(0, turret.hp - damage);
+    turret.hitTimer = 0.24;
+    if (shouldEmitPlayerUltimateHitFeedback(feedbackGroup, turret)) {
+      playGroupedPlayerUltimateHitSound("turret", playedHitSoundGroups);
+      burstTurretFragments(laser, effectDensity);
+      emitPurpleBulletHitElectricity(laser, "turret");
+      shake = Math.max(shake, turret.hp <= 0 ? 14 : 8);
+    }
+    if (turret.hp <= 0) resolveTurretDeath(turret, effectDensity);
+  }
+
+  for (const { target: boss, rect } of candidates.bosses) {
+    if (!boss.alive) continue;
+    if (!playerUltimateLaserOverlapsRect(laser, rect, segment)) continue;
+    currentContacts.add(boss);
+    if (previousContacts.has(boss)) continue;
+    boss.hp = Math.max(0, boss.hp - damage);
+    if (shouldEmitPlayerUltimateHitFeedback(feedbackGroup, boss)) {
+      playGroupedPlayerUltimateHitSound("boss", playedHitSoundGroups);
+      emitPurpleBulletHitElectricity(laser, "boss");
+      burst(
+        laser.x,
+        laser.y,
+        "#e28bff",
+        scaledEffectCount(16, effectDensity),
+        250,
+      );
+    }
+    if (boss.hp <= 0) {
+      boss.alive = false;
+      addPlayerScore(MID_BOSS.score);
+      shake = Math.max(shake, 18);
+      burst(
+        boss.x + boss.width / 2,
+        boss.y + boss.height / 2,
+        "#ff4fd8",
+        scaledEffectCount(42, effectDensity),
+        390,
+      );
+    }
+  }
+  laser.contactTargets = currentContacts;
+}
+
+function resolveEnemyDeath(enemy, playDeathSound = false, effectDensity = 1) {
   if (!enemy?.alive || enemy.deathResolved) return false;
   enemy.deathResolved = true;
   enemy.hp = 0;
@@ -95,22 +463,22 @@ function resolveEnemyDeath(enemy, playDeathSound = false) {
     playMonsterDie01Sound();
   }
   addPlayerScore(enemy.score);
-  burstCombatantExplosion(enemy, enemy.kind);
+  burstCombatantExplosion(enemy, enemy.kind, effectDensity);
   if (isCrimsonMonster1) {
-    emitCrimsonMonsterExplosion(enemy);
+    emitCrimsonMonsterExplosion(enemy, effectDensity);
   }
   return true;
 }
 
-function resolveTurretDeath(turret) {
+function resolveTurretDeath(turret, effectDensity = 1) {
   if (!turret?.alive || turret.deathResolved) return false;
   turret.deathResolved = true;
   turret.hp = 0;
   turret.alive = false;
   if (typeof playTurretDie01Sound === "function") playTurretDie01Sound();
   addPlayerScore(TURRET.score);
-  burstCombatantExplosion(turret, "turret");
-  emitTurretDeathExplosion(turret);
+  burstCombatantExplosion(turret, "turret", effectDensity);
+  emitTurretDeathExplosion(turret, effectDensity);
   return true;
 }
 
@@ -259,6 +627,7 @@ function absorbEnemyAttackWithPlayerShield(source) {
 
 function takePlayerDamage(amount, source = null) {
   if (gameOver || player.hp <= 0 || player.invincible > 0 || playerIsDown() ||
+      player.ultimateActive ||
       (TEST_MODE && testInvincibility)) return false;
   if (sourceConsumesPlayerShield(source) && player.accelerationShieldBlockTimer > 0) {
     return false;
@@ -408,6 +777,19 @@ function playGroupedCombatantHitSound(kind, playedGroups) {
   playCombatantHitSound(kind);
 }
 
+function playGroupedPlayerUltimateHitSound(kind, playedGroups) {
+  const group = combatantHitSoundGroup(kind) ?? (kind === "boss" ? "boss" : null);
+  if (!group || playedGroups.has(group)) return;
+  playedGroups.add(group);
+  if (typeof playPlayerUltimateHitSound === "function") {
+    playPlayerUltimateHitSound(kind);
+  } else if (kind === "boss") {
+    if (typeof playGunHitSound === "function") playGunHitSound();
+  } else {
+    playCombatantHitSound(kind);
+  }
+}
+
 function emitPlayerRevival() {
   const hitbox = getPlayerHitbox();
   const centerX = player.x + player.width / 2;
@@ -436,14 +818,69 @@ function emitPlayerRevival() {
       revivalOrb: true,
     });
   }
-  const knockbackArea = { x: centerX, y: centerY, radius: PLAYER_REVIVAL_RADIUS };
-  const playedHitSoundGroups = new Set();
+  playerRevivalWave = {
+    centerX,
+    centerY,
+    elapsed: 0,
+    radius: PLAYER_REVIVAL_WAVE_START_RADIUS,
+    hitTargets: new Set(),
+    playedHitSoundGroups: new Set(),
+  };
+  shake = Math.max(shake, 10);
+}
+
+function playerRevivalWaveRadius(elapsed) {
+  const progress = Math.max(0, Math.min(
+    1,
+    elapsed / PLAYER_REVIVAL_WAVE_DURATION,
+  ));
+  const visualExpansion = progress * 0.46 + progress * progress * 0.54;
+  return PLAYER_REVIVAL_WAVE_START_RADIUS +
+    (PLAYER_REVIVAL_RADIUS - PLAYER_REVIVAL_WAVE_START_RADIUS) * visualExpansion;
+}
+
+function playerRevivalWaveIntersectsRect(wave, rect, previousRadius, radius) {
+  const closestX = Math.max(rect.x, Math.min(wave.centerX, rect.x + rect.width));
+  const closestY = Math.max(rect.y, Math.min(wave.centerY, rect.y + rect.height));
+  const minimumDistance = Math.hypot(
+    closestX - wave.centerX,
+    closestY - wave.centerY,
+  );
+  const farthestX = Math.max(
+    Math.abs(rect.x - wave.centerX),
+    Math.abs(rect.x + rect.width - wave.centerX),
+  );
+  const farthestY = Math.max(
+    Math.abs(rect.y - wave.centerY),
+    Math.abs(rect.y + rect.height - wave.centerY),
+  );
+  const maximumDistance = Math.hypot(farthestX, farthestY);
+  const halfThickness = PLAYER_REVIVAL_WAVE_THICKNESS / 2;
+  const innerRadius = Math.max(0, previousRadius - halfThickness);
+  const outerRadius = radius + halfThickness;
+  return minimumDistance <= outerRadius && maximumDistance >= innerRadius;
+}
+
+function updatePlayerRevivalWave(dt) {
+  const wave = playerRevivalWave;
+  if (!wave || dt <= 0) return false;
+  const previousRadius = wave.radius;
+  wave.elapsed = Math.min(PLAYER_REVIVAL_WAVE_DURATION, wave.elapsed + dt);
+  wave.radius = playerRevivalWaveRadius(wave.elapsed);
+
   for (const enemy of enemies) {
     if (
-      !enemy.alive || !MONSTER_TYPES[enemy.kind] ||
-      !overlapsCircleRect(knockbackArea, getEnemyHitbox(enemy))
+      !enemy.alive || !MONSTER_TYPES[enemy.kind] || wave.hitTargets.has(enemy) ||
+      !playerRevivalWaveIntersectsRect(
+        wave,
+        getEnemyHitbox(enemy),
+        previousRadius,
+        wave.radius,
+      )
     ) continue;
-    const direction = Math.sign(enemy.x + enemy.width / 2 - centerX) || enemy.facing || 1;
+    wave.hitTargets.add(enemy);
+    const direction = Math.sign(enemy.x + enemy.width / 2 - wave.centerX) ||
+      enemy.facing || 1;
     const impact = {
       x: enemy.x + enemy.width / 2,
       y: enemy.y + enemy.height / 2,
@@ -451,7 +888,7 @@ function emitPlayerRevival() {
       vy: 0,
     };
     enemy.hp = Math.max(0, enemy.hp - PLAYER_REVIVAL_DAMAGE);
-    playGroupedCombatantHitSound(enemy.kind, playedHitSoundGroups);
+    playGroupedCombatantHitSound(enemy.kind, wave.playedHitSoundGroups);
     burstMonsterFragments(impact, enemy, enemy.hp <= 0);
     if (enemy.hp <= 0) {
       resolveEnemyDeath(enemy);
@@ -472,8 +909,18 @@ function emitPlayerRevival() {
   }
 
   for (const turret of turrets) {
-    if (!turret.alive || !overlapsCircleRect(knockbackArea, turret)) continue;
-    const direction = Math.sign(turret.x + turret.width / 2 - centerX) || turret.facing || 1;
+    if (
+      !turret.alive || wave.hitTargets.has(turret) ||
+      !playerRevivalWaveIntersectsRect(
+        wave,
+        turret,
+        previousRadius,
+        wave.radius,
+      )
+    ) continue;
+    wave.hitTargets.add(turret);
+    const direction = Math.sign(turret.x + turret.width / 2 - wave.centerX) ||
+      turret.facing || 1;
     const impact = {
       x: turret.x + turret.width / 2,
       y: turret.y + turret.height / 2,
@@ -481,7 +928,7 @@ function emitPlayerRevival() {
       vy: 0,
     };
     turret.hp = Math.max(0, turret.hp - PLAYER_REVIVAL_DAMAGE);
-    playGroupedCombatantHitSound("turret", playedHitSoundGroups);
+    playGroupedCombatantHitSound("turret", wave.playedHitSoundGroups);
     turret.hitTimer = 0.18;
     burstTurretFragments(impact);
     if (turret.hp <= 0) {
@@ -490,7 +937,16 @@ function emitPlayerRevival() {
   }
 
   for (const boss of midBosses) {
-    if (!boss.alive || !overlapsCircleRect(knockbackArea, boss)) continue;
+    if (
+      !boss.alive || wave.hitTargets.has(boss) ||
+      !playerRevivalWaveIntersectsRect(
+        wave,
+        boss,
+        previousRadius,
+        wave.radius,
+      )
+    ) continue;
+    wave.hitTargets.add(boss);
     boss.hp = Math.max(0, boss.hp - PLAYER_REVIVAL_DAMAGE);
     burst(
       boss.x + boss.width / 2,
@@ -505,7 +961,8 @@ function emitPlayerRevival() {
       shake = Math.max(shake, 16);
     }
   }
-  shake = Math.max(shake, 10);
+  if (wave.elapsed >= PLAYER_REVIVAL_WAVE_DURATION) playerRevivalWave = null;
+  return true;
 }
 
 function burst(x, y, color, count = 10, force = 220) {
@@ -557,7 +1014,11 @@ function emitHeartPickupBurst(heart) {
   shake = Math.max(shake, 1.4);
 }
 
-function burstMonsterFragments(bullet, enemy, lethal = false) {
+function scaledEffectCount(count, effectDensity = 1) {
+  return Math.max(1, Math.round(count * effectDensity));
+}
+
+function burstMonsterFragments(bullet, enemy, lethal = false, effectDensity = 1) {
   const bulletSpeed = Math.max(1, Math.hypot(bullet.vx, bullet.vy));
   const baseAngle = Math.atan2(bullet.vy, bullet.vx);
   const colors = enemy.kind === "monster1" && enemy.crimsonVariant
@@ -569,7 +1030,7 @@ function burstMonsterFragments(bullet, enemy, lethal = false) {
     : enemy.kind === "monster4"
     ? ["#ff9d65", "#dc593d", "#92372e", "#2ce4d7", "#34202d"]
     : ["#70ff37", "#c9ff55", "#34ba32", "#713aa0", "#2b1647"];
-  const count = lethal ? 30 : 16;
+  const count = scaledEffectCount(lethal ? 30 : 16, effectDensity);
   const spread = lethal ? Math.PI * 0.9 : Math.PI * 0.58;
 
   for (let i = 0; i < count; i += 1) {
@@ -590,10 +1051,11 @@ function burstMonsterFragments(bullet, enemy, lethal = false) {
   }
 }
 
-function burstTurretFragments(bullet) {
+function burstTurretFragments(bullet, effectDensity = 1) {
   const angle = Math.atan2(-bullet.vy, -bullet.vx);
   const colors = ["#e3e8ef", "#9aa7bd", "#dc7aeb", "#794189", "#ffcb67"];
-  for (let shard = 0; shard < 22; shard += 1) {
+  const shardCount = scaledEffectCount(22, effectDensity);
+  for (let shard = 0; shard < shardCount; shard += 1) {
     const shardAngle = angle + (Math.random() - 0.5) * Math.PI * 1.1;
     const speed = 140 + Math.random() * 310;
     const life = 0.24 + Math.random() * 0.34;
@@ -642,7 +1104,7 @@ function emitPurpleBulletHitElectricity(bullet, targetKind) {
   });
 }
 
-function burstCombatantExplosion(target, kind) {
+function burstCombatantExplosion(target, kind, effectDensity = 1) {
   const isTurret = kind === "turret";
   const isCrimson = kind === "monster1" && target.crimsonVariant;
   const isLarge = isCrimson || isTurret || kind === "monster2" ||
@@ -680,7 +1142,10 @@ function burstCombatantExplosion(target, kind) {
     });
   }
 
-  const sparkCount = isCrimson ? 46 : isLarge ? 34 : 24;
+  const sparkCount = scaledEffectCount(
+    isCrimson ? 46 : isLarge ? 34 : 24,
+    effectDensity,
+  );
   for (let spark = 0; spark < sparkCount; spark += 1) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 110 + Math.random() * (isLarge ? 410 : 310);
@@ -700,7 +1165,8 @@ function burstCombatantExplosion(target, kind) {
     });
   }
 
-  for (let smoke = 0; smoke < (isLarge ? 10 : 6); smoke += 1) {
+  const smokeCount = scaledEffectCount(isLarge ? 10 : 6, effectDensity);
+  for (let smoke = 0; smoke < smokeCount; smoke += 1) {
     const life = 0.65 + Math.random() * 0.55;
     particles.push({
       x: centerX + (Math.random() - 0.5) * target.width * 0.7,
@@ -716,7 +1182,10 @@ function burstCombatantExplosion(target, kind) {
     });
   }
 
-  const debrisCount = isCrimson ? 30 : isTurret ? 24 : isLarge ? 20 : 12;
+  const debrisCount = scaledEffectCount(
+    isCrimson ? 30 : isTurret ? 24 : isLarge ? 20 : 12,
+    effectDensity,
+  );
   let excess = particles.filter((particle) => particle.debris).length +
     debrisCount - COMBAT_DEBRIS_LIMIT;
   for (let i = 0; i < particles.length && excess > 0;) {
@@ -762,7 +1231,7 @@ function burstCombatantExplosion(target, kind) {
   shake = Math.max(shake, isLarge ? 13 : 8);
 }
 
-function emitCrimsonMonsterExplosion(source) {
+function emitCrimsonMonsterExplosion(source, effectDensity = 1) {
   if (source.crimsonExplosionTriggered) return;
   source.crimsonExplosionTriggered = true;
   const centerX = source.x + source.width / 2;
@@ -790,10 +1259,11 @@ function emitCrimsonMonsterExplosion(source) {
     radius: MONSTER1_CRIMSON_EXPLOSION_RADIUS,
     damage: MONSTER1_CRIMSON_EXPLOSION_DAMAGE,
     knockbackSpeed: MONSTER1_CRIMSON_KNOCKBACK_SPEED,
+    effectDensity,
   });
 }
 
-function emitTurretDeathExplosion(source) {
+function emitTurretDeathExplosion(source, effectDensity = 1) {
   if (source.deathExplosionTriggered) return;
   source.deathExplosionTriggered = true;
   const centerX = source.x + source.width / 2;
@@ -822,6 +1292,7 @@ function emitTurretDeathExplosion(source) {
     radius: TURRET_DEATH_EXPLOSION_RADIUS,
     damage: TURRET_DEATH_EXPLOSION_DAMAGE,
     knockbackSpeed: TURRET_DEATH_KNOCKBACK_SPEED,
+    effectDensity,
   });
 }
 
@@ -832,6 +1303,7 @@ function damageNearbyMonstersFromExplosion({
   radius,
   damage,
   knockbackSpeed,
+  effectDensity = 1,
 }) {
 
   const damageArea = {
@@ -853,9 +1325,9 @@ function damageNearbyMonstersFromExplosion({
       vy: -180,
     };
     enemy.hp = Math.max(0, enemy.hp - damage);
-    burstMonsterFragments(impact, enemy, enemy.hp <= 0);
+    burstMonsterFragments(impact, enemy, enemy.hp <= 0, effectDensity);
     if (enemy.hp <= 0) {
-      resolveEnemyDeath(enemy);
+      resolveEnemyDeath(enemy, false, effectDensity);
       continue;
     }
 
@@ -969,16 +1441,41 @@ function shootPlayer() {
 }
 
 function playGroupedPlayerRicochetSound(bullet) {
-  if (typeof playPlayerGunImpactSound !== "function") return;
+  const playImpactSound = (
+    bullet.kind === "player-ultimate-laser" &&
+    typeof playPlayerUltimateRicochetSound === "function"
+  )
+    ? playPlayerUltimateRicochetSound
+    : typeof playPlayerGunImpactSound === "function"
+      ? playPlayerGunImpactSound
+      : null;
+  if (!playImpactSound) return;
   const group = bullet.impactSoundGroup;
   if (!group) {
-    playPlayerGunImpactSound();
+    playImpactSound();
+    return;
+  }
+  if (bullet.kind === "player-ultimate-laser") {
+    const lastPlayedAt = group.lastUltimateRicochetSoundAt ?? -Infinity;
+    if (gameTime - lastPlayedAt < PLAYER_ULTIMATE_RICOCHET_SOUND_INTERVAL) return;
+    group.lastUltimateRicochetSoundAt = gameTime;
+    playImpactSound();
     return;
   }
   const ricochetBit = 1 << Math.min(30, bullet.ricochets);
   if ((group.playedRicochetMask & ricochetBit) !== 0) return;
   group.playedRicochetMask |= ricochetBit;
-  playPlayerGunImpactSound();
+  playImpactSound();
+}
+
+function shouldEmitGroupedUltimateRicochetImpact(bullet) {
+  const group = bullet.impactSoundGroup;
+  if (!group) return true;
+  const ricochetBit = 1 << Math.min(30, bullet.ricochets ?? 0);
+  if ((group.playedUltimateImpactMask ?? 0) & ricochetBit) return false;
+  group.playedUltimateImpactMask = (group.playedUltimateImpactMask ?? 0) |
+    ricochetBit;
+  return true;
 }
 
 function playerFireDirection() {
@@ -1314,6 +1811,12 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
     bullet.y = Math.max(bounds.top, Math.min(bounds.bottom, bullet.y));
   }
   const travelDistance = Math.hypot(bullet.vx, bullet.vy) * dt;
+  if (bullet.kind === "player-ultimate-laser") {
+    bullet.visibleLength = Math.min(
+      bullet.beamLength ?? PLAYER_ULTIMATE_LASER_LENGTH,
+      (bullet.visibleLength ?? 0) + travelDistance,
+    );
+  }
   const steps = Math.max(1, Math.ceil(travelDistance / Math.max(3, bullet.radius * 0.8)));
   const stepTime = dt / steps;
   // Any ricochet still stays within this frame's total travel distance.
@@ -1333,6 +1836,11 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
     if (bullet.kind === "turret-laser") {
       burstTurretLaserImpact(bullet, collision, finalImpact);
     } else if (bullet.kind === "player-bullet") {
+      burstPlayerRicochetImpact(bullet, collision, finalImpact);
+    } else if (
+      bullet.kind === "player-ultimate-laser" &&
+      shouldEmitGroupedUltimateRicochetImpact(bullet)
+    ) {
       burstPlayerRicochetImpact(bullet, collision, finalImpact);
     } else {
       burst(bullet.x, bullet.y, ricochetColor, finalImpact ? 6 : 5, 115);
@@ -1365,7 +1873,10 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
       bullet.vy -= 2 * velocityAlongNormal * collision.normalY;
     }
     bullet.ricochets += 1;
-    if (bullet.kind === "player-bullet") playGroupedPlayerRicochetSound(bullet);
+    if (
+      bullet.kind === "player-bullet" ||
+      bullet.kind === "player-ultimate-laser"
+    ) playGroupedPlayerRicochetSound(bullet);
   }
   return true;
 }
@@ -1430,10 +1941,16 @@ function moveMonster2Fireball(bullet, dt) {
 }
 
 function updateBullets(dt) {
+  let ultimateLaserTargets = null;
   for (let i = bullets.length - 1; i >= 0; i -= 1) {
     const bullet = bullets[i];
     if (!moveRicochetingBullet(bullet, dt, "#c9a7ff")) {
       bullets.splice(i, 1);
+      continue;
+    }
+    if (bullet.kind === "player-ultimate-laser") {
+      ultimateLaserTargets ??= playerUltimateLaserTargetSnapshot();
+      updatePlayerUltimateLaserHits(bullet, ultimateLaserTargets);
       continue;
     }
     let hit = false;

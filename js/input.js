@@ -273,6 +273,16 @@ testInvincibilityButton?.addEventListener("click", (event) => {
 });
 updateTestInvincibilityButton();
 
+function triggerTestUltimate() {
+  if (!TEST_MODE) return false;
+  return startPlayerUltimate(true);
+}
+
+testUltimateButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  triggerTestUltimate();
+});
+
 testSpawnMonster1Button?.addEventListener("click", (event) => {
   event.preventDefault();
   spawnTestMonster("monster1");

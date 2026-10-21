@@ -23,3 +23,11 @@ test("test controls include the dedicated turret spawn button", () => {
   assert.match(html, /aria-label="포탑 한 기 생성"/);
   assert.match(css, /\.test-monster-spawn-button\.turret\s*\{/);
 });
+
+test("test controls include an immediate ultimate button", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+  assert.match(html, /data-test-ultimate/);
+  assert.match(html, /aria-label="필살기 즉시 발동"/);
+  assert.match(css, /\.test-ultimate-button\s*\{/);
+});

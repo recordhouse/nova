@@ -183,11 +183,95 @@ test("a faster takeoff keeps its momentum and travels farther through the jump",
   assert.ok(read(scope, "player.x") - takeoffX > 200);
 });
 
+test("landing without movement input stops airborne momentum immediately", () => {
+  const { scope } = createGame();
+  read(scope, `
+    player.y=413;
+    player.vy=500;
+    player.vx=PLAYER_RUN_MAX_SPEED;
+    player.runSpeed=PLAYER_RUN_MAX_SPEED;
+    player.grounded=false;
+    player.platform=null;
+    player.reversalDirection=-1;
+    player.reversalSparkTimer=0.02;
+  `);
+
+  scope.updatePlayer(frame);
+  assert.equal(read(scope, "player.grounded"), true);
+  assert.equal(read(scope, "player.vx"), 0);
+  assert.equal(read(scope, "player.runSpeed"), read(scope, "player.speed"));
+  assert.equal(read(scope, "player.reversalDirection"), 0);
+  assert.equal(read(scope, "particles.filter(p=>p.reversalSpark).length"), 0);
+
+  const landingX = read(scope, "player.x");
+  scope.updatePlayer(frame);
+  assert.equal(read(scope, "player.x"), landingX,
+    "the player does not continue sliding after touching down");
+});
+
+test("the player's foot width catches a platform edge and keeps its support", () => {
+  const { scope } = createGame();
+  read(scope, `
+    platforms.length=0;
+    globalThis.edgeRoad={kind:'flat',id:2,start:1000,end:1200,y:500,features:[]};
+    platforms.push(edgeRoad);
+    player.x=1000-player.width/2-8;
+    player.y=413;
+    player.vx=0;
+    player.vy=500;
+    player.grounded=false;
+    player.platform=null;
+  `);
+  assert.equal(read(scope, "player.x+player.width/2 < edgeRoad.start"), true,
+    "the center point is still outside the road");
+
+  scope.updatePlayer(frame);
+  assert.equal(read(scope, "player.grounded"), true);
+  assert.equal(read(scope, "player.platform"), read(scope, "edgeRoad"));
+  assert.equal(read(scope, "player.y+player.height"), 500);
+
+  scope.updatePlayer(frame);
+  assert.equal(read(scope, "player.grounded"), true,
+    "edge support persists instead of dropping the player on the next frame");
+
+  read(scope, `
+    player.x=edgeRoad.start-player.width/2-
+      (PLAYER_LANDING_FOOT_WIDTH/2-PLAYER_LANDING_MIN_SUPPORT_WIDTH+1);
+    player.y=413;
+    player.vy=500;
+    player.grounded=false;
+    player.platform=null;
+  `);
+  scope.updatePlayer(frame);
+  assert.equal(read(scope, "player.grounded"), false,
+    "a tiny edge overlap is not enough to keep the player attached");
+});
+
+test("small contacts at both sides cannot bridge a separated-road gap", () => {
+  const { scope } = createGame();
+  read(scope, `
+    platforms.length=0;
+    const leftRoad={kind:'flat',id:2,start:0,end:990,y:500,features:[]};
+    const rightRoad={kind:'flat',id:3,start:1010,end:1200,y:500,features:[]};
+    platforms.push(leftRoad,rightRoad);
+    player.x=1000-player.width/2;
+    player.y=500-player.height;
+    player.vx=0;
+    player.vy=0;
+    player.grounded=true;
+    player.platform=leftRoad;
+  `);
+
+  scope.updatePlayer(frame);
+  assert.equal(read(scope, "player.grounded"), false,
+    "eight pixels on each road is below the ten-pixel support requirement");
+});
+
 test("stepping off an edge briefly preserves both the ground jump and double jump", () => {
   const { scope } = createGame();
   read(scope, `
     maxWorldX=3000;
-    player.x=1977;
+    player.x=1993;
     controls.right=true;
   `);
   scope.updatePlayer(frame);

@@ -117,6 +117,9 @@ test("combat sounds preload and use their intended audio segments", async () => 
   scope.playResurrectionSound();
   scope.playHeartPickupSound();
   scope.playShieldSound();
+  scope.playPlayerUltimateRicochetSound();
+  scope.playPlayerUltimateHitSound("monster2");
+  scope.playPlayerUltimateHitSound("turret");
   const impactOffset = vm.runInContext("PLAYER_GUN_IMPACT_SOUND_OFFSET", scope);
 
   assert.equal(contexts.length, 1);
@@ -166,11 +169,17 @@ test("combat sounds preload and use their intended audio segments", async () => 
     [10, 0],
     [10, 0],
     [10, 0],
+    [10, impactOffset],
+    [10, 0],
+    [10, 0],
   ]);
   assert.deepEqual(
     outputGains.slice(2, 14).map((gain) => gain.value),
     [0.3, 0.34, 0.4, 0.55, 0.38, 0.38, 0.38, 0.42, 0.3, 0.5, 0.44, 0.42],
   );
+  assert.equal(vm.runInContext("playerUltimateRicochetChannel.output.gain.value", scope), 0.52);
+  assert.equal(vm.runInContext("playerUltimateOrganicHitChannel.output.gain.value", scope), 0.5);
+  assert.equal(vm.runInContext("playerUltimateMetalHitChannel.output.gain.value", scope), 0.56);
   assert.deepEqual(gainEvents, [
     ["set", 0.42, 10],
     ["set", 0.42, 10.09],

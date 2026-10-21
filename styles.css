@@ -94,6 +94,7 @@ button {
 .test-map-button,
 .test-music-button,
 .test-invincibility-button,
+.test-ultimate-button,
 .test-area-button,
 .test-monster-spawn-button {
   display: grid;
@@ -134,6 +135,7 @@ button {
 .test-map-button:active,
 .test-music-button:active,
 .test-invincibility-button:active,
+.test-ultimate-button:active,
 .test-area-button:active,
 .test-monster-spawn-button:active {
   transform: translate(2px, 2px);
@@ -182,6 +184,13 @@ button {
   color: #f5dcff;
   border-color: rgb(211 130 255 / 90%);
   background: rgb(168 77 227 / 22%);
+}
+
+.test-ultimate-button {
+  min-width: 72px;
+  color: #f2d7ff;
+  border-color: rgb(210 116 255 / 88%);
+  background: rgb(127 48 181 / 18%);
 }
 
 .test-area-button {

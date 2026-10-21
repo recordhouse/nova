@@ -217,7 +217,8 @@ test("the player revival wave can contact the corrected upper-body region", () =
   assert.equal(scope.overlapsCircleRect(wave, enemy), false);
   assert.equal(scope.overlapsCircleRect(wave, scope.getEnemyHitbox(enemy)), true);
   scope.emitPlayerRevival();
-  assert.equal(Math.abs(enemy.hitKnockbackVelocity), 1500);
+  scope.updatePlayerRevivalWave(read(scope, "PLAYER_REVIVAL_WAVE_DURATION"));
+  assert.equal(Math.abs(enemy.hitKnockbackVelocity), 750);
 });
 
 test("M AREA includes a visible head even when its old collision rectangle was offscreen", () => {

@@ -481,6 +481,19 @@ const femaleResurrectionVoice = createPreparedGameSound(
   femaleVoiceOutput,
 );
 
+function createSharedGameSoundChannel(volume) {
+  const output = gameAudioContext ? gameAudioContext.createGain() : null;
+  if (output) {
+    output.gain.value = volume;
+    output.connect(gameSfxOutput);
+  }
+  return { output, queued: false };
+}
+
+const playerUltimateRicochetChannel = createSharedGameSoundChannel(0.52);
+const playerUltimateOrganicHitChannel = createSharedGameSoundChannel(0.5);
+const playerUltimateMetalHitChannel = createSharedGameSoundChannel(0.56);
+
 function prepareGameAudio() {
   playMonsterBasicVideo();
   playSpaceBackgroundVideo();
@@ -531,15 +544,15 @@ function playPlayerGunSound() {
   });
 }
 
-function startPlayerGunImpactSound() {
-  if (!gameAudioContext || !playerGunImpactSoundBuffer || !playerGunImpactOutput) return;
+function startPlayerGunImpactSound(output = playerGunImpactOutput) {
+  if (!gameAudioContext || !playerGunImpactSoundBuffer || !output) return;
   const source = gameAudioContext.createBufferSource();
   const offset = Math.min(
     PLAYER_GUN_IMPACT_SOUND_OFFSET,
     Math.max(0, playerGunImpactSoundBuffer.duration - 0.01),
   );
   source.buffer = playerGunImpactSoundBuffer;
-  source.connect(playerGunImpactOutput);
+  source.connect(output);
   source.onended = () => {
     source.disconnect();
   };
@@ -560,12 +573,26 @@ function playPlayerGunImpactSound() {
   });
 }
 
-function startPreparedGameSound(sound, onEnded = null) {
-  if (!gameAudioContext || !sound.buffer || !sound.output) return;
+function playPlayerUltimateRicochetSound() {
+  prepareGameAudio();
+  if (playerGunImpactSoundBuffer) {
+    startPlayerGunImpactSound(playerUltimateRicochetChannel.output);
+    return;
+  }
+  if (playerUltimateRicochetChannel.queued) return;
+  playerUltimateRicochetChannel.queued = true;
+  playerGunImpactSoundDecode.then((buffer) => {
+    playerUltimateRicochetChannel.queued = false;
+    if (buffer) startPlayerGunImpactSound(playerUltimateRicochetChannel.output);
+  });
+}
+
+function startPreparedGameSound(sound, onEnded = null, output = sound.output) {
+  if (!gameAudioContext || !sound.buffer || !output) return;
   const source = gameAudioContext.createBufferSource();
   const offset = Math.min(sound.offset, Math.max(0, sound.buffer.duration - 0.01));
   source.buffer = sound.buffer;
-  source.connect(sound.output);
+  source.connect(output);
   source.onended = () => {
     source.disconnect();
     if (onEnded) onEnded(source);
@@ -586,6 +613,28 @@ function playPreparedGameSound(sound) {
     sound.queued = false;
     if (buffer) startPreparedGameSound(sound);
   });
+}
+
+function playPreparedGameSoundOnChannel(sound, channel) {
+  prepareGameAudio();
+  if (sound.buffer) {
+    startPreparedGameSound(sound, null, channel.output);
+    return;
+  }
+  if (channel.queued) return;
+  channel.queued = true;
+  sound.decode.then((buffer) => {
+    channel.queued = false;
+    if (buffer) startPreparedGameSound(sound, null, channel.output);
+  });
+}
+
+function playPlayerUltimateHitSound(kind) {
+  if (kind === "monster3" || kind === "turret") {
+    playPreparedGameSoundOnChannel(metalHitSound, playerUltimateMetalHitChannel);
+    return;
+  }
+  playPreparedGameSoundOnChannel(gunHitSound, playerUltimateOrganicHitChannel);
 }
 
 let activeFemaleVoiceSource = null;
@@ -732,8 +781,7 @@ function playFemaleEndVoice() {
   return playPreparedFemaleVoice(femaleEndVoice, 5, true);
 }
 
-// The ultimate action is not implemented yet. Its future handler can call this
-// directly without adding another audio path.
+// The ultimate activation uses the prepared finishing-voice channel directly.
 function playFemaleFinishingVoice() {
   const result = playRandomFemaleVoice(
     femaleFinishingVoices,

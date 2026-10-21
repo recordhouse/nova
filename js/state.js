@@ -69,6 +69,14 @@ const player = {
   ultimateCharges: 0,
   ultimateMeterScore: 0,
   ultimateChargeStartedAt: -Infinity,
+  ultimateActive: false,
+  ultimateTime: 0,
+  ultimateStartY: 0,
+  ultimateTargetY: 0,
+  ultimateLasersFired: false,
+  ultimateLaserStep: 0,
+  ultimateImpactSoundGroup: null,
+  ultimateWasActive: false,
   score: 0,
   scoreGainAmount: 0,
   scoreGainStartedAt: -Infinity,
@@ -126,6 +134,7 @@ let previousTime = performance.now();
 let gameTime = 0;
 let shake = 0;
 let gameOver = false;
+let playerRevivalWave = null;
 let mapSeed = 0;
 let mapRandom = Math.random;
 let nextPlatformId = 1;

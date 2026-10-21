@@ -104,6 +104,26 @@ function approachPlayerSpeed(value, target, maximumChange) {
   return Math.max(target, value - maximumChange);
 }
 
+function playerFootSupports(centerX) {
+  const halfFootWidth = PLAYER_LANDING_FOOT_WIDTH / 2;
+  const footLeft = centerX - halfFootWidth;
+  const footRight = centerX + halfFootWidth;
+  return platformsBetween(footLeft, footRight).flatMap((platform) => {
+    const overlapLeft = Math.max(footLeft, platform.start);
+    const overlapRight = Math.min(footRight, platform.end);
+    if (overlapRight - overlapLeft < PLAYER_LANDING_MIN_SUPPORT_WIDTH) return [];
+    const contactX = Math.max(
+      platform.start,
+      Math.min(platform.end, centerX),
+    );
+    return [{
+      platform,
+      contactX,
+      surfaceY: platformSurfaceY(platform, contactX),
+    }];
+  });
+}
+
 function playerAccelerationProgress() {
   return Math.max(0, Math.min(1, (
     player.runSpeed - player.speed
@@ -252,6 +272,64 @@ function syncPlayerStandVideoPlayback(standing) {
   }
 }
 
+function updatePlayerCamera(dt) {
+  const playerCenterX = player.x + player.width / 2;
+  updateCameraLookDirection(dt);
+  let targetCameraX = playerCenterX - cameraAnchorScreenX();
+  targetCameraX = Math.max(minWorldX, Math.min(maxWorldX - WIDTH, targetCameraX));
+  const cameraDistance = targetCameraX - cameraX;
+  const easedCameraStep = cameraDistance * (
+    1 - Math.exp(-dt * CAMERA_HORIZONTAL_FOLLOW_SPEED)
+  );
+  const maximumCameraStep = WIDTH * CAMERA_MAX_PAN_SPEED_RATIO * dt;
+  cameraX += Math.max(
+    -maximumCameraStep,
+    Math.min(maximumCameraStep, easedCameraStep),
+  );
+  const playerFeetY = player.y + player.height;
+  const targetCameraY = playerFeetY - BASE_GROUND_Y;
+  cameraY += (targetCameraY - cameraY) * Math.min(1, dt * 4.2);
+}
+
+function updatePlayerUltimate(dt) {
+  player.ultimateTime += dt;
+  const liftProgress = Math.min(
+    1,
+    player.ultimateTime / PLAYER_ULTIMATE_LIFT_DURATION,
+  );
+  const easedLift = 1 - (1 - liftProgress) ** 3;
+  player.y = liftProgress < 1
+    ? player.ultimateStartY +
+      (player.ultimateTargetY - player.ultimateStartY) * easedLift
+    : player.ultimateTargetY + Math.sin(
+      (player.ultimateTime - PLAYER_ULTIMATE_LIFT_DURATION) *
+      PLAYER_ULTIMATE_FLOAT_SPEED,
+    ) * PLAYER_ULTIMATE_FLOAT_AMPLITUDE;
+  player.vx = 0;
+  player.vy = 0;
+  player.grounded = false;
+  player.platform = null;
+  player.crouching = false;
+  player.deepFalling = false;
+  player.jumpAnimationTime += dt;
+  player.fireWasActive = false;
+  player.fireAnimationTime = 0;
+  syncPlayerGunVideoPlayback(false);
+  syncPlayerRunVideoPlayback(false);
+  syncPlayerStandVideoPlayback(false);
+
+  updatePlayerUltimateLaserSweep();
+  if (player.ultimateTime < PLAYER_ULTIMATE_DURATION) return;
+
+  player.ultimateActive = false;
+  player.ultimateTime = 0;
+  player.ultimateImpactSoundGroup = null;
+  player.vy = 0;
+  player.jumpCount = 1;
+  player.airJumpAvailable = true;
+  player.fallReferenceY = player.y + player.height;
+}
+
 function updatePlayer(dt) {
   const downForThisFrame = playerIsDown();
   const playerControlActive = (
@@ -281,6 +359,14 @@ function updatePlayer(dt) {
     player.fireEnergy + PLAYER_FIRE_ENERGY_REGEN_PER_SECOND * dt,
   );
   updatePlayerDown(dt);
+  const ultimateInputStarted = controls.ultimate && !player.ultimateWasActive;
+  player.ultimateWasActive = controls.ultimate;
+  if (ultimateInputStarted) startPlayerUltimate();
+  if (player.ultimateActive) {
+    updatePlayerUltimate(dt);
+    updatePlayerCamera(dt);
+    return;
+  }
   const jumpInputActive = controls.jump || controls.up;
   const jumpInputStarted = jumpQueued || (jumpInputActive && !player.jumpLatch);
   jumpQueued = false;
@@ -462,11 +548,16 @@ function updatePlayer(dt) {
       player.fallReferenceY = player.y + player.height;
     } else {
       const currentFeetY = player.y + player.height;
-      const connectedPlatform = platformsAt(playerCenterX)
-        .map((platform) => ({
-          platform,
-          surfaceY: platformSurfaceY(platform, playerCenterX),
-        }))
+      const centeredSupports = platformsAt(playerCenterX).map((platform) => ({
+        platform,
+        contactX: playerCenterX,
+        surfaceY: platformSurfaceY(platform, playerCenterX),
+      }));
+      const connectedPlatform = (
+        centeredSupports.length > 0
+          ? centeredSupports
+          : playerFootSupports(playerCenterX)
+      )
         .sort(
           (a, b) => Math.abs(a.surfaceY - currentFeetY) - Math.abs(b.surfaceY - currentFeetY),
         )
@@ -510,11 +601,7 @@ function updatePlayer(dt) {
     player.deepFalling = deepFalling;
 
     if (player.vy >= 0) {
-      const landing = platformsAt(playerCenterX)
-        .map((platform) => ({
-          platform,
-          surfaceY: platformSurfaceY(platform, playerCenterX),
-        }))
+      const landing = playerFootSupports(playerCenterX)
         .sort((a, b) => a.surfaceY - b.surfaceY)
         .find((candidate) => (
           previousBottom <= candidate.surfaceY + 7 &&
@@ -530,6 +617,15 @@ function updatePlayer(dt) {
         player.fallReferenceY = landing.surfaceY;
         player.deepFalling = false;
         player.fallAnimationTime = 0;
+        if (horizontalInput === 0) {
+          player.vx = 0;
+          player.runSpeed = player.speed;
+          player.reversalDirection = 0;
+          player.reversalSparkTimer = 0;
+          player.recentRunDirection = 0;
+          player.recentRunSpeed = 0;
+          player.reversalGraceTimer = 0;
+        }
       }
     }
   }
@@ -572,21 +668,7 @@ function updatePlayer(dt) {
     }
   }
 
-  updateCameraLookDirection(dt);
-  let targetCameraX = playerCenterX - cameraAnchorScreenX();
-  targetCameraX = Math.max(minWorldX, Math.min(maxWorldX - WIDTH, targetCameraX));
-  const cameraDistance = targetCameraX - cameraX;
-  const easedCameraStep = cameraDistance * (
-    1 - Math.exp(-dt * CAMERA_HORIZONTAL_FOLLOW_SPEED)
-  );
-  const maximumCameraStep = WIDTH * CAMERA_MAX_PAN_SPEED_RATIO * dt;
-  cameraX += Math.max(
-    -maximumCameraStep,
-    Math.min(maximumCameraStep, easedCameraStep),
-  );
-  const playerFeetY = player.y + player.height;
-  const targetCameraY = playerFeetY - BASE_GROUND_Y;
-  cameraY += (targetCameraY - cameraY) * Math.min(1, dt * 4.2);
+  updatePlayerCamera(dt);
 
   if (player.y > lowestPlatformY + 430) {
     if (!gameOver && typeof playFemaleDeathVoice === "function") {

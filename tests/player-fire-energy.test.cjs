@@ -238,3 +238,13 @@ test("purple gauge tracks the drawn sprite and never blinks with temporary immun
   assert.equal(calls.some((call) => call.color === "#a653f5"), false);
   assert.ok(calls.some((call) => call.color === "#7145a2"));
 });
+
+test("ultimate floating keeps the standing pose instead of using a jump frame", () => {
+  const { scope, calls } = createGame();
+  const standingImage = read(scope, "playerSprites.stand.image");
+  read(scope, "player.ultimateActive=true; player.grounded=false; player.jumpAnimationTime=0.5");
+  scope.drawPlayerSprite(read(scope, "player.x+player.width/2"));
+  const spriteDraw = calls.find((call) => call.operation === "drawImage");
+  assert.ok(spriteDraw, "the floating character still draws a sprite");
+  assert.equal(spriteDraw.args[0], standingImage);
+});

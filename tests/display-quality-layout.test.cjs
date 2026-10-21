@@ -136,7 +136,7 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
     assert.equal(header.stage.y, header.score.y);
     assert.equal(header.hearts.y, header.stage.y);
     assert.equal(header.ultimate.y, header.stage.y);
-    assert.equal(header.infoY, 14);
+    assert.equal(header.infoY, 13);
     assert.equal(header.map.y, 7);
     assert.equal(header.map.y, scope.ultimateMeterLayout().height + 1,
       "the minimap hugs the ultimate meter without overlapping it");
@@ -502,6 +502,57 @@ test("HUD pixel glyphs and hearts reuse their small prerendered sprites", () => 
   assert.equal(created, initialCreated);
   assert.equal(painted, initialPainted);
   assert.equal(calls.filter((call) => call.operation === "drawImage").length, 18);
+});
+
+test("dense ultimate lasers reuse prerendered glow instead of rebuilding blur per ray", () => {
+  const { scope, calls } = createDisplay();
+  const laserLength = read(scope, "PLAYER_ULTIMATE_LASER_LENGTH");
+  let created = 0;
+  let painted = 0;
+  scope.document.createElement = () => {
+    created += 1;
+    return { getContext: () => ({
+      scale() {}, translate() {}, beginPath() {}, moveTo() {}, lineTo() {},
+      stroke() { painted += 1; }, fillRect() {},
+    }) };
+  };
+  const laser = {
+    x: 200, y: 300, vx: 900, vy: 0,
+    beamLength: laserLength, visibleLength: laserLength, ultimateLane: 4,
+  };
+  scope.drawPlayerUltimateLaser(laser);
+  scope.drawPlayerUltimateLaser(laser);
+  assert.equal(created, 1);
+  assert.equal(painted, 4,
+    "the gun laser's three core layers and trailing glow are painted only into the cache");
+  assert.equal(calls.filter((call) => call.operation === "drawImage").length, 2);
+  assert.equal(calls.filter((call) => call.operation === "stroke").length, 0);
+});
+
+test("the ultimate aura centers on the standing sprite and fades at its edge", () => {
+  const { scope, calls, gradients } = createDisplay();
+  read(scope, `
+    player.ultimateActive = true;
+    player.ultimateTime = PLAYER_ULTIMATE_LIFT_DURATION;
+    gameTime = 1;
+  `);
+  calls.length = 0;
+
+  scope.drawPlayerUltimateAura(false);
+  scope.drawPlayerUltimateAura(true);
+
+  const expectedCenterY = read(scope, `player.y + player.height +
+    PLAYER_STAND_SPRITE_Y_OFFSET -
+    PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_STAND_SPRITE_SCALE / 2`);
+  const translate = calls.find((call) => call.operation === "translate");
+  assert.equal(translate.args[1], expectedCenterY);
+  assert.equal(gradients.length, 1);
+  assert.equal(gradients[0].operation, "createRadialGradient");
+  assert.equal(gradients[0].stops.at(-1).offset, 1);
+  assert.match(gradients[0].stops.at(-1).color, /, 0\)$/);
+  assert.equal(calls.filter((call) => call.operation === "arc").length, 1);
+  assert.equal(calls.filter((call) => call.operation === "fill").length, 1);
+  assert.equal(calls.filter((call) => call.operation === "stroke").length, 0);
 });
 
 test("revival orbs and impact rays reuse glow sprites and skip offscreen particles", () => {

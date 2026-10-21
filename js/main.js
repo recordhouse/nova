@@ -180,6 +180,7 @@ function update(dt) {
     return;
   }
   updatePlayer(dt);
+  updatePlayerRevivalWave(dt);
   updateHeartItems();
   updateTurrets(dt);
   updateMidBosses(dt);
@@ -234,4 +235,10 @@ function loop(currentTime) {
 
 buildStars();
 resetGame();
+if (
+  typeof getPlayerUltimateLaserSprite === "function" &&
+  typeof PLAYER_ULTIMATE_LASER_LENGTH === "number"
+) {
+  getPlayerUltimateLaserSprite();
+}
 requestAnimationFrame(loop);

@@ -64,9 +64,12 @@ function createGame() {
 function read(scope, code) { return vm.runInContext(code, scope); }
 function body(calls) { return calls.findLast((call) => call.operation === "drawImage"); }
 function downDuration(scope) { return read(scope, "PLAYER_DOWN_ANIMATION_DURATION"); }
-function recover(scope) {
+function recover(scope, advanceWave = true) {
   scope.updatePlayer(downDuration(scope));
   scope.updatePlayer(2);
+  if (advanceWave) {
+    scope.updatePlayerRevivalWave(read(scope, "PLAYER_REVIVAL_WAVE_DURATION"));
+  }
 }
 
 test("a successful revival plays resurrection.mp3 exactly once", () => {
@@ -616,7 +619,7 @@ test("the revival wave deals two damage to nearby hostiles and knocks surviving 
   recover(scope);
   assert.equal(scope.left.hp, 0);
   assert.equal(scope.left.alive, false);
-  assert.equal(scope.right.hitKnockbackVelocity, 1500);
+  assert.equal(scope.right.hitKnockbackVelocity, 750);
   assert.equal(scope.right.hitTimer, 0.72);
   assert.equal(scope.right.state, "chase");
   for (const enemy of [scope.far, scope.dead, scope.above]) assert.equal(enemy.hitKnockbackVelocity, 0);
@@ -632,6 +635,35 @@ test("the revival wave deals two damage to nearby hostiles and knocks surviving 
   const rightX = scope.right.x;
   scope.updateEnemies(0.02);
   assert.ok(scope.right.x > rightX);
+});
+
+test("revival damage follows the visible expanding ring instead of filling its radius", () => {
+  const { scope } = createGame();
+  read(scope, `
+    const waveCenterY=getPlayerHitbox().y+getPlayerHitbox().height/2;
+    globalThis.nearWaveTurret={
+      x:1020,y:waveCenterY-10,width:20,height:20,alive:true,hp:10,hitTimer:0,
+    };
+    globalThis.outerWaveTurret={
+      x:1170,y:waveCenterY-10,width:20,height:20,alive:true,hp:10,hitTimer:0,
+    };
+    turrets.push(nearWaveTurret,outerWaveTurret);
+  `);
+  scope.takePlayerDamage(1);
+  recover(scope, false);
+  assert.equal(scope.nearWaveTurret.hp, 10);
+  assert.equal(scope.outerWaveTurret.hp, 10,
+    "targets inside the eventual radius are not damaged immediately");
+
+  scope.updatePlayerRevivalWave(0.05);
+  assert.equal(scope.nearWaveTurret.hp, 8);
+  assert.equal(scope.outerWaveTurret.hp, 10);
+
+  scope.updatePlayerRevivalWave(0.8);
+  assert.equal(scope.nearWaveTurret.hp, 8,
+    "the passing ring damages each target only once");
+  assert.equal(scope.outerWaveTurret.hp, 8,
+    "the outer target is damaged when the visible ring reaches it");
 });
 
 test("revival damage uses the same organic and metal hit sounds as bullets", () => {
@@ -701,29 +733,28 @@ function knockbackDistance(kind, dt) {
   return Math.abs(enemy.x - startX);
 }
 
-function previousKnockbackDistance(dt) {
-  let velocity = 1000;
-  let timer = 0.5;
+function formerRevivalKnockbackDistance(dt) {
+  let velocity = 1500;
+  let timer = 0.72;
   let distance = 0;
   while (timer > dt + 1e-9) {
     timer -= dt;
     distance += velocity * dt;
-    velocity *= Math.exp(-4 * dt);
+    velocity *= Math.exp(-3 * dt);
   }
   return distance;
 }
 
-test("revival pushes both monster types at least 70% farther than the prior knockback", () => {
+test("revival pushes both monster types half the former distance", () => {
   for (const kind of ["monster1", "monster2"]) for (const dt of [1 / 30, 1 / 60, 1 / 144]) {
-    const previousDistance = previousKnockbackDistance(dt);
-    const strongerDistance = knockbackDistance(kind, dt);
-    assert.ok(strongerDistance > 350, `${kind} moved ${strongerDistance}px`);
-    assert.ok(strongerDistance > previousDistance * 1.7,
-      `${kind}: ${previousDistance}px -> ${strongerDistance}px`);
+    const formerDistance = formerRevivalKnockbackDistance(dt);
+    const reducedDistance = knockbackDistance(kind, dt);
+    assert.ok(Math.abs(reducedDistance / formerDistance - 0.5) < 0.03,
+      `${kind}: ${formerDistance}px -> ${reducedDistance}px`);
   }
 });
 
-test("normal bullets do not truncate the stronger revival push, and normal impact returns afterwards", () => {
+test("normal bullets do not truncate the reduced revival push, and normal impact returns afterwards", () => {
   const { scope } = createGame();
   const enemy = read(scope, "addEnemy(fixtureRoad,1070,'monster2')");
   scope.takePlayerDamage(1);
@@ -732,7 +763,7 @@ test("normal bullets do not truncate the stronger revival push, and normal impac
   read(scope, `bullets.push({x:${enemy.x + enemy.width / 2},y:${box.y + 30},vx:1520,vy:0,radius:3})`);
   scope.updateBullets(0);
   assert.equal(enemy.hp, 7);
-  assert.equal(enemy.hitKnockbackVelocity, 1500);
+  assert.equal(enemy.hitKnockbackVelocity, 750);
   assert.equal(enemy.hitTimer, 0.72);
   assert.equal(enemy.revivalKnockback, true);
   for (let frame = 0; frame < 45; frame += 1) scope.updateEnemies(1 / 60);
@@ -743,7 +774,7 @@ test("normal bullets do not truncate the stronger revival push, and normal impac
   assert.equal(enemy.hitKnockbackVelocity, enemy.hitKnockbackSpeed);
 });
 
-test("extended revival knockback still respects platform edges and does not teleport across gaps", () => {
+test("reduced revival knockback still respects platform edges and does not teleport across gaps", () => {
   const { scope } = createGame();
   const enemy = read(scope, "addEnemy(fixtureRoad,1070,'monster2')");
   const initialCenterX = enemy.x + enemy.width / 2;
@@ -767,7 +798,7 @@ test("airborne monsters are also knocked away instead of being snapped to the gr
   enemy.hp = 4;
   scope.takePlayerDamage(1);
   recover(scope);
-  assert.equal(enemy.jumpVx, 1500);
+  assert.equal(enemy.jumpVx, 750);
   assert.equal(enemy.jumpHit, true);
   const x = enemy.x;
   scope.updateEnemies(1 / 60);

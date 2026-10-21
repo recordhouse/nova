@@ -1218,10 +1218,39 @@ function drawPlayerAccelerationShield(frontLayer) {
   ctx.restore();
 }
 
+function drawPlayerUltimateAura(frontLayer) {
+  if (!player.ultimateActive || frontLayer) return;
+  const centerX = player.x + player.width / 2;
+  const centerY = player.y + player.height + PLAYER_STAND_SPRITE_Y_OFFSET -
+    PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_STAND_SPRITE_SCALE / 2;
+  const pulse = 0.5 + Math.sin(gameTime * 24) * 0.5;
+  const liftProgress = Math.min(1,
+    player.ultimateTime / PLAYER_ULTIMATE_LIFT_DURATION);
+  const radiusX = 58 + pulse * 7;
+  const radiusY = 88 + liftProgress * 14;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.translate(centerX, centerY);
+  ctx.scale(1, radiusY / radiusX);
+  const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, radiusX);
+  glow.addColorStop(0, `rgba(137, 54, 211, ${0.14 + pulse * 0.04})`);
+  glow.addColorStop(0.56, `rgba(153, 73, 224, ${0.17 + pulse * 0.05})`);
+  glow.addColorStop(0.82, `rgba(185, 79, 255, ${0.09 + pulse * 0.03})`);
+  glow.addColorStop(1, "rgba(185, 79, 255, 0)");
+  ctx.shadowColor = "#b94fff";
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(0, 0, radiusX, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawPlayer() {
   const blinking = player.downPhase === "hold" || (!player.downPhase && player.invincible > 0);
   const blinkTime = player.downPhase === "hold"
     ? player.downTime - PLAYER_DOWN_ANIMATION_DURATION : gameTime;
+  drawPlayerUltimateAura(false);
   drawPlayerAccelerationShield(false);
   ctx.save();
   // Dim rather than disappear completely, keeping the character easy to locate.
@@ -1229,7 +1258,8 @@ function drawPlayer() {
   const spriteTopY = drawPlayerSprite(player.x + player.width / 2);
   ctx.restore();
   drawPlayerAccelerationShield(true);
-  drawPlayerFireEnergyGauge(spriteTopY);
+  drawPlayerUltimateAura(true);
+  if (!player.ultimateActive) drawPlayerFireEnergyGauge(spriteTopY);
 }
 
 const PLAYER_GAUGE_STYLE = {
@@ -1322,7 +1352,7 @@ function drawPlayerPhysicsDebug() {
 function drawPlayerSprite(centerX) {
   const isDownPose = Boolean(player.downPhase);
   const isRunning = playerIsRunningOnGround();
-  const isJumping = !player.grounded;
+  const isJumping = !player.grounded && !player.ultimateActive;
   const isDeepFalling = isJumping && player.deepFalling;
   const isFiring = controls.fire && playerCanFire() && (
     player.fireEnergy >= PLAYER_FIRE_ENERGY_PER_SHOT || player.fireTimer > 0
@@ -2047,14 +2077,17 @@ function drawMonster4Crescent(bullet) {
   ctx.restore();
 }
 
-function paintPlayerProjectile(context, shimmer = 1) {
+function paintPlayerProjectile(context, shimmer = 1, trailLength = 36) {
+  const normalizedTrailLength = Math.max(36, trailLength);
+  const mainStartX = 17 - normalizedTrailLength;
+  const trailEndX = mainStartX - 1;
   context.lineCap = "round";
   context.shadowColor = "#b35cff";
   context.shadowBlur = 20 * shimmer;
   context.strokeStyle = "rgba(181, 108, 255, 0.72)";
   context.lineWidth = 8.5 * shimmer;
   context.beginPath();
-  context.moveTo(-19, 0);
+  context.moveTo(mainStartX, 0);
   context.lineTo(14, 0);
   context.stroke();
   context.shadowBlur = 8;
@@ -2069,14 +2102,14 @@ function paintPlayerProjectile(context, shimmer = 1) {
   context.strokeStyle = "rgba(185, 124, 255, 0.42)";
   context.lineWidth = 2.25 * shimmer;
   context.beginPath();
-  context.moveTo(-36, 0);
-  context.lineTo(-20, 0);
+  context.moveTo(-normalizedTrailLength, 0);
+  context.lineTo(trailEndX, 0);
   context.stroke();
   context.shadowBlur = 5;
   context.globalAlpha *= shimmer;
   context.fillStyle = "#eddaff";
-  context.fillRect(-26, -5, 2, 2);
-  context.fillRect(-34, 3, 2, 2);
+  context.fillRect(trailEndX - 6, -5, 2, 2);
+  context.fillRect(-normalizedTrailLength + 2, 3, 2, 2);
   context.fillStyle = "#ffffff";
   context.fillRect(5, -1, 8, 2);
   context.fillRect(8, -4, 2, 8);
@@ -2084,6 +2117,7 @@ function paintPlayerProjectile(context, shimmer = 1) {
 
 let playerProjectileSprite = null;
 let playerProjectileSpriteAttempted = false;
+const playerUltimateLaserSpriteCache = new Map();
 
 function cachedCanvasSprite(cache, key, width, height, paint) {
   if (cache.has(key)) return cache.get(key);
@@ -2122,13 +2156,75 @@ function getPlayerProjectileSprite() {
   return sprite;
 }
 
+function paintPlayerUltimateLaser(context, length) {
+  paintPlayerProjectile(context, 1, length);
+}
+
+function getPlayerUltimateLaserSprite() {
+  const spriteLength = PLAYER_ULTIMATE_LASER_LENGTH;
+  const horizontalPadding = 28;
+  const width = spriteLength + horizontalPadding * 2;
+  const height = 60;
+  return cachedCanvasSprite(
+    playerUltimateLaserSpriteCache,
+    `ultimate-laser-${spriteLength}`,
+    width,
+    height,
+    (spriteContext) => {
+      spriteContext.translate(spriteLength + horizontalPadding, height / 2);
+      spriteContext.globalCompositeOperation = "lighter";
+      paintPlayerUltimateLaser(spriteContext, spriteLength);
+    },
+  );
+}
+
+function drawPlayerUltimateLaser(laser) {
+  const shimmer = 0.9 + Math.sin(
+    gameTime * 12 + laser.x * 0.008 + laser.y * 0.004,
+  ) * 0.1;
+  const length = laser.visibleLength ??
+    laser.beamLength ?? PLAYER_ULTIMATE_LASER_LENGTH;
+  const spriteLength = PLAYER_ULTIMATE_LASER_LENGTH;
+  const horizontalPadding = 28;
+  const spriteWidth = spriteLength + horizontalPadding * 2;
+  const spriteHeight = 60;
+  const sprite = getPlayerUltimateLaserSprite();
+  ctx.save();
+  ctx.translate(laser.x, laser.y);
+  ctx.rotate(Math.atan2(laser.vy, laser.vx));
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha *= shimmer;
+  if (sprite) {
+    ctx.scale(Math.max(0.1, Math.min(1, length / spriteLength)), 1);
+    ctx.drawImage(
+      sprite,
+      -(spriteLength + horizontalPadding),
+      -spriteHeight / 2,
+      spriteWidth,
+      spriteHeight,
+    );
+  } else {
+    paintPlayerProjectile(ctx, shimmer, length);
+  }
+  ctx.restore();
+}
+
 function drawProjectiles() {
-  const playerSprite = bullets.length > 0 ? getPlayerProjectileSprite() : null;
+  const playerSprite = bullets.some((bullet) => bullet.kind !== "player-ultimate-laser")
+    ? getPlayerProjectileSprite()
+    : null;
   for (const bullet of bullets) {
+    const drawMargin = bullet.kind === "player-ultimate-laser"
+      ? (bullet.beamLength ?? PLAYER_ULTIMATE_LASER_LENGTH) + 100
+      : 100;
     if (
-      bullet.x < cameraX - 100 || bullet.x > cameraX + WIDTH + 100 ||
-      bullet.y < cameraY - 100 || bullet.y > cameraY + HEIGHT + 100
+      bullet.x < cameraX - drawMargin || bullet.x > cameraX + WIDTH + drawMargin ||
+      bullet.y < cameraY - drawMargin || bullet.y > cameraY + HEIGHT + drawMargin
     ) continue;
+    if (bullet.kind === "player-ultimate-laser") {
+      drawPlayerUltimateLaser(bullet);
+      continue;
+    }
     const shimmer = 0.9 + Math.sin(gameTime * 12 + bullet.x * 0.008 + bullet.y * 0.004) * 0.1;
     ctx.save();
     ctx.translate(bullet.x, bullet.y);
@@ -3637,6 +3733,8 @@ const TOP_VIDEO_SLOT_TOP_ASPECT = 1.04;
 const TOP_VIDEO_SLOT_BOTTOM_RATIO = 0.88;
 const TOP_VIDEO_SLOT_REFERENCE_Y = 30;
 const HUD_ULTIMATE_FRAME_COLOR = "rgba(132, 92, 157, 0.42)";
+const HUD_STATUS_ICON_MAX_SCALE = 3.2;
+const HUD_STATUS_ICON_GAP_UNITS = 1.4;
 const MINIMAP_VERTICAL_EXAGGERATION_MAX = 2.5;
 const MINIMAP_HEIGHT_RATIO = 0.9;
 
@@ -3668,8 +3766,8 @@ function topVideoSlotMetrics(mapX, mapWidth) {
 function hudHeaderLayout() {
   const portrait = HEIGHT > WIDTH;
   const gap = WIDTH < 650 ? 10 : 12;
-  const infoY = 14;
-  const infoHeight = 20;
+  const infoY = 13;
+  const infoHeight = 22;
   const mapY = 7;
   const mapWidth = Math.round(WIDTH * (portrait ? 0.44 : 0.38));
   const mapX = (WIDTH - mapWidth) / 2;
@@ -4697,8 +4795,8 @@ function drawHud() {
   const stageRowWidth = stageLabelWidth + textGap + stageValueWidth;
   const infoVisualScale = Math.min(
     HUD_INFO_TEXT_VISUAL_SCALE,
-    (header.score.width - 4) / scoreRowWidth,
-    (header.stage.width - 4) / stageRowWidth,
+    header.score.width / scoreRowWidth,
+    header.stage.width / stageRowWidth,
   );
   const canTransformHudText = typeof ctx.translate === "function" &&
     typeof ctx.scale === "function";
@@ -4711,8 +4809,9 @@ function drawHud() {
   drawUltimateScoreMeter();
   drawMinimap(false);
   ctx.save();
+  ctx.imageSmoothingEnabled = false;
   ctx.shadowColor = "rgba(101, 218, 230, 0.35)";
-  ctx.shadowBlur = 5;
+  ctx.shadowBlur = 3;
   ctx.save();
   if (canTransformHudText) {
     ctx.translate(scoreCenterX, scoreCenterY);
@@ -4762,14 +4861,15 @@ function drawHud() {
   ctx.shadowBlur = 6;
   const maximumHearts = Math.min(PLAYER_MAX_HEARTS, player.maxHp ?? 3);
   const heartScale = Math.min(
-    3,
+    HUD_STATUS_ICON_MAX_SCALE,
     header.hearts.width / Math.max(
       1,
-      maximumHearts * 7 + Math.max(0, maximumHearts - 1) * 1.7,
+      maximumHearts * 7 +
+      Math.max(0, maximumHearts - 1) * HUD_STATUS_ICON_GAP_UNITS,
     ),
   );
   const heartWidth = 7 * heartScale;
-  const heartGap = heartScale * 1.7;
+  const heartGap = heartScale * HUD_STATUS_ICON_GAP_UNITS;
   const heartRowWidth = maximumHearts * heartWidth +
     Math.max(0, maximumHearts - 1) * heartGap;
   const heartsX = header.hearts.x + (header.hearts.width - heartRowWidth) / 2;
@@ -4783,9 +4883,9 @@ function drawHud() {
     );
   }
 
-  const ultimateGapUnits = WIDTH < 650 ? 1.7 : 2;
+  const ultimateGapUnits = HUD_STATUS_ICON_GAP_UNITS;
   const ultimateScale = Math.min(
-    3,
+    HUD_STATUS_ICON_MAX_SCALE,
     header.ultimate.width / Math.max(
       1,
       PLAYER_MAX_ULTIMATE_CHARGES * 7 +

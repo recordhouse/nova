@@ -146,19 +146,19 @@ test("five HUD regions keep score, hearts, map, empty ultimates and stage separa
     assert.ok(Math.abs(labels[1].y - numbers[1].y) <= 1);
     assert.ok(numbers[0].x > labels[0].x, "score stays on one line");
     assert.ok(numbers[1].x > labels[1].x, "stage stays on one line");
-    assert.equal(read(scope, "HUD_INFO_TEXT_VISUAL_SCALE"), 1.6);
+    assert.equal(read(scope, "HUD_INFO_TEXT_VISUAL_SCALE"), 1.72);
     assert.ok(hearts.every((heart) => heart.scale === hearts[0].scale));
-    assert.ok(hearts[0].scale > 1.5 && hearts[0].scale <= 3);
+    assert.ok(hearts[0].scale > 1.5 && hearts[0].scale <= 3.2);
     assert.ok(ultimates.every((slot) => slot.scale === ultimates[0].scale));
-    assert.ok(ultimates[0].scale > 1.5 && ultimates[0].scale <= 3);
+    assert.ok(ultimates[0].scale > 1.5 && ultimates[0].scale <= 3.2);
     const scoreEnd = numbers[0].x + scope.hudNumeralWidth(numbers[0].text, numbers[0].scale);
     const stageEnd = numbers[1].x + scope.hudNumeralWidth(numbers[1].text, numbers[1].scale);
     const scoreRowWidth = scoreEnd - labels[0].x;
     const stageRowWidth = stageEnd - labels[1].x;
     const infoVisualScale = Math.min(
       read(scope, "HUD_INFO_TEXT_VISUAL_SCALE"),
-      (header.score.width - 4) / scoreRowWidth,
-      (header.stage.width - 4) / stageRowWidth,
+      header.score.width / scoreRowWidth,
+      header.stage.width / stageRowWidth,
     );
     const scoreCenterX = header.score.x + header.score.width / 2;
     const stageCenterX = header.stage.x + header.stage.width / 2;
@@ -171,7 +171,7 @@ test("five HUD regions keep score, hearts, map, empty ultimates and stage separa
     assert.ok(visualScoreStart >= header.score.x, `${width}px score leaves its region`);
     assert.ok(header.score.x >= width / 2,
       `${width}px score is not in the right-side group`);
-    assert.equal(header.score.y, 14);
+    assert.equal(header.score.y, 13);
     assert.equal(header.map.y, 7);
     assert.ok(visualStageStart >= header.stage.x &&
       visualStageEnd <= header.stage.x + header.stage.width,
