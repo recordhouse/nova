@@ -108,6 +108,7 @@ function startPlayerUltimate(force = false) {
   if (typeof syncPlayerGunVideoPlayback === "function") syncPlayerGunVideoPlayback(false);
   if (typeof syncPlayerRunVideoPlayback === "function") syncPlayerRunVideoPlayback(false);
   if (typeof syncPlayerStandVideoPlayback === "function") syncPlayerStandVideoPlayback(false);
+  if (typeof playPlayerFinishingVideo === "function") playPlayerFinishingVideo();
   if (typeof playFemaleFinishingVoice === "function") playFemaleFinishingVoice();
   burst(
     player.x + player.width / 2,
@@ -125,12 +126,14 @@ function firePlayerUltimateLaserStep(step) {
   const lastStep = PLAYER_ULTIMATE_LASER_STEPS - 1;
   const clampedStep = Math.max(0, Math.min(lastStep, step));
   const sweepProgress = lastStep > 0 ? clampedStep / lastStep : 0;
-  const centerX = player.x + player.width / 2;
-  const standDrawHeight = PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_STAND_SPRITE_SCALE;
-  const standTopY = player.y + player.height + PLAYER_STAND_SPRITE_Y_OFFSET -
-    standDrawHeight;
-  const centerY = standTopY +
-    standDrawHeight * PLAYER_ULTIMATE_CHEST_HEIGHT_RATIO;
+  const originX = player.x + player.width / 2 +
+    PLAYER_ULTIMATE_ORIGIN_X_OFFSET * player.facing;
+  const finishingDrawHeight = PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_FINISHING_SPRITE_SCALE;
+  const finishingTopY = player.y + player.height + PLAYER_FINISHING_SPRITE_Y_OFFSET -
+    finishingDrawHeight;
+  const originY = finishingTopY +
+    finishingDrawHeight * PLAYER_ULTIMATE_CHEST_HEIGHT_RATIO +
+    PLAYER_ULTIMATE_ORIGIN_Y_OFFSET;
   const rightAngle = -Math.PI / 2 + sweepProgress * Math.PI;
   const angles = clampedStep === 0 || clampedStep === lastStep
     ? [rightAngle]
@@ -141,8 +144,8 @@ function firePlayerUltimateLaserStep(step) {
     const directionY = Math.sin(angle);
     bullets.push({
       kind: "player-ultimate-laser",
-      x: centerX + directionX * 10,
-      y: centerY + directionY * 10,
+      x: originX + directionX * 10,
+      y: originY + directionY * 10,
       vx: directionX * PLAYER_ULTIMATE_LASER_SPEED,
       vy: directionY * PLAYER_ULTIMATE_LASER_SPEED,
       radius: PLAYER_ULTIMATE_LASER_RADIUS,
@@ -158,8 +161,8 @@ function firePlayerUltimateLaserStep(step) {
       ultimateLane: clampedStep,
     });
     burst(
-      centerX + directionX * 15,
-      centerY + directionY * 15,
+      originX + directionX * 15,
+      originY + directionY * 15,
       "#c996ff",
       2,
       90,

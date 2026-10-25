@@ -8,6 +8,7 @@ const vm = require("node:vm");
 
 test("combat sounds preload and use their intended audio segments", async () => {
   const starts = [];
+  const startedSources = [];
   const gainEvents = [];
   const outputGains = [];
   const contexts = [];
@@ -20,13 +21,18 @@ test("combat sounds preload and use their intended audio segments", async () => 
       this.destination = {};
       this.state = "running";
     }
-    decodeAudioData() { return Promise.resolve({ duration: 0.339592 }); }
+    decodeAudioData(data) {
+      return Promise.resolve({ duration: 0.339592, source: data.source });
+    }
     resume() { return Promise.resolve(); }
     createBufferSource() {
       return {
         connect() {},
         disconnect() {},
-        start(...args) { starts.push(args); },
+        start(...args) {
+          starts.push(args);
+          startedSources.push(this.buffer?.source);
+        },
       };
     }
     createGain() {
@@ -80,7 +86,7 @@ test("combat sounds preload and use their intended audio segments", async () => 
       fetchedSources.push(source);
       return {
         ok: true,
-        arrayBuffer: async () => new ArrayBuffer(8),
+        arrayBuffer: async () => ({ source }),
       };
     },
   };
@@ -93,7 +99,7 @@ test("combat sounds preload and use their intended audio segments", async () => 
   await vm.runInContext("playerGunImpactSoundDecode", scope);
   await vm.runInContext(`Promise.all([
     gunHitSound.decode,
-    metalHitSound.decode,
+    ...metalHitSounds.map((sound)=>sound.decode),
     turretLaserSound.decode,
     monsterDie01Sound.decode,
     monsterDie03Sound.decode,
@@ -103,7 +109,12 @@ test("combat sounds preload and use their intended audio segments", async () => 
     resurrectionSound.decode,
     heartPickupSound.decode,
     shieldSound.decode,
+    ...Object.values(enemyVideoVoiceSounds).map((sound)=>sound.decode),
   ])`, scope);
+  vm.runInContext(`
+    const randomValues=[0,0.99,0.99];
+    Math.random=()=>randomValues.shift()??0;
+  `, scope);
   scope.playPlayerGunSound();
   scope.playPlayerGunImpactSound();
   scope.playGunHitSound();
@@ -120,6 +131,10 @@ test("combat sounds preload and use their intended audio segments", async () => 
   scope.playPlayerUltimateRicochetSound();
   scope.playPlayerUltimateHitSound("monster2");
   scope.playPlayerUltimateHitSound("turret");
+  scope.playMetalHitSound();
+  scope.playEnemyVideoVoice("monster2");
+  scope.playEnemyVideoVoice("monster3");
+  scope.playEnemyVideoVoice("turret");
   const impactOffset = vm.runInContext("PLAYER_GUN_IMPACT_SOUND_OFFSET", scope);
 
   assert.equal(contexts.length, 1);
@@ -149,33 +164,61 @@ test("combat sounds preload and use their intended audio segments", async () => 
   assert.ok(fetchedSources.includes("./assets/sound/gun_impact.mp3?v=20261019-1"));
   assert.ok(fetchedSources.includes("./assets/sound/gun_hit.mp3?v=20261019-1"));
   assert.ok(fetchedSources.includes("./assets/sound/heart.mp3"));
+  for (const index of [1, 2, 3]) {
+    assert.ok(fetchedSources.includes(
+      `./assets/sound/metal_0${index}.mp3?v=20261021-1`,
+    ));
+  }
+  assert.ok(fetchedSources.includes(
+    "./assets/sound/voice_monster_02.mp3?v=20261021-1",
+  ));
+  assert.ok(fetchedSources.includes(
+    "./assets/sound/voice_monster_03.mp3?v=20261021-1",
+  ));
+  assert.ok(fetchedSources.includes(
+    "./assets/sound/voice_turret_01.mp3?v=20261021-1",
+  ));
   assert.ok(fetchedSources.includes("./assets/sound/monster_die_03.mp3"));
   assert.ok(fetchedSources.includes("./assets/sound/monster_die_01_01.mp3"));
   assert.ok(fetchedSources.includes("./assets/sound/turret_die_01.mp3"));
   assert.ok(fetchedSources.includes("./assets/sound/resurrection.mp3"));
   assert.ok(fetchedSources.includes("./assets/sound/shield.mp3"));
   assert.ok(impactOffset >= 0 && impactOffset < 0.339592);
-  assert.deepEqual(starts, [
-    [10, 0, 0.115],
-    [10, impactOffset],
-    [10, 0],
-    [10, 0],
-    [10, 0],
-    [10, 0],
-    [10, 0],
-    [10, 0],
-    [10, 0],
-    [10, 0],
-    [10, 0],
-    [10, 0],
-    [10, 0],
-    [10, impactOffset],
-    [10, 0],
-    [10, 0],
-  ]);
+  assert.deepEqual(starts[0], [10, 0, 0.115]);
+  assert.deepEqual(starts[1], [10, impactOffset]);
+  assert.deepEqual(starts[13], [10, impactOffset]);
+  assert.ok(starts.slice(2).every((args, index) => (
+    index === 11 || args.length === 2 && args[0] === 10 && args[1] === 0
+  )));
   assert.deepEqual(
-    outputGains.slice(2, 14).map((gain) => gain.value),
-    [0.3, 0.34, 0.4, 0.55, 0.38, 0.38, 0.38, 0.42, 0.3, 0.5, 0.44, 0.42],
+    startedSources.filter((source) => source?.includes("/metal_")),
+    [
+      "./assets/sound/metal_01.mp3?v=20261021-1",
+      "./assets/sound/metal_03.mp3?v=20261021-1",
+      "./assets/sound/metal_02.mp3?v=20261021-1",
+    ],
+    "metal hits rotate randomly without immediately repeating a variant",
+  );
+  assert.deepEqual(
+    startedSources.filter((source) => source?.includes("/voice_")),
+    [
+      "./assets/sound/voice_monster_02.mp3?v=20261021-1",
+      "./assets/sound/voice_monster_03.mp3?v=20261021-1",
+      "./assets/sound/voice_turret_01.mp3?v=20261021-1",
+    ],
+  );
+  assert.deepEqual(
+    Array.from(vm.runInContext(
+      "metalHitSounds.map((sound)=>sound.output.gain.value)",
+      scope,
+    )),
+    [0.4, 0.4, 0.4],
+  );
+  assert.deepEqual(
+    Array.from(vm.runInContext(
+      "Object.values(enemyVideoVoiceSounds).map((sound)=>sound.output.gain.value)", scope,
+    )),
+    [0.68, 0.68, 0.68],
   );
   assert.equal(vm.runInContext("playerUltimateRicochetChannel.output.gain.value", scope), 0.52);
   assert.equal(vm.runInContext("playerUltimateOrganicHitChannel.output.gain.value", scope), 0.5);

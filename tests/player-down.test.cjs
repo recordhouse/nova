@@ -142,6 +142,15 @@ test("blast-run.png is loaded as five correctly bounded running-fire frames", ()
   assert.ok(sprite.frames.every((frame) => frame.x + frame.width <= 2008 && frame.height === 500));
 });
 
+test("finishing.png uses five frames at the faster finishing speed", () => {
+  const { scope } = createGame();
+  const sprite = read(scope, "playerSprites.finishing");
+  assert.equal(sprite.loaded, true);
+  assert.ok(sprite.image.source.includes("/finishing.png?"));
+  assert.equal(sprite.fps, 8);
+  assert.deepEqual(Array.from(sprite.frames, (frame) => frame.x), [0, 402, 804, 1206, 1608]);
+});
+
 test("the down artwork sits below standing while its collision box stays put", () => {
   const { scope, calls } = createGame();
   const centerX = read(scope, "player.x + player.width / 2");

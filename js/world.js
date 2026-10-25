@@ -2561,6 +2561,7 @@ function resetPlayerPosition() {
   resetPlayerDownState();
   playerRevivalWave = null;
   if (typeof stopPlayerDownVideo === "function") stopPlayerDownVideo();
+  if (typeof stopPlayerFinishingVideo === "function") stopPlayerFinishingVideo();
   player.x = 110;
   player.platform = startingPlatform();
   player.y = platformSurfaceY(

@@ -12,6 +12,7 @@ function createGame() {
   const videoCalls = [];
   const runVideoCalls = [];
   const standVideoCalls = [];
+  const startVideoCalls = [];
   const stack = [];
   const ctx = new Proxy({ globalAlpha: 1 }, {
     get(target, key) {
@@ -39,9 +40,15 @@ function createGame() {
     stopPlayerRunVideo: () => runVideoCalls.push("stop"),
     playPlayerStandVideo: () => standVideoCalls.push("play"),
     stopPlayerStandVideo: () => standVideoCalls.push("stop"),
+    playPlayerStartVideo: () => startVideoCalls.push("play"),
+    stopPlayerStartVideo: () => startVideoCalls.push("stop"),
     playerSprites: {
       stand: { loaded: true, image: { naturalWidth: 400, naturalHeight: 500 }, fps: 1,
         frames: [{ x: 0, y: 0, width: 400, height: 500 }] },
+      finishing: { loaded: true, image: { naturalWidth: 2008, naturalHeight: 500 }, fps: 8,
+        frames: Array.from({ length: 5 }, (_, frame) => (
+          { x: frame * 402, y: 0, width: 400, height: 500 }
+        )) },
     },
   };
   vm.createContext(scope);
@@ -56,7 +63,15 @@ function createGame() {
     player.grounded=true; player.platform=fixtureRoad;
     minWorldX=0; maxWorldX=2000;
   `, scope);
-  return { scope, calls, soundCalls, videoCalls, runVideoCalls, standVideoCalls };
+  return {
+    scope,
+    calls,
+    soundCalls,
+    videoCalls,
+    runVideoCalls,
+    standVideoCalls,
+    startVideoCalls,
+  };
 }
 
 function read(scope, source) { return vm.runInContext(source, scope); }
@@ -190,29 +205,33 @@ test("the stand video plays while the grounded player is idle or crouching", () 
   assert.deepEqual(videoCalls, ["play"], "the firing video takes priority over stand");
 });
 
-test("the first start voice holds the stand video over movement and firing footage", () => {
-  const { scope, videoCalls, runVideoCalls, standVideoCalls } = createGame();
+test("the first start voice holds its dedicated video over movement and firing footage", () => {
+  const { scope, videoCalls, runVideoCalls, standVideoCalls, startVideoCalls } = createGame();
   read(scope, `
     globalThis.startVoiceVideoActive=true;
     globalThis.isFemaleStartVoiceVideoActive=()=>startVoiceVideoActive;
     player.voiceControlStarted=true;
     controls.right=true;
   `);
+  scope.playPlayerStartVideo();
   scope.updatePlayer(1 / 60);
   assert.deepEqual(videoCalls, []);
   assert.deepEqual(runVideoCalls, []);
-  assert.deepEqual(standVideoCalls, ["play"]);
+  assert.deepEqual(standVideoCalls, []);
+  assert.deepEqual(startVideoCalls, ["play"]);
 
   read(scope, "controls.right=false; controls.fire=true");
   scope.updatePlayer(1 / 60);
   assert.deepEqual(videoCalls, [],
     "changing from running to firing cannot replace the held start footage");
   assert.deepEqual(runVideoCalls, []);
-  assert.deepEqual(standVideoCalls, ["play"]);
+  assert.deepEqual(standVideoCalls, []);
+  assert.deepEqual(startVideoCalls, ["play"]);
 
   read(scope, "startVoiceVideoActive=false");
   scope.updatePlayer(1 / 60);
-  assert.deepEqual(standVideoCalls, ["play", "stop"]);
+  assert.deepEqual(standVideoCalls, []);
+  assert.deepEqual(startVideoCalls, ["play", "stop"]);
   assert.deepEqual(videoCalls, ["play"],
     "the current action footage resumes as soon as the start voice ends");
 });
@@ -239,12 +258,27 @@ test("purple gauge tracks the drawn sprite and never blinks with temporary immun
   assert.ok(calls.some((call) => call.color === "#7145a2"));
 });
 
-test("ultimate floating keeps the standing pose instead of using a jump frame", () => {
+test("ultimate floating uses the finishing animation from its first frame", () => {
   const { scope, calls } = createGame();
-  const standingImage = read(scope, "playerSprites.stand.image");
-  read(scope, "player.ultimateActive=true; player.grounded=false; player.jumpAnimationTime=0.5");
+  const finishingImage = read(scope, "playerSprites.finishing.image");
+  read(scope, `
+    gameTime=99;
+    player.ultimateActive=true;
+    player.ultimateTime=0;
+    player.grounded=false;
+    player.jumpAnimationTime=0.5;
+  `);
   scope.drawPlayerSprite(read(scope, "player.x+player.width/2"));
   const spriteDraw = calls.find((call) => call.operation === "drawImage");
   assert.ok(spriteDraw, "the floating character still draws a sprite");
-  assert.equal(spriteDraw.args[0], standingImage);
+  assert.equal(spriteDraw.args[0], finishingImage);
+  assert.equal(spriteDraw.args[1], 0, "the animation starts at the first finishing frame");
+  const expectedHeight = read(
+    scope,
+    "PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_STAND_SPRITE_SCALE * 1.1",
+  );
+  assert.ok(
+    Math.abs(spriteDraw.args[8] - expectedHeight) < 1e-9,
+    "the finishing pose is ten percent larger than the standing pose",
+  );
 });

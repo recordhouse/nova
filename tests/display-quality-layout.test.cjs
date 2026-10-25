@@ -257,31 +257,35 @@ test("the active stand video shares the left protagonist slot", () => {
   assert.equal(draw[8], layout.height);
 });
 
-test("the start voice forces stand footage over every active action video", () => {
+test("the start voice forces its dedicated footage over every active action video", () => {
   const { scope, calls } = createDisplay();
   const gunVideo = { videoWidth: 480, videoHeight: 480 };
   const runVideo = { videoWidth: 480, videoHeight: 480 };
   const standVideo = { videoWidth: 480, videoHeight: 480 };
   const downVideo = { videoWidth: 480, videoHeight: 480 };
+  const startVideo = { videoWidth: 480, videoHeight: 480 };
   scope.playerGunVideoAsset = { video: gunVideo, loaded: true, active: true };
   scope.playerRunVideoAsset = { video: runVideo, loaded: true, active: true };
   scope.playerStandVideoAsset = { video: standVideo, loaded: true, active: true };
   scope.playerDownVideoAsset = { video: downVideo, loaded: true, active: true };
+  scope.playerStartVideoAsset = { video: startVideo, loaded: true, active: true };
   scope.isFemaleStartVoiceVideoActive = () => true;
 
   scope.drawTopVideoSlots();
 
   assert.equal(calls.filter((call) =>
-    call.operation === "drawImage" && call.args[0] === standVideo).length, 1);
+    call.operation === "drawImage" && call.args[0] === startVideo).length, 1);
   assert.equal(calls.some((call) => call.operation === "drawImage" &&
-    [gunVideo, runVideo, downVideo].includes(call.args[0])), false);
+    [gunVideo, runVideo, standVideo, downVideo].includes(call.args[0])), false);
 });
 
 test("the one-shot down video takes priority in the left protagonist slot", () => {
   const { scope, calls } = createDisplay();
   const downVideo = { videoWidth: 480, videoHeight: 480 };
+  const finishingVideo = { videoWidth: 480, videoHeight: 480 };
   const standVideo = { videoWidth: 480, videoHeight: 480 };
   scope.playerDownVideoAsset = { video: downVideo, loaded: true, active: true };
+  scope.playerFinishingVideoAsset = { video: finishingVideo, loaded: true, active: true };
   scope.playerStandVideoAsset = { video: standVideo, loaded: true, active: true };
 
   scope.drawTopVideoSlots();
@@ -290,6 +294,27 @@ test("the one-shot down video takes priority in the left protagonist slot", () =
     call.operation === "drawImage" && call.args[0] === downVideo).length, 1);
   assert.equal(calls.filter((call) =>
     call.operation === "drawImage" && call.args[0] === standVideo).length, 0);
+  assert.equal(calls.filter((call) =>
+    call.operation === "drawImage" && call.args[0] === finishingVideo).length, 0);
+});
+
+test("the finishing video replaces regular action footage during an ultimate", () => {
+  const { scope, calls } = createDisplay();
+  const finishingVideo = { videoWidth: 480, videoHeight: 480 };
+  const gunVideo = { videoWidth: 480, videoHeight: 480 };
+  scope.playerFinishingVideoAsset = {
+    video: finishingVideo,
+    loaded: true,
+    active: true,
+  };
+  scope.playerGunVideoAsset = { video: gunVideo, loaded: true, active: true };
+
+  scope.drawTopVideoSlots();
+
+  assert.equal(calls.filter((call) =>
+    call.operation === "drawImage" && call.args[0] === finishingVideo).length, 1);
+  assert.equal(calls.filter((call) =>
+    call.operation === "drawImage" && call.args[0] === gunVideo).length, 0);
 });
 
 test("the looping basic video fills the idle monster slot", () => {
@@ -529,7 +554,7 @@ test("dense ultimate lasers reuse prerendered glow instead of rebuilding blur pe
   assert.equal(calls.filter((call) => call.operation === "stroke").length, 0);
 });
 
-test("the ultimate aura centers on the standing sprite and fades at its edge", () => {
+test("the ultimate aura centers on the finishing sprite and fades at its edge", () => {
   const { scope, calls, gradients } = createDisplay();
   read(scope, `
     player.ultimateActive = true;
@@ -542,8 +567,8 @@ test("the ultimate aura centers on the standing sprite and fades at its edge", (
   scope.drawPlayerUltimateAura(true);
 
   const expectedCenterY = read(scope, `player.y + player.height +
-    PLAYER_STAND_SPRITE_Y_OFFSET -
-    PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_STAND_SPRITE_SCALE / 2`);
+    PLAYER_FINISHING_SPRITE_Y_OFFSET -
+    PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_FINISHING_SPRITE_SCALE / 2`);
   const translate = calls.find((call) => call.operation === "translate");
   assert.equal(translate.args[1], expectedCenterY);
   assert.equal(gradients.length, 1);

@@ -1221,8 +1221,8 @@ function drawPlayerAccelerationShield(frontLayer) {
 function drawPlayerUltimateAura(frontLayer) {
   if (!player.ultimateActive || frontLayer) return;
   const centerX = player.x + player.width / 2;
-  const centerY = player.y + player.height + PLAYER_STAND_SPRITE_Y_OFFSET -
-    PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_STAND_SPRITE_SCALE / 2;
+  const centerY = player.y + player.height + PLAYER_FINISHING_SPRITE_Y_OFFSET -
+    PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_FINISHING_SPRITE_SCALE / 2;
   const pulse = 0.5 + Math.sin(gameTime * 24) * 0.5;
   const liftProgress = Math.min(1,
     player.ultimateTime / PLAYER_ULTIMATE_LIFT_DURATION);
@@ -1362,36 +1362,40 @@ function drawPlayerSprite(centerX) {
   const isRunningFirePose = isFiring && playerUsesRunningFirePose();
   const sprite = isDownPose
     ? playerSprites.down
-    : isCrouching && isFiring
-      ? playerSprites.blastSit
-      : isCrouching
-        ? playerSprites.sit
-        : isFiring
-          ? isJumping
-            ? playerSprites.blastJump
-            : isRunningFirePose
-              ? playerSprites.blastRun
-              : isAimingHigh
-                ? playerSprites.blastHigh
-                : playerSprites.blast
-          : isDeepFalling
-            ? playerSprites.getOff
-            : isJumping
-              ? playerSprites.jump
-              : isRunning
-                ? playerSprites.run
-                : playerSprites.stand;
+    : player.ultimateActive
+      ? playerSprites.finishing
+      : isCrouching && isFiring
+        ? playerSprites.blastSit
+        : isCrouching
+          ? playerSprites.sit
+          : isFiring
+            ? isJumping
+              ? playerSprites.blastJump
+              : isRunningFirePose
+                ? playerSprites.blastRun
+                : isAimingHigh
+                  ? playerSprites.blastHigh
+                  : playerSprites.blast
+            : isDeepFalling
+              ? playerSprites.getOff
+              : isJumping
+                ? playerSprites.jump
+                : isRunning
+                  ? playerSprites.run
+                  : playerSprites.stand;
   const spriteYOffset = isDownPose
     ? PLAYER_DOWN_SPRITE_Y_OFFSET
-    : isFiring
-      ? PLAYER_FIRE_SPRITE_Y_OFFSET
-      : isCrouching
-        ? PLAYER_SIT_SPRITE_Y_OFFSET
-        : isJumping
-          ? PLAYER_JUMP_SPRITE_Y_OFFSET
-          : isRunning
-            ? PLAYER_RUN_SPRITE_Y_OFFSET
-            : PLAYER_STAND_SPRITE_Y_OFFSET;
+    : player.ultimateActive
+      ? PLAYER_FINISHING_SPRITE_Y_OFFSET
+      : isFiring
+        ? PLAYER_FIRE_SPRITE_Y_OFFSET
+        : isCrouching
+          ? PLAYER_SIT_SPRITE_Y_OFFSET
+          : isJumping
+            ? PLAYER_JUMP_SPRITE_Y_OFFSET
+            : isRunning
+              ? PLAYER_RUN_SPRITE_Y_OFFSET
+              : PLAYER_STAND_SPRITE_Y_OFFSET;
   const spriteFeetY = player.y + player.height + spriteYOffset;
   if (!sprite?.loaded || !sprite.image.naturalWidth || !sprite.image.naturalHeight) {
     return spriteFeetY - PLAYER_SPRITE_DRAW_HEIGHT * PLAYER_STAND_SPRITE_SCALE;
@@ -1400,39 +1404,43 @@ function drawPlayerSprite(centerX) {
   const jumpProgress = Math.min(1, player.jumpAnimationTime / JUMP_ANIMATION_DURATION);
   const frame = isDownPose
     ? Math.min(sprite.frames.length - 1, Math.floor(player.downTime * sprite.fps))
-    : sprite === playerSprites.blastRun
-      ? Math.floor(player.runAnimationTime * sprite.fps) % sprite.frames.length
-      : isFiring
-        ? Math.floor(player.fireAnimationTime * sprite.fps) % sprite.frames.length
-        : isDeepFalling
-          ? Math.floor(player.fallAnimationTime * sprite.fps) % sprite.frames.length
-          : isJumping
-            ? Math.min(sprite.frames.length - 1, Math.floor(jumpProgress * sprite.frames.length))
-            : sprite === playerSprites.run
-              ? Math.floor(player.runAnimationTime * sprite.fps) % sprite.frames.length
-              : Math.floor(gameTime * sprite.fps) % sprite.frames.length;
+    : sprite === playerSprites.finishing
+      ? Math.floor(player.ultimateTime * sprite.fps) % sprite.frames.length
+      : sprite === playerSprites.blastRun
+        ? Math.floor(player.runAnimationTime * sprite.fps) % sprite.frames.length
+        : isFiring
+          ? Math.floor(player.fireAnimationTime * sprite.fps) % sprite.frames.length
+          : isDeepFalling
+            ? Math.floor(player.fallAnimationTime * sprite.fps) % sprite.frames.length
+            : isJumping
+              ? Math.min(sprite.frames.length - 1, Math.floor(jumpProgress * sprite.frames.length))
+              : sprite === playerSprites.run
+                ? Math.floor(player.runAnimationTime * sprite.fps) % sprite.frames.length
+                : Math.floor(gameTime * sprite.fps) % sprite.frames.length;
   const source = sprite.frames[frame];
   const spriteScale = sprite === playerSprites.down
     ? PLAYER_DOWN_SPRITE_SCALE
-    : sprite === playerSprites.stand
-      ? PLAYER_STAND_SPRITE_SCALE
-      : sprite === playerSprites.blastHigh
-        ? PLAYER_BLAST_HIGH_SPRITE_SCALE
-        : sprite === playerSprites.blastRun
-          ? PLAYER_BLAST_RUN_SPRITE_SCALE
-          : sprite === playerSprites.blastJump
-            ? PLAYER_JUMP_SPRITE_SCALE
-            : sprite === playerSprites.blast
-              ? PLAYER_BLAST_SPRITE_SCALE
-              : sprite === playerSprites.sit
-                ? PLAYER_SIT_SPRITE_SCALE
-                : sprite === playerSprites.blastSit
-                  ? PLAYER_BLAST_SIT_SPRITE_SCALE
-                  : sprite === playerSprites.getOff
-                    ? PLAYER_GET_OFF_SPRITE_SCALE
-                    : sprite === playerSprites.jump
-                      ? PLAYER_JUMP_SPRITE_SCALE
-                      : 1;
+    : sprite === playerSprites.finishing
+      ? PLAYER_FINISHING_SPRITE_SCALE
+      : sprite === playerSprites.stand
+        ? PLAYER_STAND_SPRITE_SCALE
+        : sprite === playerSprites.blastHigh
+          ? PLAYER_BLAST_HIGH_SPRITE_SCALE
+          : sprite === playerSprites.blastRun
+            ? PLAYER_BLAST_RUN_SPRITE_SCALE
+            : sprite === playerSprites.blastJump
+              ? PLAYER_JUMP_SPRITE_SCALE
+              : sprite === playerSprites.blast
+                ? PLAYER_BLAST_SPRITE_SCALE
+                : sprite === playerSprites.sit
+                  ? PLAYER_SIT_SPRITE_SCALE
+                  : sprite === playerSprites.blastSit
+                    ? PLAYER_BLAST_SIT_SPRITE_SCALE
+                    : sprite === playerSprites.getOff
+                      ? PLAYER_GET_OFF_SPRITE_SCALE
+                      : sprite === playerSprites.jump
+                        ? PLAYER_JUMP_SPRITE_SCALE
+                        : 1;
   const drawHeight = PLAYER_SPRITE_DRAW_HEIGHT * spriteScale;
   const drawWidth = source.width * (drawHeight / source.height);
   const feetY = spriteFeetY;
@@ -3999,7 +4007,7 @@ function prepareTopVideoSlotLayer(
 
 function drawTopVideoSlots() {
   const layout = topVideoSlotLayout();
-  const forceStartStandVideo =
+  const forceStartVideo =
     typeof isFemaleStartVoiceVideoActive === "function" &&
     isFemaleStartVoiceVideoActive();
   for (const [side, points] of [
@@ -4018,14 +4026,21 @@ function drawTopVideoSlots() {
       playerStandVideoAsset.loaded && playerStandVideoAsset.active
       ? playerStandVideoAsset.video
       : null;
-    const forcedStartStandVideo = forceStartStandVideo &&
-      typeof playerStandVideoAsset !== "undefined" &&
-      playerStandVideoAsset.loaded
-      ? playerStandVideoAsset.video
-      : null;
+    const forcedStartVideo = forceStartVideo &&
+      typeof playerStartVideoAsset !== "undefined" &&
+      playerStartVideoAsset.loaded
+      ? playerStartVideoAsset.video
+      : forceStartVideo && typeof playerStandVideoAsset !== "undefined" &&
+          playerStandVideoAsset.loaded
+        ? playerStandVideoAsset.video
+        : null;
     const downVideo = typeof playerDownVideoAsset !== "undefined" &&
       playerDownVideoAsset.loaded && playerDownVideoAsset.active
       ? playerDownVideoAsset.video
+      : null;
+    const finishingVideo = typeof playerFinishingVideoAsset !== "undefined" &&
+      playerFinishingVideoAsset.loaded && playerFinishingVideoAsset.active
+      ? playerFinishingVideoAsset.video
       : null;
     const activeEnemyVideoAsset = typeof activeEnemyAttackVideoAsset === "function"
       ? activeEnemyAttackVideoAsset()
@@ -4040,7 +4055,8 @@ function drawTopVideoSlots() {
       ? monsterBasicVideoAsset.video
       : null;
     const slotVideo = side === "left"
-      ? forcedStartStandVideo ?? downVideo ?? gunVideo ?? runVideo ?? standVideo
+      ? forcedStartVideo ?? downVideo ?? finishingVideo ?? gunVideo ??
+        runVideo ?? standVideo
       : enemyVideoAsset?.video ?? basicEnemyVideo;
     const backgroundVideo = side === "right" && enemyVideoAsset
       ? basicEnemyVideo
@@ -4583,6 +4599,7 @@ function drawPixelText(text, x, y, scale, color, align = "left") {
 
 function paintPixelHeart(target, x, y, fillAmount, scale) {
   const fill = Math.max(0, Math.min(1, fillAmount));
+  const filledColumns = 7 * fill;
   const pixels = [
     "0110110",
     "1111111",
@@ -4596,14 +4613,14 @@ function paintPixelHeart(target, x, y, fillAmount, scale) {
       if (pixels[row][column] !== "1") continue;
       const pixelX = pixelSnap(x + column * scale, 1);
       const pixelY = pixelSnap(y + row * scale, 1);
-      const filledWidth = Math.min(scale, Math.max(0, 7 * scale * fill - column * scale));
-      if (filledWidth < scale) {
+      const filledRatio = Math.min(1, Math.max(0, filledColumns - column));
+      if (filledRatio < 1) {
         target.fillStyle = "rgba(73, 91, 104, 0.7)";
         target.fillRect(pixelX, pixelY, scale, scale);
       }
-      if (filledWidth > 0) {
+      if (filledRatio > 0) {
         target.fillStyle = "#ff4f5f";
-        target.fillRect(pixelX, pixelY, filledWidth, scale);
+        target.fillRect(pixelX, pixelY, scale * filledRatio, scale);
       }
     }
   }
@@ -4620,14 +4637,17 @@ function drawPixelHeart(x, y, fillAmount, scale = 3) {
   const fill = Math.max(0, Math.min(1, fillAmount));
   const sprite = cachedCanvasSprite(
     hudGlyphSpriteCache,
-    `heart:${fill}:${scale}`,
-    7 * scale,
-    6 * scale,
-    (spriteContext) => paintPixelHeart(spriteContext, 0, 0, fill, scale),
+    `heart:${fill}`,
+    7,
+    6,
+    (spriteContext) => paintPixelHeart(spriteContext, 0, 0, fill, 1),
   );
   if (sprite) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
     ctx.drawImage(sprite, pixelSnap(x, 1), pixelSnap(y, 1),
       7 * scale, 6 * scale);
+    ctx.restore();
   } else {
     paintPixelHeart(ctx, x, y, fill, scale);
   }

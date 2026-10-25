@@ -217,3 +217,12 @@ test("half-heart pixels and HUD faithfully display fractional health", () => {
   vm.runInContext("player.hp=2.5; drawHud()", scope);
   assert.deepEqual(fills, [1, 1, 0.5]);
 });
+
+test("a full enlarged heart has no dark seam from fractional pixel sizing", () => {
+  const { scope, rectangles } = createGame();
+  scope.drawPixelHeart(0, 0, 1, 3.2);
+  assert.equal(
+    rectangles.some((rect) => rect.color === "rgba(73, 91, 104, 0.7)"),
+    false,
+  );
+});

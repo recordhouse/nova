@@ -150,8 +150,14 @@ test("female voice files preload and share one non-overlapping priority channel"
   assert.equal(read(scope, "femaleDeathVoices[0].output.gain.value"), 0.72,
     "the damage voice uses the same volume as the regular character voices");
 
+  read(scope, `
+    globalThis.startVideoCalls=0;
+    playPlayerStartVideo=()=>{startVideoCalls+=1;return true};
+  `);
   const finishLatest = () => started.at(-1).node.onended();
   assert.equal(scope.playFemaleStartVoice(), true);
+  assert.equal(read(scope, "startVideoCalls"), 1,
+    "the dedicated start footage begins with the start voice");
   assert.equal(scope.isFemaleStartVoiceVideoActive(), true,
     "the stand cut-in overrides action footage while the start line plays");
   assert.equal(scope.playFemaleAttackVoice(), false,

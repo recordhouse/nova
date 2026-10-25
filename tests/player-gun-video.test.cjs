@@ -6,7 +6,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-test("the optimized gun video loops only while continuous fire is active", async () => {
+test("optimized action videos randomize and keep their playback lifecycles", async () => {
   const videos = [];
   const createVideo = () => ({
     listeners: {}, readyState: 0, videoWidth: 480, videoHeight: 480,
@@ -55,24 +55,34 @@ test("the optimized gun video loops only while continuous fire is active", async
       { filename: `${name}.js` },
     );
   }
+  vm.runInContext("Math.random=()=>0", scope);
 
   const [
-    video,
-    runVideo,
+    gunVideo1,
+    gunVideo2,
+    runVideo1,
+    runVideo2,
     standVideo,
     downVideo,
+    startVideo,
+    finishingVideo,
     basicVideo,
     monster1Video,
     monster2Video,
     monster3Video,
     monster4Video,
     turretVideo,
+    spaceVideo,
   ] = videos;
-  const spaceVideo = videos[10];
-  assert.equal(video.src, "./assets/video/main/gun-optimized.mp4?v=20261015-1");
-  assert.equal(runVideo.src, "./assets/video/main/run-optimized.mp4?v=20261015-1");
+  assert.equal(gunVideo1.src, "./assets/video/main/gun-optimized.mp4?v=20261015-1");
+  assert.equal(gunVideo2.src, "./assets/video/main/gun_02-optimized.mp4?v=20261021-2");
+  assert.equal(runVideo1.src, "./assets/video/main/run-optimized.mp4?v=20261015-1");
+  assert.equal(runVideo2.src, "./assets/video/main/run_02-optimized.mp4?v=20261021-1");
   assert.equal(standVideo.src, "./assets/video/main/stand-optimized.mp4?v=20261015-1");
   assert.equal(downVideo.src, "./assets/video/main/down-optimized.mp4?v=20261015-1");
+  assert.equal(startVideo.src, "./assets/video/main/start-optimized.mp4?v=20261021-1");
+  assert.equal(finishingVideo.src,
+    "./assets/video/main/finishing-optimized.mp4?v=20261021-1");
   assert.equal(basicVideo.src,
     "./assets/video/monsters/basic-optimized.mp4?v=20261015-1");
   assert.equal(monster1Video.src,
@@ -96,12 +106,13 @@ test("the optimized gun video loops only while continuous fire is active", async
   await Promise.resolve();
   assert.equal(spaceVideo.playCalls, 1);
   assert.equal(vm.runInContext("spaceBackgroundVideoAsset.active", scope), true);
-  assert.equal(runVideo.muted, true);
-  assert.equal(runVideo.loop, true);
+  assert.ok([runVideo1, runVideo2].every((video) => video.muted && video.loop));
   assert.equal(standVideo.muted, true);
   assert.equal(standVideo.loop, true);
   assert.equal(downVideo.muted, true);
   assert.equal(downVideo.loop, false);
+  assert.equal(startVideo.loop, false);
+  assert.equal(finishingVideo.loop, false);
   assert.equal(basicVideo.muted, true);
   assert.equal(basicVideo.loop, true);
   assert.equal(basicVideo.playbackRate, 1);
@@ -112,11 +123,10 @@ test("the optimized gun video loops only while continuous fire is active", async
   await Promise.resolve();
   assert.equal(basicVideo.playCalls, 1);
   assert.equal(vm.runInContext("monsterBasicVideoAsset.active", scope), true);
-  assert.equal(video.preload, "auto");
-  assert.equal(video.muted, true);
-  assert.equal(video.defaultMuted, true);
-  assert.equal(video.playsInline, true);
-  assert.equal(video.loop, true);
+  assert.equal(gunVideo1.preload, "auto");
+  assert.ok([gunVideo1, gunVideo2].every((video) => (
+    video.muted && video.defaultMuted && video.playsInline && video.loop
+  )));
   assert.equal(monster2Video.muted, true);
   assert.equal(monster2Video.loop, false);
   assert.equal(monster2Video.playbackRate, 2.9);
@@ -129,25 +139,34 @@ test("the optimized gun video loops only while continuous fire is active", async
   ));
   assert.equal(scope.playPlayerGunVideo(), false, "an early shot waits for video data");
   assert.equal(scope.playPlayerGunVideo(), false, "pending playback is not reloaded each frame");
-  assert.equal(video.loadCalls, 2);
-  video.readyState = 4;
-  video.listeners.loadeddata();
+  assert.equal(gunVideo1.loadCalls, 2);
+  gunVideo1.readyState = 4;
+  gunVideo1.listeners.loadeddata();
   await Promise.resolve();
-  assert.equal(video.playCalls, 1);
-  assert.equal(video.currentTime, 0);
+  assert.equal(gunVideo1.playCalls, 1);
+  assert.equal(gunVideo1.currentTime, 0);
   assert.equal(vm.runInContext("playerGunVideoAsset.active", scope), true);
 
   assert.equal(scope.playPlayerGunVideo(), false);
-  assert.equal(video.playCalls, 1, "rapid follow-up bullets do not rewind the cut-in");
+  assert.equal(gunVideo1.playCalls, 1, "rapid follow-up bullets do not rewind the cut-in");
 
   assert.equal(scope.stopPlayerGunVideo(), true);
-  assert.equal(video.pauseCalls, 1);
-  assert.equal(video.currentTime, 0);
+  assert.equal(gunVideo1.pauseCalls, 1);
+  assert.equal(gunVideo1.currentTime, 0);
   assert.equal(vm.runInContext("playerGunVideoAsset.active", scope), false);
   assert.equal(scope.stopPlayerGunVideo(), false);
-  assert.equal(video.pauseCalls, 1, "an inactive video is not paused every frame");
-  assert.equal(scope.playPlayerGunVideo(), true);
-  assert.equal(video.playCalls, 2, "a new firing hold restarts from the beginning");
+  assert.equal(gunVideo1.pauseCalls, 1, "an inactive video is not paused every frame");
+
+  vm.runInContext("Math.random=()=>0.99", scope);
+  assert.equal(scope.playPlayerGunVideo(), false,
+    "the randomly selected second gun video waits for its own data");
+  assert.equal(vm.runInContext("playerGunVideoAsset===playerGunVideoAssets[1]", scope), true);
+  gunVideo2.readyState = 4;
+  gunVideo2.listeners.loadeddata();
+  await Promise.resolve();
+  assert.equal(gunVideo2.playCalls, 1,
+    "a later firing hold can randomly use the second gun video");
+  assert.equal(scope.stopPlayerGunVideo(), true);
 
   assert.equal(scope.playPlayerDownVideo(), false,
     "the down cut-in waits for its video data");
@@ -160,6 +179,28 @@ test("the optimized gun video loops only while continuous fire is active", async
   assert.equal(vm.runInContext("playerDownVideoAsset.active", scope), false);
   assert.equal(downVideo.currentTime, 0);
 
+  assert.equal(scope.playPlayerStartVideo(), false);
+  startVideo.readyState = 4;
+  startVideo.listeners.loadeddata();
+  await Promise.resolve();
+  assert.equal(startVideo.playCalls, 1);
+  startVideo.listeners.ended();
+  assert.equal(vm.runInContext("playerStartVideoAsset.active", scope), false);
+
+  assert.equal(scope.playPlayerFinishingVideo(), false);
+  finishingVideo.readyState = 4;
+  finishingVideo.listeners.loadeddata();
+  await Promise.resolve();
+  assert.equal(finishingVideo.playCalls, 1);
+  assert.equal(scope.playPlayerFinishingVideo(), true,
+    "a new ultimate restarts finishing footage even if the previous clip is active");
+  assert.equal(finishingVideo.pauseCalls, 1);
+  assert.equal(finishingVideo.playCalls, 2);
+
+  vm.runInContext(`
+    globalThis.enemyVideoVoiceCalls=[];
+    playEnemyVideoVoice=(kind)=>{enemyVideoVoiceCalls.push(kind);return true};
+  `, scope);
   assert.equal(scope.playMonster2AttackVideo(10), true);
   assert.equal(scope.playMonster2AttackVideo(10.2), false,
     "a pending monster cut-in cannot restart");
@@ -167,6 +208,7 @@ test("the optimized gun video loops only while continuous fire is active", async
   monster2Video.listeners.loadeddata();
   await Promise.resolve();
   assert.equal(monster2Video.playCalls, 1);
+  assert.deepEqual(Array.from(scope.enemyVideoVoiceCalls), ["monster2"]);
   assert.equal(vm.runInContext("monster2AttackVideoAsset.active", scope), true);
   monster2Video.listeners.ended();
   assert.equal(vm.runInContext("monster2AttackVideoAsset.active", scope), false);
@@ -174,6 +216,7 @@ test("the optimized gun video loops only while continuous fire is active", async
     "the global three-second cut-in cooldown prevents flicker");
   assert.equal(scope.playMonster2AttackVideo(13), true);
   assert.equal(monster2Video.playCalls, 2);
+  assert.deepEqual(Array.from(scope.enemyVideoVoiceCalls), ["monster2", "monster2"]);
   assert.equal(scope.resetMonster2AttackVideo(), undefined);
   assert.equal(monster2Video.pauseCalls, 1);
 
@@ -182,6 +225,10 @@ test("the optimized gun video loops only while continuous fire is active", async
   turretVideo.listeners.loadeddata();
   await Promise.resolve();
   assert.equal(turretVideo.playCalls, 1);
+  assert.deepEqual(
+    Array.from(scope.enemyVideoVoiceCalls),
+    ["monster2", "monster2", "turret"],
+  );
   assert.equal(vm.runInContext("enemyAttackVideoAssets.turret.active", scope), true);
   assert.equal(scope.playEnemyAttackVideo("monster3", 21), false,
     "one enemy cut-in cannot interrupt another");
@@ -212,12 +259,16 @@ test("the optimized gun video loops only while continuous fire is active", async
   monster3Video.listeners.loadeddata();
   await Promise.resolve();
   assert.equal(monster3Video.playCalls, 1);
+  assert.deepEqual(
+    Array.from(scope.enemyVideoVoiceCalls),
+    ["monster2", "monster2", "turret", "monster3"],
+  );
   scope.resetEnemyAttackVideo();
   assert.equal(scope.queueEnemyIntroductionVideo("monster1", 10), true,
     "a new stage resets first-encounter introductions");
 });
 
-test("the run and stand videos use independent playback lifecycles", async () => {
+test("the two run videos randomize independently from stand footage", async () => {
   const videos = [];
   const scope = {
     performance: { now: () => 0 },
@@ -248,18 +299,27 @@ test("the run and stand videos use independent playback lifecycles", async () =>
       scope, { filename: `${name}.js` });
   }
 
-  const [gunVideo, runVideo, standVideo] = videos;
+  const [gunVideo1, gunVideo2, runVideo1, runVideo2, standVideo] = videos;
+  vm.runInContext("Math.random=()=>0", scope);
   assert.equal(scope.playPlayerRunVideo(), true);
-  assert.equal(runVideo.playCalls, 1);
-  assert.equal(gunVideo.playCalls, 0);
+  assert.equal(runVideo1.playCalls, 1);
+  assert.equal(runVideo2.playCalls, 0);
+  assert.equal(gunVideo1.playCalls + gunVideo2.playCalls, 0);
   assert.equal(scope.stopPlayerRunVideo(), true);
-  assert.equal(runVideo.pauseCalls, 1);
-  assert.equal(runVideo.currentTime, 0);
-  assert.equal(gunVideo.pauseCalls, 0);
+  assert.equal(runVideo1.pauseCalls, 1);
+  assert.equal(runVideo1.currentTime, 0);
+  assert.equal(gunVideo1.pauseCalls + gunVideo2.pauseCalls, 0);
+
+  vm.runInContext("Math.random=()=>0.99", scope);
+  assert.equal(scope.playPlayerRunVideo(), true);
+  assert.equal(runVideo2.playCalls, 1);
+  assert.equal(vm.runInContext("playerRunVideoAsset===playerRunVideoAssets[1]", scope), true);
+  assert.equal(scope.stopPlayerRunVideo(), true);
+  assert.equal(runVideo2.pauseCalls, 1);
   assert.equal(standVideo.playCalls, 0);
   assert.equal(scope.playPlayerStandVideo(), true);
   assert.equal(standVideo.playCalls, 1);
-  assert.equal(runVideo.playCalls, 1);
+  assert.equal(runVideo1.playCalls + runVideo2.playCalls, 2);
   assert.equal(scope.stopPlayerStandVideo(), true);
   assert.equal(standVideo.pauseCalls, 1);
   assert.equal(standVideo.currentTime, 0);

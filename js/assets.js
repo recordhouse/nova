@@ -25,6 +25,7 @@ function loadImageAsset(source) {
 function loadVideoAsset(source, options = {}) {
   const loop = options.loop ?? true;
   const playbackRate = options.playbackRate ?? 1;
+  const onStart = typeof options.onStart === "function" ? options.onStart : null;
   const video = typeof document !== "undefined"
     ? document.createElement?.("video")
     : null;
@@ -33,6 +34,7 @@ function loadVideoAsset(source, options = {}) {
     loaded: false,
     active: false,
     pendingPlay: false,
+    onStart,
   };
   if (!video) return asset;
   video.preload = "auto";
@@ -64,6 +66,11 @@ const playerSprites = {
   jump: loadPlayerSprite("./assets/images/main/stage/jump.png", 13, PLAYER_JUMP_FRAMES),
   getOff: loadPlayerSprite("./assets/images/main/stage/get-off.png", 10, PLAYER_JUMP_FRAMES),
   stand: loadPlayerSprite("./assets/images/main/stage/stand.png", 5, PLAYER_STAND_FRAMES),
+  finishing: loadPlayerSprite(
+    "./assets/images/main/stage/finishing.png",
+    PLAYER_FINISHING_FPS,
+    PLAYER_FINISHING_FRAMES,
+  ),
   blast: loadPlayerSprite("./assets/images/main/stage/blast.png", 10, PLAYER_BLAST_FRAMES),
   blastRun: loadPlayerSprite("./assets/images/main/stage/blast-run.png", 9, PLAYER_RUN_FRAMES),
   blastHigh: loadPlayerSprite("./assets/images/main/stage/blast-high.png", 10, PLAYER_BLAST_FRAMES),
@@ -81,11 +88,27 @@ const enemySprites = {
 };
 
 const turretSprite = loadImageAsset("./assets/images/monsters/turret_01.png");
-const playerGunVideoAsset = loadVideoAsset("./assets/video/main/gun-optimized.mp4?v=20261015-1");
-const playerRunVideoAsset = loadVideoAsset("./assets/video/main/run-optimized.mp4?v=20261015-1");
+const playerGunVideoAssets = Object.freeze([
+  loadVideoAsset("./assets/video/main/gun-optimized.mp4?v=20261015-1"),
+  loadVideoAsset("./assets/video/main/gun_02-optimized.mp4?v=20261021-2"),
+]);
+let playerGunVideoAsset = playerGunVideoAssets[0];
+const playerRunVideoAssets = Object.freeze([
+  loadVideoAsset("./assets/video/main/run-optimized.mp4?v=20261015-1"),
+  loadVideoAsset("./assets/video/main/run_02-optimized.mp4?v=20261021-1"),
+]);
+let playerRunVideoAsset = playerRunVideoAssets[0];
 const playerStandVideoAsset = loadVideoAsset("./assets/video/main/stand-optimized.mp4?v=20261015-1");
 const playerDownVideoAsset = loadVideoAsset(
   "./assets/video/main/down-optimized.mp4?v=20261015-1",
+  { loop: false },
+);
+const playerStartVideoAsset = loadVideoAsset(
+  "./assets/video/main/start-optimized.mp4?v=20261021-1",
+  { loop: false },
+);
+const playerFinishingVideoAsset = loadVideoAsset(
+  "./assets/video/main/finishing-optimized.mp4?v=20261021-1",
   { loop: false },
 );
 const monsterBasicVideoAsset = loadVideoAsset(
@@ -106,11 +129,19 @@ const enemyAttackVideoAssets = Object.freeze({
   ),
   monster2: loadVideoAsset(
     "./assets/video/monsters/monster2-attack-optimized.mp4?v=20261015-1",
-    { loop: false, playbackRate: ENEMY_ATTACK_VIDEO_PLAYBACK_RATES.monster2 },
+    {
+      loop: false,
+      playbackRate: ENEMY_ATTACK_VIDEO_PLAYBACK_RATES.monster2,
+      onStart: () => playEnemyVideoVoice("monster2"),
+    },
   ),
   monster3: loadVideoAsset(
     "./assets/video/monsters/monster3-attack-optimized.mp4?v=20261015-1",
-    { loop: false, playbackRate: ENEMY_ATTACK_VIDEO_PLAYBACK_RATES.monster3 },
+    {
+      loop: false,
+      playbackRate: ENEMY_ATTACK_VIDEO_PLAYBACK_RATES.monster3,
+      onStart: () => playEnemyVideoVoice("monster3"),
+    },
   ),
   monster4: loadVideoAsset(
     "./assets/video/monsters/monster4-attack-optimized.mp4?v=20261015-1",
@@ -118,7 +149,11 @@ const enemyAttackVideoAssets = Object.freeze({
   ),
   turret: loadVideoAsset(
     "./assets/video/monsters/turret-attack-optimized.mp4?v=20261015-1",
-    { loop: false, playbackRate: ENEMY_ATTACK_VIDEO_PLAYBACK_RATES.turret },
+    {
+      loop: false,
+      playbackRate: ENEMY_ATTACK_VIDEO_PLAYBACK_RATES.turret,
+      onStart: () => playEnemyVideoVoice("turret"),
+    },
   ),
 });
 const monster2AttackVideoAsset = enemyAttackVideoAssets.monster2;
@@ -140,6 +175,7 @@ function startVideoAssetPlayback(asset) {
   video.currentTime = 0;
   try {
     const playback = video.play();
+    asset.onStart?.();
     if (playback?.catch) {
       playback.catch(() => {
         asset.active = false;
@@ -171,20 +207,46 @@ function stopVideoAsset(asset) {
   return true;
 }
 
+function activeVideoAssetInGroup(assets) {
+  return assets.find((asset) => asset.active || asset.pendingPlay) ?? null;
+}
+
+function randomVideoAsset(assets) {
+  return assets[Math.floor(Math.random() * assets.length)];
+}
+
+function stopVideoAssetGroup(assets) {
+  let stopped = false;
+  for (const asset of assets) stopped = stopVideoAsset(asset) || stopped;
+  return stopped;
+}
+
 function playPlayerGunVideo() {
+  const activeAsset = activeVideoAssetInGroup(playerGunVideoAssets);
+  if (activeAsset) {
+    playerGunVideoAsset = activeAsset;
+    return false;
+  }
+  playerGunVideoAsset = randomVideoAsset(playerGunVideoAssets);
   return playVideoAsset(playerGunVideoAsset);
 }
 
 function stopPlayerGunVideo() {
-  return stopVideoAsset(playerGunVideoAsset);
+  return stopVideoAssetGroup(playerGunVideoAssets);
 }
 
 function playPlayerRunVideo() {
+  const activeAsset = activeVideoAssetInGroup(playerRunVideoAssets);
+  if (activeAsset) {
+    playerRunVideoAsset = activeAsset;
+    return false;
+  }
+  playerRunVideoAsset = randomVideoAsset(playerRunVideoAssets);
   return playVideoAsset(playerRunVideoAsset);
 }
 
 function stopPlayerRunVideo() {
-  return stopVideoAsset(playerRunVideoAsset);
+  return stopVideoAssetGroup(playerRunVideoAssets);
 }
 
 function playPlayerStandVideo() {
@@ -201,6 +263,23 @@ function playPlayerDownVideo() {
 
 function stopPlayerDownVideo() {
   return stopVideoAsset(playerDownVideoAsset);
+}
+
+function playPlayerStartVideo() {
+  return playVideoAsset(playerStartVideoAsset);
+}
+
+function stopPlayerStartVideo() {
+  return stopVideoAsset(playerStartVideoAsset);
+}
+
+function playPlayerFinishingVideo() {
+  stopVideoAsset(playerFinishingVideoAsset);
+  return playVideoAsset(playerFinishingVideoAsset);
+}
+
+function stopPlayerFinishingVideo() {
+  return stopVideoAsset(playerFinishingVideoAsset);
 }
 
 function playMonsterBasicVideo() {
@@ -351,7 +430,8 @@ const playerGunSoundData = fetchSoundData("./assets/sound/gun.mp3");
 const playerGunImpactSoundData = fetchSoundData("./assets/sound/gun_impact.mp3?v=20261019-1");
 const gunHitSoundData = fetchSoundData("./assets/sound/gun_hit.mp3?v=20261019-1");
 const heartPickupSoundData = fetchSoundData("./assets/sound/heart.mp3");
-const metalHitSoundData = fetchSoundData("./assets/sound/metal.mp3");
+const metalHitSoundData = [1, 2, 3].map((index) =>
+  fetchSoundData(`./assets/sound/metal_0${index}.mp3?v=20261021-1`));
 const turretLaserSoundData = fetchSoundData("./assets/sound/laser.mp3?v=20260922-2");
 const monsterDie01SoundData = fetchSoundData("./assets/sound/monster_die_01.mp3");
 const monsterDie03SoundData = fetchSoundData("./assets/sound/monster_die_03.mp3");
@@ -372,6 +452,11 @@ const femaleFinishingVoiceData = [1, 2].map((index) =>
 const femaleResurrectionVoiceData = fetchSoundData(
   "./assets/sound/voice_female_resurrection.mp3",
 );
+const enemyVideoVoiceData = Object.freeze({
+  monster2: fetchSoundData("./assets/sound/voice_monster_02.mp3?v=20261021-1"),
+  monster3: fetchSoundData("./assets/sound/voice_monster_03.mp3?v=20261021-1"),
+  turret: fetchSoundData("./assets/sound/voice_turret_01.mp3?v=20261021-1"),
+});
 function createGameAudioContext() {
   if (!GameAudioContext) return null;
   try {
@@ -452,7 +537,8 @@ function createPreparedGameSound(
 }
 
 const gunHitSound = createPreparedGameSound(gunHitSoundData, 0.34);
-const metalHitSound = createPreparedGameSound(metalHitSoundData, 0.4);
+const metalHitSounds = metalHitSoundData.map((data) =>
+  createPreparedGameSound(data, 0.4));
 const turretLaserSound = createPreparedGameSound(turretLaserSoundData, 0.55);
 const monsterDie01Sound = createPreparedGameSound(monsterDie01SoundData, 0.38);
 const monsterDie03Sound = createPreparedGameSound(monsterDie03SoundData, 0.38);
@@ -480,6 +566,12 @@ const femaleResurrectionVoice = createPreparedGameSound(
   0,
   femaleVoiceOutput,
 );
+const enemyVideoVoiceSounds = Object.freeze({
+  monster2: createPreparedGameSound(enemyVideoVoiceData.monster2, 0.68),
+  monster3: createPreparedGameSound(enemyVideoVoiceData.monster3, 0.68),
+  turret: createPreparedGameSound(enemyVideoVoiceData.turret, 0.68),
+});
+let lastMetalHitSoundIndex = -1;
 
 function createSharedGameSoundChannel(volume) {
   const output = gameAudioContext ? gameAudioContext.createGain() : null;
@@ -629,9 +721,22 @@ function playPreparedGameSoundOnChannel(sound, channel) {
   });
 }
 
+function nextMetalHitSound() {
+  const index = randomVoiceIndex(metalHitSounds, lastMetalHitSoundIndex);
+  lastMetalHitSoundIndex = index;
+  return metalHitSounds[index];
+}
+
+function playEnemyVideoVoice(kind) {
+  const sound = enemyVideoVoiceSounds[kind];
+  if (!sound) return false;
+  playPreparedGameSound(sound);
+  return true;
+}
+
 function playPlayerUltimateHitSound(kind) {
   if (kind === "monster3" || kind === "turret") {
-    playPreparedGameSoundOnChannel(metalHitSound, playerUltimateMetalHitChannel);
+    playPreparedGameSoundOnChannel(nextMetalHitSound(), playerUltimateMetalHitChannel);
     return;
   }
   playPreparedGameSoundOnChannel(gunHitSound, playerUltimateOrganicHitChannel);
@@ -657,6 +762,7 @@ function stopActiveFemaleVoice() {
   if (sound === femaleStartVoice) {
     femaleStartVoiceVideoActive = false;
     femaleStartVoiceVideoHoldUntil = -Infinity;
+    stopPlayerStartVideo();
   }
   if (!source) return;
   try {
@@ -698,6 +804,7 @@ function startPreparedFemaleVoice(sound, priority, interrupt) {
   if (isStartVoice) {
     femaleStartVoiceVideoActive = true;
     femaleStartVoiceVideoHoldUntil = -Infinity;
+    playPlayerStartVideo();
   }
   return true;
 }
@@ -800,6 +907,7 @@ function playFemaleResurrectionVoice() {
 function resetFemaleVoicePlayback() {
   queuedFemaleVoiceRequest = null;
   stopActiveFemaleVoice();
+  stopPlayerStartVideo();
   femaleStartVoiceVideoActive = false;
   femaleStartVoiceVideoHoldUntil = -Infinity;
   lastFemaleAttackVoiceIndex = -1;
@@ -812,7 +920,7 @@ function playGunHitSound() {
 }
 
 function playMetalHitSound() {
-  playPreparedGameSound(metalHitSound);
+  playPreparedGameSound(nextMetalHitSound());
 }
 
 function playTurretLaserSound() {

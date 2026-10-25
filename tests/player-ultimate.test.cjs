@@ -26,6 +26,7 @@ function createGame({ testMode = false, loadInput = false } = {}) {
   };
   const scope = {
     finishingVoiceCalls: 0,
+    finishingVideoCalls: 0,
     ultimateRicochetSoundCalls: 0,
     ultimateHitSoundKinds: [],
     performance: { now: () => 0 },
@@ -45,6 +46,7 @@ function createGame({ testMode = false, loadInput = false } = {}) {
     },
   };
   scope.playFemaleFinishingVoice = () => { scope.finishingVoiceCalls += 1; };
+  scope.playPlayerFinishingVideo = () => { scope.finishingVideoCalls += 1; };
   scope.playPlayerUltimateRicochetSound = () => {
     scope.ultimateRicochetSoundCalls += 1;
   };
@@ -87,6 +89,7 @@ test("a charged ultimate floats the player and sweeps dense radial lasers from t
   assert.ok(read(scope, "player.y") < startY);
   assert.equal(read(scope, "player.vy"), 0);
   assert.equal(scope.finishingVoiceCalls, 1);
+  assert.equal(scope.finishingVideoCalls, 1);
   assert.equal(scope.takePlayerDamage(1), false, "the floating attack cannot be interrupted");
 
   for (let frame = 0; frame < 84; frame += 1) scope.updatePlayer(1 / 60);
@@ -114,9 +117,10 @@ test("a charged ultimate floats the player and sweeps dense radial lasers from t
   for (let frame = 0; frame < 40; frame += 1) scope.updatePlayer(1 / 60);
   assert.equal(read(scope, "bullets.length"), 36, "holding ULT does not fire another sweep");
   assert.equal(scope.finishingVoiceCalls, 1);
+  assert.equal(scope.finishingVideoCalls, 1);
 });
 
-test("ultimate lasers originate from the standing character's chest", () => {
+test("ultimate lasers originate from the finishing character's chest", () => {
   const { scope } = createGame();
   read(scope, `
     player.ultimateCharges=1;
@@ -124,16 +128,23 @@ test("ultimate lasers originate from the standing character's chest", () => {
     player.y=650;
     bullets.length=0;
     firePlayerUltimateLaserStep(0);
-    const drawHeight=PLAYER_SPRITE_DRAW_HEIGHT*PLAYER_STAND_SPRITE_SCALE;
-    const spriteTop=player.y+player.height+PLAYER_STAND_SPRITE_Y_OFFSET-drawHeight;
+    const drawHeight=PLAYER_SPRITE_DRAW_HEIGHT*PLAYER_FINISHING_SPRITE_SCALE;
+    const spriteTop=player.y+player.height+PLAYER_FINISHING_SPRITE_Y_OFFSET-drawHeight;
     globalThis.expectedUltimateChestY=
-      spriteTop+drawHeight*PLAYER_ULTIMATE_CHEST_HEIGHT_RATIO;
+      spriteTop+drawHeight*PLAYER_ULTIMATE_CHEST_HEIGHT_RATIO+
+      PLAYER_ULTIMATE_ORIGIN_Y_OFFSET;
   `);
   const laser = read(scope, "bullets[0]");
-  assert.ok(Math.abs(laser.x - read(scope, "player.x+player.width/2")) < 1e-9);
+  assert.ok(Math.abs(laser.x - read(scope, `player.x+player.width/2+
+    PLAYER_ULTIMATE_ORIGIN_X_OFFSET`)) < 1e-9);
   assert.ok(Math.abs(laser.y - (read(scope, "expectedUltimateChestY") - 10)) < 1e-9);
   assert.ok(read(scope, "expectedUltimateChestY") < read(scope, "player.y"),
     "the visual chest sits above the much shorter physics body");
+
+  read(scope, "player.facing=-1; bullets.length=0; firePlayerUltimateLaserStep(0)");
+  assert.ok(Math.abs(read(scope, "bullets[0].x") - read(scope, `player.x+player.width/2-
+    PLAYER_ULTIMATE_ORIGIN_X_OFFSET`)) < 1e-9,
+  "the horizontal origin follows the mirrored finishing artwork");
 });
 
 test("each ultimate laser ricochets three times and expires on the next collision", () => {

@@ -646,18 +646,20 @@ function updatePlayer(dt) {
   const firingPose = firing && (
     player.fireEnergy >= PLAYER_FIRE_ENERGY_PER_SHOT || player.fireTimer > 0
   );
-  const startVoiceStandVideo = !downForThisFrame &&
+  const startVoiceVideoActive = !downForThisFrame &&
     typeof isFemaleStartVoiceVideoActive === "function" &&
     isFemaleStartVoiceVideoActive();
-  const runVideoPose = !startVoiceStandVideo && !firingPose && !downForThisFrame && (
+  if (!startVoiceVideoActive && typeof stopPlayerStartVideo === "function") {
+    stopPlayerStartVideo();
+  }
+  const runVideoPose = !startVoiceVideoActive && !firingPose && !downForThisFrame && (
     playerIsRunningOnGround() || !player.grounded
   );
-  syncPlayerGunVideoPlayback(firingPose && !startVoiceStandVideo);
+  syncPlayerGunVideoPlayback(firingPose && !startVoiceVideoActive);
   syncPlayerRunVideoPlayback(runVideoPose);
   syncPlayerStandVideoPlayback(
-    startVoiceStandVideo || (
-      !firingPose && !runVideoPose && !downForThisFrame && player.grounded
-    ),
+    !startVoiceVideoActive &&
+    !firingPose && !runVideoPose && !downForThisFrame && player.grounded,
   );
   player.fireAnimationTime = firingPose ? player.fireAnimationTime + dt : 0;
   if (firing && player.fireTimer <= 0 && player.fireEnergy >= PLAYER_FIRE_ENERGY_PER_SHOT) {
