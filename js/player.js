@@ -396,14 +396,14 @@ function updatePlayer(dt) {
     updatePlayerCamera(dt);
     return;
   }
-  const jumpInputActive = controls.jump || controls.up;
+  const jumpInputActive = controls.jump;
   const jumpInputStarted = jumpQueued || (jumpInputActive && !player.jumpLatch);
   jumpQueued = false;
   player.jumpLatch = jumpInputActive;
   if (downForThisFrame) {
     player.jumpBufferTimer = 0;
-  } else if (jumpInputStarted && (!controls.fire || controls.jump)) {
-    // Up doubles as high aim while firing; Space remains an explicit buffered jump.
+  } else if (jumpInputStarted) {
+    // Up is reserved for high aim; only the dedicated jump input buffers a jump.
     player.jumpBufferTimer = PLAYER_JUMP_BUFFER_TIME;
   } else {
     player.jumpBufferTimer = Math.max(0, player.jumpBufferTimer - dt);

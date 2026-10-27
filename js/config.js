@@ -31,9 +31,34 @@ function viewportIsLandscape() {
   );
 }
 
+function mobileTouchDevice() {
+  const coarsePointer = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+  const touchPoints = typeof navigator !== "undefined"
+    ? Number(navigator.maxTouchPoints) || 0
+    : 0;
+  return coarsePointer || touchPoints > 0;
+}
+
+const MOBILE_LANDSCAPE_MODE = !TEST_MODE && mobileTouchDevice();
+gameShellElement?.classList?.toggle("mobile-landscape", MOBILE_LANDSCAPE_MODE);
+
+function mobileLandscapeRotationActive() {
+  return MOBILE_LANDSCAPE_MODE && !viewportIsLandscape();
+}
+
+function screenDeltaToGameDelta(dx, dy) {
+  return mobileLandscapeRotationActive()
+    ? { dx: dy, dy: -dx }
+    : { dx, dy };
+}
+
+function gameUsesLandscapeLayout() {
+  return MOBILE_LANDSCAPE_MODE || viewportIsLandscape();
+}
+
 function canvasResolutionForOrientation(
   shortSide = DEFAULT_CANVAS_SHORT_SIDE,
-  landscape = viewportIsLandscape(),
+  landscape = gameUsesLandscapeLayout(),
 ) {
   const longSide = Math.round(shortSide * 16 / 9);
   return landscape
@@ -558,7 +583,10 @@ function configureCanvasResolution(width, height) {
 }
 
 function canvasBackingScale() {
-  const cssWidth = canvas.getBoundingClientRect?.().width ?? 0;
+  const canvasBounds = canvas.getBoundingClientRect?.();
+  const cssWidth = mobileLandscapeRotationActive()
+    ? canvasBounds?.height ?? 0
+    : canvasBounds?.width ?? 0;
   const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
   if (!(cssWidth > 0)) return 1;
   return Math.max(1, Math.min(

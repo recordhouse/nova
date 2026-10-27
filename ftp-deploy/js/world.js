@@ -2967,7 +2967,7 @@ function syncCanvasOrientation() {
   const shortSide = Math.min(WIDTH, HEIGHT);
   const landscape = TEST_MODE && testOrientationOverride !== null
     ? testOrientationOverride
-    : viewportIsLandscape();
+    : gameUsesLandscapeLayout();
   const nextResolution = canvasResolutionForOrientation(shortSide, landscape);
   if (
     nextResolution.width === WIDTH &&

@@ -107,3 +107,20 @@ test("normal play cannot activate GOD even if the hidden button is clicked", () 
   assert.equal(scope.takePlayerDamage(1), true);
   assert.equal(read(scope, "player.hp"), 2);
 });
+
+test("joystick up aims without queueing a jump", () => {
+  const { scope } = createGame(false);
+  scope.setJoystickControls({ up: true });
+  assert.equal(read(scope, "controls.up"), true);
+  assert.equal(read(scope, "controls.jump"), false);
+  assert.equal(read(scope, "jumpQueued"), false);
+  scope.updatePlayer(1 / 60);
+  assert.equal(read(scope, "player.jumpBufferTimer"), 0);
+  assert.equal(read(scope, "player.jumpCount"), 0);
+  assert.ok(read(scope, "player.vy") >= 0);
+
+  read(scope, "controls.up=false; controls.jump=true");
+  scope.updatePlayer(1 / 60);
+  assert.equal(read(scope, "player.grounded"), false);
+  assert.ok(read(scope, "player.vy") < 0);
+});

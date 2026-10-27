@@ -17,7 +17,6 @@ const joystickControls = {
   right: false,
   up: false,
   down: false,
-  jump: false,
 };
 const activeControlPointers = new Map();
 let movementJoystickElement = null;

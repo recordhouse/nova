@@ -37,21 +37,20 @@ function syncControl(control) {
 }
 
 function setJoystickControls(nextControls) {
-  const jumpWasActive = controls.jump || controls.up;
   Object.keys(joystickControls).forEach((control) => {
     joystickControls[control] = Boolean(nextControls[control]);
     syncControl(control);
   });
-  if ((joystickControls.jump || joystickControls.up) && !jumpWasActive) {
-    jumpQueued = true;
-  }
 }
 
 function updateMovementJoystick(event) {
   if (event.pointerId !== movementJoystickPointerId || !movementJoystickElement) return;
   const rect = movementJoystickElement.getBoundingClientRect();
-  const dx = event.clientX - movementJoystickOriginX;
-  const dy = event.clientY - movementJoystickOriginY;
+  const pointerDelta = screenDeltaToGameDelta(
+    event.clientX - movementJoystickOriginX,
+    event.clientY - movementJoystickOriginY,
+  );
+  const { dx, dy } = pointerDelta;
   const distance = Math.hypot(dx, dy);
   const maximumKnobDistance = rect.width * 0.3;
   const knobScale = distance > maximumKnobDistance
@@ -127,7 +126,7 @@ window.addEventListener("keydown", (event) => {
   const control = keyboardControl(event);
   if (!control) return;
   event.preventDefault();
-  if ((control === "jump" || control === "up") && !event.repeat) jumpQueued = true;
+  if (control === "jump" && !event.repeat) jumpQueued = true;
   keyboardControls[control] = true;
   syncControl(control);
 });
@@ -349,3 +348,33 @@ window.addEventListener("pagehide", resetAllInputs);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) resetAllInputs();
 });
+
+async function requestMobileLandscapeMode() {
+  if (!MOBILE_LANDSCAPE_MODE) return false;
+  const fullscreenTarget = document.documentElement ?? gameShellElement;
+  if (
+    !document.fullscreenElement &&
+    typeof fullscreenTarget?.requestFullscreen === "function"
+  ) {
+    try {
+      await fullscreenTarget.requestFullscreen({ navigationUI: "hide" });
+    } catch {
+      // The rotated landscape layout remains available when fullscreen is denied.
+    }
+  }
+  const orientation = window.screen?.orientation;
+  if (typeof orientation?.lock !== "function") return false;
+  try {
+    await orientation.lock("landscape");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+if (MOBILE_LANDSCAPE_MODE) {
+  window.addEventListener("pointerdown", requestMobileLandscapeMode, {
+    capture: true,
+    once: true,
+  });
+}

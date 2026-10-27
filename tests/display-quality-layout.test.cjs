@@ -6,7 +6,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-function createDisplay(cssWidth = 390, pixelRatio = 3) {
+function createDisplay(cssWidth = 390, pixelRatio = 3, mobile = false) {
   const calls = [];
   const gradients = [];
   const stack = [];
@@ -39,18 +39,31 @@ function createDisplay(cssWidth = 390, pixelRatio = 3) {
     getContext: () => ctx,
     getBoundingClientRect: () => ({ width: measuredWidth, height: measuredWidth * 16 / 9 }),
   };
+  const shellClasses = new Set();
+  const shell = {
+    classList: {
+      toggle(name, enabled) {
+        if (enabled) shellClasses.add(name);
+        else shellClasses.delete(name);
+      },
+    },
+  };
   const scope = {
     performance: { now: () => 0 },
-    document: { querySelector: (selector) => selector === "#game" ? canvas : null },
+    navigator: { maxTouchPoints: mobile ? 5 : 0 },
+    document: { querySelector: (selector) => selector === "#game" ? canvas
+      : selector === ".game-shell" ? shell : null },
     window: { location: { search: "" }, innerWidth: 390, innerHeight: 693,
-      devicePixelRatio: pixelRatio, matchMedia: () => ({ matches: false }) },
+      devicePixelRatio: pixelRatio, matchMedia: (query) => ({
+        matches: mobile && query === "(pointer: coarse)",
+      }) },
   };
   vm.createContext(scope);
   for (const name of ["config", "state", "renderer"]) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "js", `${name}.js`), "utf8"),
       scope, { filename: `${name}.js` });
   }
-  return { scope, canvas, calls, gradients,
+  return { scope, canvas, calls, gradients, shellClasses,
     setCssWidth: (width) => { measuredWidth = width; } };
 }
 
@@ -90,6 +103,19 @@ test("reduced performance mode lowers backing resolution and effect density", ()
   assert.equal(scope.setAdaptivePerformanceMode(false), true);
   assert.equal(canvas.width, 1440);
   assert.equal(canvas.height, 2560);
+});
+
+test("touch devices start with a landscape game even in a portrait viewport", () => {
+  const { scope, canvas, shellClasses } = createDisplay(390, 3, true);
+  assert.equal(read(scope, "MOBILE_LANDSCAPE_MODE"), true);
+  assert.equal(read(scope, "WIDTH"), 1280);
+  assert.equal(read(scope, "HEIGHT"), 720);
+  assert.equal(shellClasses.has("mobile-landscape"), true);
+  assert.equal(canvas.width, 2080);
+  assert.equal(canvas.height, 1170);
+  const transformedDelta = scope.screenDeltaToGameDelta(40, 0);
+  assert.equal(transformedDelta.dx, 0);
+  assert.equal(transformedDelta.dy, -40);
 });
 
 test("the looping space video replaces the generated star background", () => {

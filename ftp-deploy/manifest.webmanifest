@@ -1,0 +1,9 @@
+{
+  "name": "NOVA — Run & Gun",
+  "short_name": "NOVA",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#050505"
+}
