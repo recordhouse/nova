@@ -36,8 +36,13 @@ function particleHasGameplayPriority(particle) {
 }
 
 function trimActiveParticles() {
-  const particleLimit = typeof ACTIVE_PARTICLE_LIMIT === "number"
+  const baseParticleLimit = typeof ACTIVE_PARTICLE_LIMIT === "number"
     ? ACTIVE_PARTICLE_LIMIT : 520;
+  const performanceDensity = typeof adaptiveEffectDensity === "number"
+    ? adaptiveEffectDensity : 1;
+  const particleLimit = Math.max(320, Math.round(
+    baseParticleLimit * performanceDensity,
+  ));
   let excess = particles.length - particleLimit;
   if (excess <= 0) return;
   let writeIndex = 0;
@@ -225,9 +230,63 @@ function draw() {
   drawHud();
 }
 
+const PERFORMANCE_REDUCE_FRAME_SECONDS = 1 / 50;
+const PERFORMANCE_RESTORE_FRAME_SECONDS = 1 / 57;
+const PERFORMANCE_REDUCE_HOLD_SECONDS = 1.5;
+const PERFORMANCE_RESTORE_HOLD_SECONDS = 5;
+let adaptivePerformanceReduced = false;
+let adaptiveAverageFrameSeconds = 1 / 60;
+let adaptiveSlowFrameTime = 0;
+let adaptiveRecoveryFrameTime = 0;
+
+function updateAdaptivePerformance(frameSeconds) {
+  if (!Number.isFinite(frameSeconds) || frameSeconds <= 0) return false;
+  if (frameSeconds > 0.12) {
+    adaptiveAverageFrameSeconds = 1 / 60;
+    adaptiveSlowFrameTime = 0;
+    adaptiveRecoveryFrameTime = 0;
+    return false;
+  }
+  const sampleSeconds = Math.min(0.05, frameSeconds);
+  const blend = 1 - Math.exp(-sampleSeconds * 2);
+  adaptiveAverageFrameSeconds += (
+    sampleSeconds - adaptiveAverageFrameSeconds
+  ) * blend;
+
+  if (!adaptivePerformanceReduced) {
+    adaptiveRecoveryFrameTime = 0;
+    adaptiveSlowFrameTime = adaptiveAverageFrameSeconds >=
+      PERFORMANCE_REDUCE_FRAME_SECONDS
+      ? adaptiveSlowFrameTime + sampleSeconds
+      : Math.max(0, adaptiveSlowFrameTime - sampleSeconds * 2);
+    if (adaptiveSlowFrameTime < PERFORMANCE_REDUCE_HOLD_SECONDS) return false;
+    adaptivePerformanceReduced = true;
+    adaptiveSlowFrameTime = 0;
+    if (typeof setAdaptivePerformanceMode === "function") {
+      setAdaptivePerformanceMode(true);
+    }
+    return true;
+  }
+
+  adaptiveSlowFrameTime = 0;
+  adaptiveRecoveryFrameTime = adaptiveAverageFrameSeconds <=
+    PERFORMANCE_RESTORE_FRAME_SECONDS
+    ? adaptiveRecoveryFrameTime + sampleSeconds
+    : 0;
+  if (adaptiveRecoveryFrameTime < PERFORMANCE_RESTORE_HOLD_SECONDS) return false;
+  adaptivePerformanceReduced = false;
+  adaptiveRecoveryFrameTime = 0;
+  if (typeof setAdaptivePerformanceMode === "function") {
+    setAdaptivePerformanceMode(false);
+  }
+  return true;
+}
+
 function loop(currentTime) {
-  const dt = Math.min(0.033, (currentTime - previousTime) / 1000);
+  const frameSeconds = (currentTime - previousTime) / 1000;
   previousTime = currentTime;
+  updateAdaptivePerformance(frameSeconds);
+  const dt = Math.min(0.033, frameSeconds);
   update(dt);
   draw();
   requestAnimationFrame(loop);

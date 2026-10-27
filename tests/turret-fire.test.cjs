@@ -37,7 +37,7 @@ test("turrets independently choose one, two or three shots for each timed burst"
   const scope = createGame();
   const turret = scope.fixtureTurret;
   vm.runInContext(`
-    cameraX=10000;
+    cameraX=-1000;
     globalThis.burstDraws=[0,0.5,0.999];
     Math.random=()=>burstDraws.shift();
   `, scope);
@@ -72,7 +72,7 @@ test("turrets independently choose one, two or three shots for each timed burst"
   assert.equal(read(scope, "burstDraws.length"), 0);
 });
 
-test("turrets still aim at a nearby player and skip distant firing particles", () => {
+test("turrets still aim nearby and fully sleep when far outside the camera", () => {
   const scope = createGame();
   const turret = scope.fixtureTurret;
   vm.runInContext("player.x=650; player.y=420", scope);
@@ -84,7 +84,10 @@ test("turrets still aim at a nearby player and skip distant firing particles", (
   vm.runInContext("player.x=10000; cameraX=10000; particles.length=0; shake=0", scope);
   turret.fireTimer = 0.05;
   scope.updateTurrets(0.1);
-  assert.equal(read(scope, "enemyBullets.length"), 2);
+  assert.equal(read(scope, "enemyBullets.length"), 1);
+  assert.equal(turret.fireTimer, 0.05);
+  assert.equal(turret.active, false);
+  assert.equal(turret.simulationSleeping, true);
   assert.equal(read(scope, "particles.length"), 0);
   assert.equal(read(scope, "shake"), 0);
   assert.equal(scope.turretLaserSoundCalls, 1, "offscreen turret fire stays silent");

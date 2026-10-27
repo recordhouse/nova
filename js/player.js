@@ -37,7 +37,13 @@ function updateElectricWires() {
   if (gameOver || player.hp <= 0 || player.invincible > 0 || playerIsDown() ||
       (TEST_MODE && testInvincibility)) return;
   const hitbox = getPlayerHitbox();
-  for (const platform of platforms) {
+  const nearbyPlatforms = typeof platformsBetween === "function"
+    ? platformsBetween(
+      hitbox.x - ELECTRIC_WIRE_RADIUS,
+      hitbox.x + hitbox.width + ELECTRIC_WIRE_RADIUS,
+    )
+    : platforms;
+  for (const platform of nearbyPlatforms) {
     if (
       !platform.features?.length ||
       platform.y + PLATFORM_DECK_THICKNESS - 3 > hitbox.y + hitbox.height + ELECTRIC_WIRE_RADIUS ||
@@ -286,8 +292,31 @@ function updatePlayerCamera(dt) {
     -maximumCameraStep,
     Math.min(maximumCameraStep, easedCameraStep),
   );
+  const crouchLookingDown = (
+    player.crouching && player.grounded && !playerIsDown() &&
+    !player.ultimateActive
+  );
+  if (crouchLookingDown) {
+    player.crouchCameraLookTime = Math.min(
+      PLAYER_CROUCH_CAMERA_LOOK_DELAY + PLAYER_CROUCH_CAMERA_LOOK_BLEND_DURATION,
+      (player.crouchCameraLookTime ?? 0) + dt,
+    );
+  } else {
+    player.crouchCameraLookTime = 0;
+  }
+  const lookDownProgress = Math.max(0, Math.min(
+    1,
+    (player.crouchCameraLookTime - PLAYER_CROUCH_CAMERA_LOOK_DELAY) /
+      PLAYER_CROUCH_CAMERA_LOOK_BLEND_DURATION,
+  ));
+  const easedLookDownProgress = lookDownProgress * lookDownProgress *
+    (3 - 2 * lookDownProgress);
+  const lookDownDistance = Math.min(
+    PLAYER_CROUCH_CAMERA_LOOK_MAX_DISTANCE,
+    HEIGHT * PLAYER_CROUCH_CAMERA_LOOK_DISTANCE_RATIO,
+  ) * easedLookDownProgress;
   const playerFeetY = player.y + player.height;
-  const targetCameraY = playerFeetY - BASE_GROUND_Y;
+  const targetCameraY = playerFeetY - BASE_GROUND_Y + lookDownDistance;
   cameraY += (targetCameraY - cameraY) * Math.min(1, dt * 4.2);
 }
 

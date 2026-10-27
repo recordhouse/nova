@@ -3050,14 +3050,15 @@ function drawPlayerShieldRamImpact(particle) {
   const progress = 1 - remaining;
   const eased = 1 - (1 - progress) ** 2;
   const direction = particle.direction || 1;
+  const impactScale = particle.scale ?? 1;
   ctx.save();
   ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
-  ctx.scale(direction, 1);
+  ctx.scale(direction * impactScale, impactScale);
   ctx.globalCompositeOperation = "lighter";
   ctx.lineCap = "round";
 
-  for (let wave = 0; wave < 3; wave += 1) {
-    ctx.globalAlpha = Math.pow(remaining, 0.9) * (0.9 - wave * 0.2);
+  for (let wave = 0; wave < 4; wave += 1) {
+    ctx.globalAlpha = Math.pow(remaining, 0.9) * (0.92 - wave * 0.17);
     ctx.strokeStyle = wave === 0 ? particle.coreColor : particle.color;
     ctx.lineWidth = wave === 0 ? 1.35 : 0.9;
     ctx.beginPath();
@@ -3073,8 +3074,8 @@ function drawPlayerShieldRamImpact(particle) {
     ctx.stroke();
   }
 
-  for (let streak = 0; streak < 8; streak += 1) {
-    const spread = (streak - 3.5) / 3.5;
+  for (let streak = 0; streak < 12; streak += 1) {
+    const spread = (streak - 5.5) / 5.5;
     const angle = spread * 0.72 + Math.sin(particle.phase + streak * 1.7) * 0.035;
     const reach = 7 + eased * (32 + Math.abs(spread) * 11) + streak % 2 * 4;
     const length = (10 + (streak % 3) * 4) * (0.55 + remaining * 0.45);
@@ -3743,8 +3744,7 @@ const TOP_VIDEO_SLOT_REFERENCE_Y = 30;
 const HUD_ULTIMATE_FRAME_COLOR = "rgba(132, 92, 157, 0.42)";
 const HUD_STATUS_ICON_MAX_SCALE = 3.2;
 const HUD_STATUS_ICON_GAP_UNITS = 1.4;
-const MINIMAP_VERTICAL_EXAGGERATION_MAX = 2.5;
-const MINIMAP_HEIGHT_RATIO = 0.9;
+const MINIMAP_HEIGHT_RATIO = 1.05;
 
 function topVideoSlotReferenceHeight(mapWidth) {
   return HEIGHT > WIDTH
@@ -4181,7 +4181,10 @@ function minimapWorldBounds() {
 }
 
 function prepareMinimapLayer(panelX, panelY, panelWidth, panelHeight) {
-  const renderScale = 2;
+  const renderScale = Math.min(
+    2,
+    typeof adaptiveRenderScaleCap === "number" ? adaptiveRenderScaleCap : 2,
+  );
   const pixelWidth = Math.max(1, Math.ceil(panelWidth * renderScale));
   const pixelHeight = Math.max(1, Math.ceil(panelHeight * renderScale));
   if (!minimapLayer) {
@@ -4274,14 +4277,20 @@ function drawMinimap(fullMap = false) {
 
   const fullWorldWidth = Math.max(1, fullWorldRight - fullWorldLeft);
   const fullWorldHeight = Math.max(1, fullWorldBottom - fullWorldTop);
-  const worldWidth = expanded ? fullWorldWidth : Math.min(
+  let worldWidth = expanded ? fullWorldWidth : Math.min(
     fullWorldWidth,
     Math.max(WIDTH * 1.25, fullWorldWidth * MINIMAP_LOCAL_WORLD_RATIO),
   );
-  const worldHeight = expanded ? fullWorldHeight : Math.min(
-    fullWorldHeight,
-    Math.max(HEIGHT * 1.1, fullWorldHeight * MINIMAP_LOCAL_WORLD_RATIO),
-  );
+  let worldHeight = fullWorldHeight;
+  if (!expanded) {
+    const plotAspect = plotWidth / Math.max(1, plotHeight);
+    const minimumWorldHeight = Math.min(fullWorldHeight, HEIGHT * 1.1);
+    worldHeight = Math.min(fullWorldHeight, worldWidth / plotAspect);
+    if (worldHeight < minimumWorldHeight) {
+      worldHeight = minimumWorldHeight;
+      worldWidth = Math.min(fullWorldWidth, worldHeight * plotAspect);
+    }
+  }
   const focusX = player.x + player.width / 2;
   const focusY = player.y + player.height / 2;
   const worldLeft = expanded ? fullWorldLeft : Math.max(
@@ -4299,19 +4308,10 @@ function drawMinimap(fullMap = false) {
     (plotWidth - markerPadding * 2) / worldWidth,
     (plotHeight - markerPadding * 2) / worldHeight,
   );
-  const localScaleX = plotWidth / worldWidth;
-  const localScaleY = Math.min(
-    plotHeight / worldHeight,
-    localScaleX * MINIMAP_VERTICAL_EXAGGERATION_MAX,
-  );
-  const localContentHeight = worldHeight * localScaleY;
-  const mapX = expanded
-    ? (value) => plotX + (plotWidth - worldWidth * mapScale) / 2 + (value - worldLeft) * mapScale
-    : (value) => plotX + (value - worldLeft) / worldWidth * plotWidth;
-  const mapY = expanded
-    ? (value) => plotY + (plotHeight - worldHeight * mapScale) / 2 + (value - worldTop) * mapScale
-    : (value) => plotY + (plotHeight - localContentHeight) / 2 +
-      (value - worldTop) * localScaleY;
+  const mapX = (value) => plotX + (plotWidth - worldWidth * mapScale) / 2 +
+    (value - worldLeft) * mapScale;
+  const mapY = (value) => plotY + (plotHeight - worldHeight * mapScale) / 2 +
+    (value - worldTop) * mapScale;
 
   const renderMap = (ctx) => {
   ctx.save();

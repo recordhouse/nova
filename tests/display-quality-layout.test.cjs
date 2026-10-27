@@ -79,6 +79,19 @@ test("backing resolution is capped for memory while remaining sharper than 1x", 
   assert.equal(canvas.height, 2560);
 });
 
+test("reduced performance mode lowers backing resolution and effect density", () => {
+  const { scope, canvas } = createDisplay(720, 4);
+  assert.equal(scope.setAdaptivePerformanceMode(true), true);
+  assert.equal(read(scope, "adaptiveRenderScaleCap"), 1.4);
+  assert.equal(read(scope, "adaptiveEffectDensity"), 0.7);
+  assert.equal(canvas.width, 1008);
+  assert.equal(canvas.height, 1792);
+  assert.equal(scope.setAdaptivePerformanceMode(true), false);
+  assert.equal(scope.setAdaptivePerformanceMode(false), true);
+  assert.equal(canvas.width, 1440);
+  assert.equal(canvas.height, 2560);
+});
+
 test("the looping space video replaces the generated star background", () => {
   const { scope, calls, gradients } = createDisplay();
   const video = {
@@ -119,8 +132,8 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
     assert.equal(header.map.x + header.map.width / 2, width / 2);
     const portrait = height > width;
     assert.equal(header.map.width, Math.round(width * (portrait ? 0.44 : 0.38)));
-    assert.equal(header.map.height, Math.round(slots.originalHeight * 0.9),
-      "enlarging the videos does not also enlarge the minimap");
+    assert.equal(header.map.height, Math.round(slots.originalHeight * 1.05),
+      "the taller minimap keeps its intended proportion beside the videos");
     assert.ok(header.hearts.x + header.hearts.width < header.ultimate.x);
     assert.ok(header.stage.x + header.stage.width < header.score.x);
     assert.ok(header.hearts.x > slots.left[1].x,
@@ -143,7 +156,7 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
     assert.ok(header.infoY > 10, "status rows move down");
     assert.ok(header.map.y < 34, "the minimap moves up");
     assert.ok(header.map.y + header.map.height <= 170);
-    assert.ok(header.map.width / header.map.height >= 1.7,
+    assert.ok(header.map.width / header.map.height >= 1.6,
       "the minimap remains horizontally oriented at the taller shared height");
   }
 });

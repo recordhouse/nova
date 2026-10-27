@@ -115,6 +115,45 @@ test("the active particle budget preserves critical effects during effect spikes
     "particles.some((particle)=>particle.impactFlash)", scope), true);
 });
 
+test("sustained slow frames reduce quality and stable recovery restores it", () => {
+  const { scope } = createGame(false);
+  for (let index = 0; index < 120; index += 1) {
+    scope.updateAdaptivePerformance(1 / 40);
+  }
+  assert.equal(vm.runInContext("adaptivePerformanceReduced", scope), true);
+  assert.equal(vm.runInContext("adaptiveEffectDensity", scope), 0.7);
+
+  for (let index = 0; index < 120; index += 1) {
+    scope.updateAdaptivePerformance(1 / 60);
+  }
+  assert.equal(vm.runInContext("adaptivePerformanceReduced", scope), true,
+    "a brief recovery must not make quality oscillate");
+
+  for (let index = 0; index < 360; index += 1) {
+    scope.updateAdaptivePerformance(1 / 60);
+  }
+  assert.equal(vm.runInContext("adaptivePerformanceReduced", scope), false);
+  assert.equal(vm.runInContext("adaptiveEffectDensity", scope), 1);
+});
+
+test("reduced quality trims cosmetic particles before critical effects", () => {
+  const { scope } = createGame(false);
+  vm.runInContext(`
+    setAdaptivePerformanceMode(true);
+    particles.length=0;
+    particles.push({x:0,y:0,vx:0,vy:0,life:1,maxLife:1,
+      gravity:0,impactFlash:true,color:'#fff',size:1});
+    for(let index=0;index<700;index++) {
+      particles.push({x:index,y:0,vx:0,vy:0,life:1,maxLife:1,
+        gravity:0,color:'#fff',size:1});
+    }
+    updateParticles(0);
+  `, scope);
+  assert.equal(vm.runInContext("particles.length", scope), 364);
+  assert.equal(vm.runInContext(
+    "particles.some((particle)=>particle.impactFlash)", scope), true);
+});
+
 for (const [landscape, shortSide] of [[false, 540], [false, 720], [true, 540], [true, 720]]) {
   test(`full ${shortSide}px ${landscape ? "landscape" : "portrait"} map fits every road and shows player and boss gate`, () => {
     const { scope, strokes, clips, fills } = createGame(true, landscape);
@@ -162,14 +201,13 @@ test("full map skips world effects and is not hidden by the game-over overlay", 
 
 test("closed map keeps the small, cropped minimap", () => {
   const { scope, strokes, strokeRects, clips } = createGame();
-  assert.equal(vm.runInContext("MINIMAP_LOCAL_WORLD_RATIO", scope), 0.33);
-  assert.equal(vm.runInContext("MINIMAP_VERTICAL_EXAGGERATION_MAX", scope), 2.5);
+  assert.equal(vm.runInContext("MINIMAP_LOCAL_WORLD_RATIO", scope), 0.25);
   scope.drawMinimap();
   const [x, y, width, height] = clips.at(-1);
   const header = scope.hudHeaderLayout();
   assert.equal(header.map.width, Math.round(720 * 0.44));
   assert.equal(header.map.height,
-    Math.round(scope.topVideoSlotLayout().originalHeight * 0.9));
+    Math.round(scope.topVideoSlotLayout().originalHeight * 1.05));
   assert.ok(width < header.map.width && height < header.map.height);
   const roads = strokes.filter((stroke) => stroke.color === "rgba(83, 221, 242, 0.62)");
   assert.ok(roads.length > 0);
@@ -184,6 +222,30 @@ test("closed map keeps the small, cropped minimap", () => {
   assert.ok(Math.abs(Math.abs(columnGap) - Math.abs(rowGap)) < 1e-9,
     "the minimap grid cells should be square");
   assert.equal(strokeRects.length, 0, "the minimap should not draw a rectangular border");
+});
+
+test("the local minimap preserves the terrain's real horizontal and vertical scale", () => {
+  const { scope, strokes } = createGame();
+  vm.runInContext(`
+    platforms.length=0;
+    platforms.push({
+      id:999, kind:'ramp', start:0, end:100,
+      entryX:0, exitX:100, entryY:200, exitY:300,
+      y:200, routeRole:'main'
+    });
+    player.x=40; player.y=210; bossDoor=null; mapSeed+=1;
+    invalidateMinimapCache();
+  `, scope);
+  strokes.length = 0;
+  scope.drawMinimap();
+  const road = strokes.find((stroke) => (
+    stroke.color === "rgba(83, 221, 242, 0.62)"
+  ));
+  assert.ok(road);
+  const horizontal = Math.abs(road.points[1].x - road.points[0].x);
+  const vertical = Math.abs(road.points[1].y - road.points[0].y);
+  assert.ok(Math.abs(horizontal - vertical) < 1e-9,
+    "a 45-degree world ramp remains 45 degrees on the minimap");
 });
 
 test("the local minimap fades its left, right and bottom edges but not its top", () => {

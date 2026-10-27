@@ -760,6 +760,24 @@ function hostileAttackVideoIsVisible(hostile) {
   );
 }
 
+function hostileIsWithinSimulationRange(hostile) {
+  const centerX = hostile.x + hostile.width / 2;
+  const centerY = hostile.y + hostile.height / 2;
+  return (
+    centerX >= cameraX - HOSTILE_SIMULATION_MARGIN_X &&
+    centerX <= cameraX + WIDTH + HOSTILE_SIMULATION_MARGIN_X &&
+    centerY >= cameraY - HOSTILE_SIMULATION_MARGIN_Y &&
+    centerY <= cameraY + HEIGHT + HOSTILE_SIMULATION_MARGIN_Y
+  );
+}
+
+function enemyNeedsContinuousSimulation(enemy) {
+  return (
+    enemy.revivalKnockback || (enemy.hitTimer ?? 0) > 0 ||
+    !["chase", "hover"].includes(enemy.state)
+  );
+}
+
 function hostileAttackVideoDistance(hostile, playerCenterX, playerCenterY) {
   return Math.hypot(
     hostile.x + hostile.width / 2 - playerCenterX,
@@ -807,6 +825,15 @@ function updateEnemies(dt) {
 
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
+    if (
+      !hostileIsWithinSimulationRange(enemy) &&
+      !enemyNeedsContinuousSimulation(enemy)
+    ) {
+      enemy.moving = false;
+      enemy.simulationSleeping = true;
+      continue;
+    }
+    enemy.simulationSleeping = false;
     enemy.animationTime += dt;
     enemy.attackTimer = Math.max(0, enemy.attackTimer - dt);
     enemy.jumpCooldown = Math.max(0, enemy.jumpCooldown - dt);
@@ -1023,6 +1050,12 @@ function updateTurrets(dt) {
 
   for (const turret of turrets) {
     if (!turret.alive) continue;
+    if (!hostileIsWithinSimulationRange(turret)) {
+      turret.active = false;
+      turret.simulationSleeping = true;
+      continue;
+    }
+    turret.simulationSleeping = false;
     const turretCenterX = turret.x + turret.width / 2;
     const turretCenterY = turret.y + turret.height / 2;
     turret.y = (

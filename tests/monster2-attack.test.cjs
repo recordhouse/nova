@@ -241,22 +241,32 @@ test("monster2 can fire outside range when its random ambient timer expires", ()
   }
 });
 
-test("autonomous attacks repeat offscreen without generating invisible particles", () => {
+test("offscreen idle monsters sleep without advancing AI or spawning projectiles", () => {
   const { scope } = createGame();
   vm.runInContext("player.x=10000; player.y=500-player.height; cameraX=10000", scope);
   const enemy = scope.fixtureEnemy;
-  let charges = 0;
+  const initialAttackTimer = enemy.attackTimer;
+  const initialAmbientTimer = enemy.ambientFireTimer;
+  const initialAnimationTime = enemy.animationTime;
   for (let frame = 0; frame < 2160; frame += 1) {
-    const previousState = enemy.state;
     scope.updateBullets(1 / 60);
     scope.updateEnemies(1 / 60);
-    if (enemy.state === "inhale" && previousState !== "inhale") charges += 1;
-    assert.ok(shots(scope).length <= 5, "offscreen projectiles must not accumulate");
   }
-  assert.ok(charges >= 3, "fire cycles must continue even when no player is in range");
+  assert.equal(enemy.state, "chase");
+  assert.equal(enemy.attackTimer, initialAttackTimer);
+  assert.equal(enemy.ambientFireTimer, initialAmbientTimer);
+  assert.equal(enemy.animationTime, initialAnimationTime);
+  assert.equal(enemy.simulationSleeping, true);
+  assert.equal(shots(scope).length, 0);
   assert.equal(vm.runInContext("particles.length", scope), 0);
-  assert.equal(scope.monster2FireSoundCalls, 0, "offscreen fire stays silent");
+  assert.equal(scope.monster2FireSoundCalls, 0);
   assert.equal(vm.runInContext("player.hp", scope), 3);
+
+  vm.runInContext("cameraX=0", scope);
+  scope.updateEnemies(1 / 60);
+  assert.equal(enemy.simulationSleeping, false);
+  assert.ok(enemy.animationTime > initialAnimationTime,
+    "the monster resumes as soon as its area approaches the camera");
 });
 
 test("a fireball fired offscreen survives the camera edge and flies into view", () => {

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#050505" />
+    <title>NOVA — Run &amp; Gun Prototype</title>
+    <link rel="preload" href="./assets/sound/gun.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/gun_impact.mp3?v=20261019-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/gun_hit.mp3?v=20261019-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/heart.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/metal_01.mp3?v=20261021-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/metal_02.mp3?v=20261021-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/metal_03.mp3?v=20261021-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/laser.mp3?v=20260922-2" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/monster_die_01.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/monster_die_03.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/monster_die_01_01.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/turret_die_01.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/monster_fire_02.mp3?v=20260923-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/resurrection.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/shield.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_start.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_run.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_attack_01.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_attack_02.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_attack_03.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_attack_04.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_attack_05.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_die_01.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_die_02.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_end.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_finishing_01.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_finishing_02.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_female_resurrection.mp3" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_monster_02.mp3?v=20261021-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_monster_03.mp3?v=20261021-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/sound/voice_turret_01.mp3?v=20261021-1" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="./assets/music/stage_01.mp3?v=20260924-1" as="audio" />
+    <link rel="stylesheet" href="./styles.css?v=20261021-3" />
+  </head>
+  <body>
+    <main class="game-shell" aria-label="NOVA 게임 프로토타입">
+      <canvas id="game" width="720" height="1280" aria-label="게임 화면"></canvas>
+
+      <section class="test-controls" data-test-controls hidden aria-label="테스트 모드 도구">
+        <button
+          type="button"
+          class="test-jump-path-button"
+          data-test-jump-path
+          aria-label="가로형 점프길 바로 보기"
+        >
+          JUMP
+        </button>
+        <button
+          type="button"
+          class="test-resolution-button"
+          data-test-resolution
+          aria-label="현재 해상도 720 곱하기 1280, 해상도 전환"
+        >
+          RES 720
+        </button>
+        <button
+          type="button"
+          class="test-orientation-button"
+          data-test-orientation
+          aria-label="현재 세로 화면, 가로 화면으로 전환"
+        >
+          VIEW 세로
+        </button>
+        <button
+          type="button"
+          class="test-map-button"
+          data-test-map
+          aria-label="전체 지도 표시 꺼짐"
+          aria-pressed="false"
+        >
+          MAP
+        </button>
+        <button
+          type="button"
+          class="test-music-button"
+          data-test-music
+          aria-label="배경음악 재생 중, 누르면 일시정지"
+          aria-pressed="false"
+        >
+          BGM Ⅱ
+        </button>
+        <button
+          type="button"
+          class="test-invincibility-button"
+          data-test-invincibility
+          aria-label="무적 모드 꺼짐"
+          aria-pressed="false"
+        >
+          GOD
+        </button>
+        <button
+          type="button"
+          class="test-ultimate-button"
+          data-test-ultimate
+          aria-label="필살기 즉시 발동"
+        >
+          ULT NOW
+        </button>
+        <button
+          type="button"
+          class="test-area-button player-area"
+          data-test-player-area
+          aria-label="주인공 영역 표시 꺼짐"
+          aria-pressed="false"
+        >
+          P AREA
+        </button>
+        <button
+          type="button"
+          class="test-area-button monster-area"
+          data-test-monster-area
+          aria-label="몬스터·포탑 영역 표시 꺼짐"
+          aria-pressed="false"
+        >
+          M AREA
+        </button>
+        <button
+          type="button"
+          class="test-monster-spawn-button monster1"
+          data-test-spawn-monster1
+          aria-label="몹1 한 마리 생성"
+        >
+          M1
+        </button>
+        <button
+          type="button"
+          class="test-monster-spawn-button monster2"
+          data-test-spawn-monster2
+          aria-label="몹2 한 마리 생성"
+        >
+          M2
+        </button>
+        <button
+          type="button"
+          class="test-monster-spawn-button monster3"
+          data-test-spawn-monster3
+          aria-label="몹3 한 마리 생성"
+        >
+          M3
+        </button>
+        <button
+          type="button"
+          class="test-monster-spawn-button monster4"
+          data-test-spawn-monster4
+          aria-label="몹4 한 마리 생성"
+        >
+          M4
+        </button>
+        <button
+          type="button"
+          class="test-monster-spawn-button turret"
+          data-test-spawn-turret
+          aria-label="포탑 한 기 생성"
+        >
+          T
+        </button>
+      </section>
+
+      <section class="touch-controls" aria-label="터치 조작 버튼">
+        <div class="move-controls">
+          <button
+            type="button"
+            class="movement-joystick"
+            data-movement-joystick
+            aria-label="이동, 점프, 앉기 조이스틱"
+          >
+            <span class="joystick-arrow up" aria-hidden="true">▲</span>
+            <span class="joystick-arrow right" aria-hidden="true">▶</span>
+            <span class="joystick-arrow down" aria-hidden="true">▼</span>
+            <span class="joystick-arrow left" aria-hidden="true">◀</span>
+            <span class="joystick-knob" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="action-controls">
+          <button
+            type="button"
+            class="control-button action ultimate"
+            data-control="ultimate"
+            data-ultimate-control
+            data-charges="0"
+            aria-label="필살기, 충전 0개"
+            aria-disabled="true"
+          >ULT</button>
+          <button class="control-button action fire" data-control="fire" aria-label="사격">FIRE</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="./js/config.js?v=20261025-4"></script>
+    <script src="./js/assets.js?v=20261025-1"></script>
+    <script src="./js/state.js?v=20261025-1"></script>
+    <script src="./js/world.js?v=20261025-1"></script>
+    <script src="./js/combat.js?v=20261025-3"></script>
+    <script src="./js/player.js?v=20261025-2"></script>
+    <script src="./js/enemies.js?v=20261025-1"></script>
+    <script src="./js/renderer.js?v=20261025-3"></script>
+    <script src="./js/input.js?v=20261021-3"></script>
+    <script src="./js/main.js?v=20261025-1"></script>
+  </body>
+</html>

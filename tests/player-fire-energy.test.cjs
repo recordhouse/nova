@@ -205,6 +205,48 @@ test("the stand video plays while the grounded player is idle or crouching", () 
   assert.deepEqual(videoCalls, ["play"], "the firing video takes priority over stand");
 });
 
+test("holding crouch looks farther down after a short delay and releasing restores the view", () => {
+  const { scope } = createGame();
+  const baseCameraY = read(scope, "player.y + player.height - BASE_GROUND_Y");
+  read(scope, `
+    cameraY=${baseCameraY};
+    controls.down=true;
+  `);
+
+  const delay = read(scope, "PLAYER_CROUCH_CAMERA_LOOK_DELAY");
+  for (let elapsed = 0; elapsed + 1 / 60 < delay; elapsed += 1 / 60) {
+    scope.updatePlayer(1 / 60);
+  }
+  assert.ok(Math.abs(read(scope, "cameraY") - baseCameraY) < 1e-6,
+    "a quick crouch does not move the camera");
+
+  for (let frame = 0; frame < 90; frame += 1) scope.updatePlayer(1 / 60);
+  const lookedDownCameraY = read(scope, "cameraY");
+  const expectedDistance = read(scope,
+    "Math.min(PLAYER_CROUCH_CAMERA_LOOK_MAX_DISTANCE, HEIGHT * PLAYER_CROUCH_CAMERA_LOOK_DISTANCE_RATIO)");
+  assert.ok(lookedDownCameraY > baseCameraY + expectedDistance * 0.9,
+    "a held crouch reveals the lower area");
+
+  read(scope, "controls.down=false");
+  for (let frame = 0; frame < 90; frame += 1) scope.updatePlayer(1 / 60);
+  assert.ok(Math.abs(read(scope, "cameraY") - baseCameraY) < 0.5,
+    "releasing crouch smoothly restores the normal view");
+  assert.equal(read(scope, "player.crouchCameraLookTime"), 0);
+});
+
+test("holding down in the air does not start the crouch camera look", () => {
+  const { scope } = createGame();
+  read(scope, `
+    player.y=100;
+    player.grounded=false;
+    player.platform=null;
+    controls.down=true;
+  `);
+  for (let frame = 0; frame < 8; frame += 1) scope.updatePlayer(1 / 60);
+  assert.equal(read(scope, "player.grounded"), false);
+  assert.equal(read(scope, "player.crouchCameraLookTime"), 0);
+});
+
 test("the first start voice holds its dedicated video over movement and firing footage", () => {
   const { scope, videoCalls, runVideoCalls, standVideoCalls, startVideoCalls } = createGame();
   read(scope, `

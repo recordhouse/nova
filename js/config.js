@@ -46,6 +46,10 @@ const BASE_GROUND_SCREEN_RATIO = 748 / 960;
 let WIDTH = initialCanvasResolution.width;
 let HEIGHT = initialCanvasResolution.height;
 const MAX_RENDER_SCALE = 2;
+const REDUCED_RENDER_SCALE = 1.4;
+const REDUCED_EFFECT_DENSITY = 0.7;
+let adaptiveRenderScaleCap = MAX_RENDER_SCALE;
+let adaptiveEffectDensity = 1;
 let BASE_GROUND_Y = HEIGHT * BASE_GROUND_SCREEN_RATIO;
 const GRAVITY = 2100;
 const JUMP_SPEED = 950;
@@ -64,6 +68,8 @@ const PLAYER_ACCELERATION_SHIELD_BREAK_SHARDS_PER_DOT = 4;
 const PLAYER_SHIELD_RAM_DAMAGE = 1;
 const PLAYER_SHIELD_RAM_KNOCKBACK_SPEED = 900;
 const PLAYER_SHIELD_RAM_KNOCKBACK_DURATION = 0.46;
+const PLAYER_SHIELD_RAM_IMPACT_SCALE = 1.4;
+const PLAYER_SHIELD_RAM_EFFECT_DENSITY = 1.4;
 const PLAYER_COYOTE_TIME = 0.11;
 const PLAYER_JUMP_BUFFER_TIME = 0.12;
 const PLAYER_MAX_FALL_SPEED = 760;
@@ -110,7 +116,7 @@ const ELECTRIC_WIRE_DAMAGE = 0.5;
 const MAP_FLOW_DISTANCE_MIN = 1200;
 const MAP_FLOW_DISTANCE_MAX = 3000;
 const MAP_FLOW_REVERSE_CHANCE = 0.34;
-const MINIMAP_LOCAL_WORLD_RATIO = 0.33;
+const MINIMAP_LOCAL_WORLD_RATIO = 0.25;
 const MAP_FLOW_VERTICAL_STREAK_CHANCE = 0.56;
 const MAP_FLOW_VERTICAL_STREAK_MAX = 3;
 const MAP_FLOW_VERTICAL_SOFT_LIMIT = 10;
@@ -153,6 +159,10 @@ const CAMERA_LOOK_SWITCH_DELAY = 0.25;
 const CAMERA_LOOK_MOVEMENT_SPEED_THRESHOLD = 32;
 const CAMERA_HORIZONTAL_FOLLOW_SPEED = 10;
 const CAMERA_MAX_PAN_SPEED_RATIO = 0.75;
+const PLAYER_CROUCH_CAMERA_LOOK_DELAY = 0.32;
+const PLAYER_CROUCH_CAMERA_LOOK_BLEND_DURATION = 0.38;
+const PLAYER_CROUCH_CAMERA_LOOK_DISTANCE_RATIO = 0.16;
+const PLAYER_CROUCH_CAMERA_LOOK_MAX_DISTANCE = 180;
 const PLAYER_SPRITE_DRAW_HEIGHT = 149.6;
 const PLAYER_STAND_SPRITE_SCALE = 1.12;
 const PLAYER_FINISHING_SPRITE_SCALE = PLAYER_STAND_SPRITE_SCALE * 1.1;
@@ -232,6 +242,8 @@ const TURRET_DEATH_EXPLOSION_DAMAGE = MONSTER1_CRIMSON_EXPLOSION_DAMAGE;
 const TURRET_DEATH_KNOCKBACK_SPEED = MONSTER1_CRIMSON_KNOCKBACK_SPEED;
 const HOSTILE_CONTACT_DAMAGE = 1;
 const HOSTILE_CONTACT_COOLDOWN = 0.65;
+const HOSTILE_SIMULATION_MARGIN_X = 1100;
+const HOSTILE_SIMULATION_MARGIN_Y = 720;
 const PLAYER_MUZZLE_HEIGHT_RATIO = 1 / 3;
 const PLAYER_MUZZLE_FORWARD_OFFSET = 44;
 const PLAYER_MUZZLE_VERTICAL_OFFSET = -10;
@@ -549,7 +561,11 @@ function canvasBackingScale() {
   const cssWidth = canvas.getBoundingClientRect?.().width ?? 0;
   const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
   if (!(cssWidth > 0)) return 1;
-  return Math.max(1, Math.min(MAX_RENDER_SCALE, cssWidth * pixelRatio / WIDTH));
+  return Math.max(1, Math.min(
+    MAX_RENDER_SCALE,
+    adaptiveRenderScaleCap,
+    cssWidth * pixelRatio / WIDTH,
+  ));
 }
 
 function syncCanvasBackingScale() {
@@ -559,6 +575,19 @@ function syncCanvasBackingScale() {
     canvas.height === Math.round(HEIGHT * scale)
   ) return false;
   configureCanvasResolution(WIDTH, HEIGHT);
+  return true;
+}
+
+function setAdaptivePerformanceMode(reduced) {
+  const nextScaleCap = reduced ? REDUCED_RENDER_SCALE : MAX_RENDER_SCALE;
+  const nextEffectDensity = reduced ? REDUCED_EFFECT_DENSITY : 1;
+  if (
+    adaptiveRenderScaleCap === nextScaleCap &&
+    adaptiveEffectDensity === nextEffectDensity
+  ) return false;
+  adaptiveRenderScaleCap = nextScaleCap;
+  adaptiveEffectDensity = nextEffectDensity;
+  syncCanvasBackingScale();
   return true;
 }
 

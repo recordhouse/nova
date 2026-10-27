@@ -17,6 +17,7 @@ function createGame() {
       matchMedia: () => ({ matches: false }) },
     playGunHitSound: () => soundCalls.push("gun_hit"),
     playMetalHitSound: () => soundCalls.push("metal"),
+    playTurretMetalHitSound: () => soundCalls.push("turret_metal"),
     playMonsterDie01Sound: () => soundCalls.push("monster_die_01"),
     playMonsterDie03Sound: () => soundCalls.push("monster_die_03"),
     playMonsterDie0101Sound: () => soundCalls.push("monster_die_01_01"),
@@ -64,7 +65,8 @@ test("organic and metal targets play their matching bullet-hit sounds", () => {
   `, scope);
   scope.updateBullets(0);
 
-  assert.deepEqual(soundCalls, ["gun_hit", "gun_hit", "metal", "gun_hit", "metal"]);
+  assert.deepEqual(soundCalls,
+    ["gun_hit", "gun_hit", "metal", "gun_hit", "turret_metal"]);
 });
 
 test("player bullets add one purple electric hit effect to every enemy class", () => {

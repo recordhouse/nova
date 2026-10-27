@@ -81,6 +81,7 @@ const player = {
   scoreGainAmount: 0,
   scoreGainStartedAt: -Infinity,
   crouching: false,
+  crouchCameraLookTime: 0,
   platform: null,
   jumpLatch: false,
   jumpBufferTimer: 0,

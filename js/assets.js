@@ -585,6 +585,7 @@ function createSharedGameSoundChannel(volume) {
 const playerUltimateRicochetChannel = createSharedGameSoundChannel(0.52);
 const playerUltimateOrganicHitChannel = createSharedGameSoundChannel(0.5);
 const playerUltimateMetalHitChannel = createSharedGameSoundChannel(0.56);
+const turretMetalHitChannel = createSharedGameSoundChannel(0.68);
 
 function prepareGameAudio() {
   playMonsterBasicVideo();
@@ -735,7 +736,11 @@ function playEnemyVideoVoice(kind) {
 }
 
 function playPlayerUltimateHitSound(kind) {
-  if (kind === "monster3" || kind === "turret") {
+  if (kind === "turret") {
+    playPreparedGameSoundOnChannel(nextMetalHitSound(), turretMetalHitChannel);
+    return;
+  }
+  if (kind === "monster3") {
     playPreparedGameSoundOnChannel(nextMetalHitSound(), playerUltimateMetalHitChannel);
     return;
   }
@@ -921,6 +926,10 @@ function playGunHitSound() {
 
 function playMetalHitSound() {
   playPreparedGameSound(nextMetalHitSound());
+}
+
+function playTurretMetalHitSound() {
+  playPreparedGameSoundOnChannel(nextMetalHitSound(), turretMetalHitChannel);
 }
 
 function playTurretLaserSound() {

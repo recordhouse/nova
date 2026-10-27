@@ -2588,6 +2588,7 @@ function resetPlayerPosition() {
   player.ultimateLaserStep = 0;
   player.ultimateImpactSoundGroup = null;
   player.ultimateWasActive = false;
+  player.crouchCameraLookTime = 0;
   if (typeof syncPlayerGunVideoPlayback === "function") {
     syncPlayerGunVideoPlayback(false);
   } else {

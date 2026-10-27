@@ -549,11 +549,16 @@ test("a shielded ground rush damages each monster type once and knocks it backwa
     const ramImpact = read(scope, "particles.find((particle)=>particle.shieldRamImpact)");
     assert.equal(ramImpact.color, "#b86cff");
     assert.equal(ramImpact.direction, 1);
+    assert.equal(ramImpact.scale, 1.4);
+    assert.equal(ramImpact.maxLife, 0.42);
     calls.length = 0;
     scope.drawPlayerShieldRamImpact(ramImpact);
-    assert.equal(calls.filter((call) => call.operation === "ellipse").length, 3);
-    assert.equal(calls.filter((call) => call.operation === "stroke").length, 3);
-    assert.equal(calls.filter((call) => call.operation === "rotate").length, 8);
+    assert.equal(calls.filter((call) => call.operation === "ellipse").length, 4);
+    assert.equal(calls.filter((call) => call.operation === "stroke").length, 4);
+    assert.equal(calls.filter((call) => call.operation === "rotate").length, 12);
+    assert.ok(calls.some((call) => (
+      call.operation === "scale" && call.args[0] === 1.4 && call.args[1] === 1.4
+    )));
 
     const hpAfterRam = scope.rammedEnemy.hp;
     scope.updateEnemies(0.01);

@@ -507,9 +507,14 @@ function damageEnemyWithPlayerShieldRam(enemy, direction) {
     vy: 0,
   };
   enemy.hp = Math.max(0, enemy.hp - PLAYER_SHIELD_RAM_DAMAGE);
-  burstMonsterFragments(impact, enemy, enemy.hp <= 0);
+  burstMonsterFragments(
+    impact,
+    enemy,
+    enemy.hp <= 0,
+    PLAYER_SHIELD_RAM_EFFECT_DENSITY,
+  );
   emitPlayerShieldRamImpact(impact, direction);
-  shake = Math.max(shake, enemy.hp <= 0 ? 12 : 8);
+  shake = Math.max(shake, enemy.hp <= 0 ? 15 : 11);
 
   if (enemy.hp <= 0) {
     resolveEnemyDeath(enemy, true);
@@ -695,7 +700,7 @@ function takePlayerDamage(amount, source = null) {
 }
 
 function emitPlayerShieldRamImpact(impact, direction) {
-  const life = 0.36;
+  const life = 0.42;
   particles.push({
     x: impact.x + direction * 3,
     y: impact.y,
@@ -705,6 +710,7 @@ function emitPlayerShieldRamImpact(impact, direction) {
     life,
     maxLife: life,
     direction,
+    scale: PLAYER_SHIELD_RAM_IMPACT_SCALE,
     phase: Math.random() * Math.PI * 2,
     color: "#b86cff",
     coreColor: "#f8eaff",
@@ -766,7 +772,11 @@ function combatantHitSoundGroup(kind) {
 function playCombatantHitSound(kind) {
   const group = combatantHitSoundGroup(kind);
   if (group === "metal") {
-    if (typeof playMetalHitSound === "function") playMetalHitSound();
+    if (kind === "turret" && typeof playTurretMetalHitSound === "function") {
+      playTurretMetalHitSound();
+    } else if (typeof playMetalHitSound === "function") {
+      playMetalHitSound();
+    }
   } else if (group === "organic") {
     if (typeof playGunHitSound === "function") playGunHitSound();
   }
@@ -1018,7 +1028,9 @@ function emitHeartPickupBurst(heart) {
 }
 
 function scaledEffectCount(count, effectDensity = 1) {
-  return Math.max(1, Math.round(count * effectDensity));
+  const performanceDensity = typeof adaptiveEffectDensity === "number"
+    ? adaptiveEffectDensity : 1;
+  return Math.max(1, Math.round(count * effectDensity * performanceDensity));
 }
 
 function burstMonsterFragments(bullet, enemy, lethal = false, effectDensity = 1) {
@@ -1820,7 +1832,10 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
       (bullet.visibleLength ?? 0) + travelDistance,
     );
   }
-  const steps = Math.max(1, Math.ceil(travelDistance / Math.max(3, bullet.radius * 0.8)));
+  const collisionStep = bullet.kind === "player-ultimate-laser"
+    ? Math.max(6, bullet.radius * 1.25)
+    : Math.max(3, bullet.radius * 0.8);
+  const steps = Math.max(1, Math.ceil(travelDistance / collisionStep));
   const stepTime = dt / steps;
   // Any ricochet still stays within this frame's total travel distance.
   const nearbyPlatforms = projectilePlatformCandidates(bullet, travelDistance);
