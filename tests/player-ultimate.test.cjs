@@ -7,10 +7,24 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 function createButton() {
+  const classes = new Set();
+  const styles = new Map();
   return {
     attributes: {},
     listeners: {},
-    classList: { add() {}, remove() {}, toggle() {} },
+    classes,
+    styles,
+    classList: {
+      add(name) { classes.add(name); },
+      remove(name) { classes.delete(name); },
+      toggle(name, enabled) {
+        if (enabled) classes.add(name);
+        else classes.delete(name);
+      },
+    },
+    style: {
+      setProperty(name, value) { styles.set(name, value); },
+    },
     dataset: {},
     setAttribute(name, value) { this.attributes[name] = value; },
     addEventListener(name, listener) { this.listeners[name] = listener; },
@@ -19,6 +33,7 @@ function createButton() {
 
 function createGame({ testMode = false, loadInput = false } = {}) {
   const testUltimateButton = createButton();
+  const ultimateControlButton = createButton();
   const testControls = { hidden: false };
   const canvas = {
     getContext: () => ({ setTransform() {} }),
@@ -33,6 +48,7 @@ function createGame({ testMode = false, loadInput = false } = {}) {
     document: {
       querySelector: (selector) => selector === "#game" ? canvas
         : selector === "[data-test-ultimate]" ? testUltimateButton
+          : selector === "[data-ultimate-control]" ? ultimateControlButton
           : selector === "[data-test-controls]" ? testControls : null,
       querySelectorAll: () => [],
       addEventListener() {},
@@ -70,12 +86,29 @@ function createGame({ testMode = false, loadInput = false } = {}) {
     player.hp=3; player.maxHp=3; player.invincible=0;
     minWorldX=0; maxWorldX=2000; cameraX=500; cameraY=0; gameOver=false;
   `, scope);
-  return { scope, testUltimateButton, testControls };
+  return { scope, testUltimateButton, ultimateControlButton, testControls };
 }
 
 function read(scope, source) {
   return vm.runInContext(source, scope);
 }
+
+test("the ultimate button ring fills with score and glows when ready", () => {
+  const { scope, ultimateControlButton } = createGame();
+  scope.addUltimateMeterScore(750);
+  assert.equal(ultimateControlButton.styles.get("--ultimate-progress"), "50%");
+  assert.equal(ultimateControlButton.dataset.progress, "50");
+  assert.equal(ultimateControlButton.classes.has("ready"), false);
+
+  scope.addUltimateMeterScore(750);
+  assert.equal(ultimateControlButton.styles.get("--ultimate-progress"), "100%");
+  assert.equal(ultimateControlButton.dataset.charges, "1");
+  assert.equal(ultimateControlButton.classes.has("ready"), true);
+
+  assert.equal(scope.startPlayerUltimate(), true);
+  assert.equal(ultimateControlButton.styles.get("--ultimate-progress"), "0%");
+  assert.equal(ultimateControlButton.classes.has("ready"), false);
+});
 
 test("a charged ultimate floats the player and sweeps dense radial lasers from top to bottom", () => {
   const { scope } = createGame();

@@ -293,7 +293,7 @@ function updatePlayerCamera(dt) {
     Math.min(maximumCameraStep, easedCameraStep),
   );
   const crouchLookingDown = (
-    player.crouching && player.grounded && !playerIsDown() &&
+    controls.down && player.grounded && !playerIsDown() &&
     !player.ultimateActive
   );
   if (crouchLookingDown) {
@@ -413,7 +413,17 @@ function updatePlayer(dt) {
   } else {
     player.coyoteTime = Math.max(0, player.coyoteTime - dt);
   }
-  player.crouching = !downForThisFrame && controls.down && player.grounded;
+  const horizontalInput = downForThisFrame
+    ? 0
+    : Number(controls.right) - Number(controls.left);
+  const continuingRunWithDown = (
+    !downForThisFrame && controls.down && player.grounded &&
+    Math.abs(player.vx) > 1
+  );
+  player.crouching = (
+    !downForThisFrame && controls.down && player.grounded &&
+    !continuingRunWithDown
+  );
   const canUseCoyoteJump = (
     !player.grounded &&
     player.jumpCount === 0 &&
@@ -425,14 +435,16 @@ function updatePlayer(dt) {
     !player.crouching &&
     (player.grounded || canUseCoyoteJump || player.airJumpAvailable)
   );
-  const horizontalInput = downForThisFrame ? 0 : Number(controls.right) - Number(controls.left);
+  const preservedDownRunDirection = continuingRunWithDown && horizontalInput === 0
+    ? Math.sign(player.vx)
+    : horizontalInput;
   const groundFireAction = (
     !downForThisFrame && controls.fire && player.grounded &&
     !PLAYER_RUNNING_FIRE_ENABLED
   );
   const move = player.crouching || groundFireAction
     ? 0
-    : horizontalInput;
+    : preservedDownRunDirection;
   const canReverseOnGround = player.grounded && !canStartJump && move !== 0;
   const canStopSkid = (
     player.grounded && !canStartJump && !downForThisFrame &&

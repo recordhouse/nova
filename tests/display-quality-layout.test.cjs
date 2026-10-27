@@ -40,12 +40,18 @@ function createDisplay(cssWidth = 390, pixelRatio = 3, mobile = false) {
     getBoundingClientRect: () => ({ width: measuredWidth, height: measuredWidth * 16 / 9 }),
   };
   const shellClasses = new Set();
+  const shellStyles = new Map();
   const shell = {
     classList: {
       toggle(name, enabled) {
         if (enabled) shellClasses.add(name);
         else shellClasses.delete(name);
       },
+    },
+    style: {
+      getPropertyValue(name) { return shellStyles.get(name) ?? ""; },
+      setProperty(name, value) { shellStyles.set(name, value); },
+      removeProperty(name) { shellStyles.delete(name); },
     },
   };
   const scope = {
@@ -63,7 +69,7 @@ function createDisplay(cssWidth = 390, pixelRatio = 3, mobile = false) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "js", `${name}.js`), "utf8"),
       scope, { filename: `${name}.js` });
   }
-  return { scope, canvas, calls, gradients, shellClasses,
+  return { scope, canvas, calls, gradients, shellClasses, shellStyles,
     setCssWidth: (width) => { measuredWidth = width; } };
 }
 
@@ -106,16 +112,29 @@ test("reduced performance mode lowers backing resolution and effect density", ()
 });
 
 test("touch devices start with a landscape game even in a portrait viewport", () => {
-  const { scope, canvas, shellClasses } = createDisplay(390, 3, true);
+  const { scope, canvas, shellClasses, shellStyles } = createDisplay(390, 3, true);
   assert.equal(read(scope, "MOBILE_LANDSCAPE_MODE"), true);
   assert.equal(read(scope, "WIDTH"), 1280);
   assert.equal(read(scope, "HEIGHT"), 720);
   assert.equal(shellClasses.has("mobile-landscape"), true);
+  assert.equal(shellClasses.has("mobile-landscape-portrait"), true);
+  assert.equal(shellStyles.get("--mobile-game-width"), "693px");
+  assert.equal(shellStyles.get("--mobile-game-height"), "389.81px");
   assert.equal(canvas.width, 2080);
   assert.equal(canvas.height, 1170);
   const transformedDelta = scope.screenDeltaToGameDelta(40, 0);
   assert.equal(transformedDelta.dx, 0);
   assert.equal(transformedDelta.dy, -40);
+
+  scope.window.innerWidth = 888;
+  scope.window.innerHeight = 500;
+  scope.window.visualViewport = { width: 888, height: 292 };
+  assert.equal(scope.syncMobileLandscapeShellSize(), true);
+  assert.equal(shellClasses.has("mobile-landscape-portrait"), false);
+  assert.equal(shellStyles.has("--mobile-game-width"), false);
+  assert.equal(shellStyles.has("--mobile-game-height"), false);
+  assert.equal(scope.viewportIsLandscape(), true,
+    "a shrunken Samsung visual viewport must not override the layout orientation");
 });
 
 test("the looping space video replaces the generated star background", () => {
@@ -162,10 +181,11 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
       "the taller minimap keeps its intended proportion beside the videos");
     assert.ok(header.hearts.x + header.hearts.width < header.ultimate.x);
     assert.ok(header.stage.x + header.stage.width < header.score.x);
-    assert.ok(header.hearts.x > slots.left[1].x,
-      "the left HUD group sits beside, not over, the video");
-    assert.ok(header.score.x + header.score.width < slots.right[1].x,
-      "the right HUD group sits beside, not over, the video");
+    const videoBoundary = portrait ? slots.left[2].x : slots.left[1].x;
+    assert.ok(header.hearts.x > videoBoundary,
+      "the left HUD group clears the enlarged video");
+    assert.ok(header.score.x + header.score.width < width - videoBoundary,
+      "the right HUD group clears the enlarged video");
     assert.ok(header.ultimate.x + header.ultimate.width <= width / 2);
     assert.ok(header.stage.x >= width / 2);
     assert.equal(header.hearts.width, header.ultimate.width);
@@ -175,11 +195,16 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
     assert.equal(header.stage.y, header.score.y);
     assert.equal(header.hearts.y, header.stage.y);
     assert.equal(header.ultimate.y, header.stage.y);
-    assert.equal(header.infoY, 13);
+    if (portrait) {
+      assert.ok(header.infoY > slots.height,
+        "portrait status rows sit below the enlarged video");
+    } else {
+      assert.equal(header.infoY, 13);
+    }
     assert.equal(header.map.y, 7);
-    assert.equal(header.map.y, scope.ultimateMeterLayout().height + 1,
-      "the minimap hugs the ultimate meter without overlapping it");
-    assert.ok(header.infoY > 10, "status rows move down");
+    assert.ok(header.map.y > 1,
+      "the minimap stays clear of the screen-edge frame");
+    assert.ok(header.infoY > 10, "status rows keep clear of the top meter");
     assert.ok(header.map.y < 34, "the minimap moves up");
     assert.ok(header.map.y + header.map.height <= 170);
     assert.ok(header.map.width / header.map.height >= 1.6,
@@ -187,7 +212,18 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
   }
 });
 
-test("two mirrored video slots are enlarged thirty percent and keep wider tops", () => {
+test("heart, ultimate, stage and score have no underline or background panel", () => {
+  const { scope, calls } = createDisplay();
+  calls.length = 0;
+  scope.drawHud();
+
+  assert.equal(read(scope, "typeof drawHudStatusPanels"), "undefined");
+  assert.equal(calls.filter((call) => call.operation === "fillRect" &&
+    call.color === "rgba(177, 104, 225, 0.46)").length, 0);
+  assert.equal(read(scope, "HUD_STATUS_CONTENT_GLOW"), "rgba(170, 218, 235, 0.38)");
+});
+
+test("two mirrored video slots are enlarged fifty percent and keep wider tops", () => {
   const { scope, calls } = createDisplay();
   for (const [width, height] of [[540, 960], [720, 1280], [960, 540], [1280, 720]]) {
     read(scope, `WIDTH=${width}; HEIGHT=${height}`);
@@ -197,9 +233,10 @@ test("two mirrored video slots are enlarged thirty percent and keep wider tops",
     assert.equal(slots.right[0].x, width);
     assert.equal(read(scope, "TOP_VIDEO_SLOT_SCALE"), 1.28);
     assert.equal(read(scope, "TOP_VIDEO_SLOT_SIZE_RATIO"), 2 / 3);
-    assert.equal(read(scope, "TOP_VIDEO_SLOT_ENLARGEMENT"), 1.3);
-    assert.ok(Math.abs(slots.height - slots.originalHeight * 1.3) < 1e-9,
-      "the video slot is exactly thirty percent larger");
+    assert.equal(read(scope, "TOP_VIDEO_SLOT_ENLARGEMENT"), 1.5);
+    assert.equal(read(scope, "TOP_VIDEO_SLOT_HUD_CLEARANCE"), 1.5);
+    assert.ok(Math.abs(slots.height - slots.originalHeight * 1.5) < 1e-9,
+      "the video slot is exactly fifty percent larger");
     assert.ok(slots.left[1].x > slots.height,
       "the top is slightly wider than the slot height");
     assert.ok(slots.left[1].x < slots.height * 1.08,
@@ -208,10 +245,11 @@ test("two mirrored video slots are enlarged thirty percent and keep wider tops",
       "the top edge is wider than the bottom edge");
     assert.ok(Math.abs(width - slots.right[1].x - slots.left[1].x) < 1e-9);
     assert.ok(Math.abs(width - slots.right[2].x - slots.left[2].x) < 1e-9);
-    assert.ok(header.hearts.x > slots.left[1].x,
-      "left status items automatically clear the enlarged video");
-    assert.ok(header.score.x + header.score.width < slots.right[1].x,
-      "right status items automatically clear the enlarged video");
+    const videoBoundary = height > width ? slots.left[2].x : slots.left[1].x;
+    assert.ok(header.hearts.x > videoBoundary,
+      "left status items clear the enlarged video");
+    assert.ok(header.score.x + header.score.width < width - videoBoundary,
+      "right status items clear the enlarged video");
     assert.equal(slots.left.length, 4);
     assert.equal(slots.right.length, 4);
     assert.equal(slots.left[0].x, slots.left[3].x);
@@ -229,10 +267,42 @@ test("two mirrored video slots are enlarged thirty percent and keep wider tops",
   assert.equal(calls.filter((call) => call.operation === "clip").length, 2);
   const slotLines = calls.filter((call) => call.operation === "stroke");
   assert.equal(slotLines.length, 2,
-    "each video slot has one subtle frame line");
-  assert.ok(slotLines.every((call) =>
-    call.strokeColor === "rgba(132, 92, 157, 0.42)"),
-  "the video frame visually continues the ultimate meter frame");
+    "the shared top frame has a glow stroke and a bright core");
+  assert.equal(slotLines[0].strokeColor, "rgba(154, 70, 220, 0.38)");
+  assert.equal(slotLines[1].strokeColor, "rgba(122, 226, 240, 0.88)");
+  const frameMoves = calls.filter((call) => call.operation === "moveTo").slice(-2);
+  const frameLines = calls.filter((call) => call.operation === "lineTo").slice(-4);
+  const layout = scope.topVideoSlotLayout();
+  assert.deepEqual(frameMoves.map((call) => call.args), [
+    [0, layout.height - 1],
+    [layout.right[1].x, 1],
+  ]);
+  assert.deepEqual(frameLines.map((call) => call.args), [
+    [layout.left[2].x, layout.height - 1],
+    [layout.left[1].x, 1],
+    [layout.right[2].x, layout.height - 1],
+    [read(scope, "WIDTH"), layout.height - 1],
+  ]);
+});
+
+test("the matching neon line also frames the full game screen", () => {
+  const { scope, calls } = createDisplay();
+  calls.length = 0;
+  scope.drawGameScreenFrame();
+
+  assert.deepEqual(calls.find((call) => call.operation === "moveTo").args,
+    [0.75, 0.75]);
+  assert.deepEqual(calls.filter((call) => call.operation === "lineTo")
+    .map((call) => call.args), [
+      [719.25, 0.75],
+      [719.25, 1279.25],
+      [0.75, 1279.25],
+    ]);
+  assert.equal(calls.filter((call) => call.operation === "closePath").length, 1);
+  const strokes = calls.filter((call) => call.operation === "stroke");
+  assert.equal(strokes.length, 2);
+  assert.equal(strokes[0].strokeColor, "rgba(154, 70, 220, 0.38)");
+  assert.equal(strokes[1].strokeColor, "rgba(122, 226, 240, 0.88)");
 });
 
 test("the active gun video fills only the clipped left trapezoid", () => {
@@ -499,7 +569,8 @@ test("video slot layers render sharply without gradients or tint and add a subtl
   assert.equal(layerSurfaces[0].height, Math.ceil(layout.height * renderScale));
   assert.equal(layerContext.imageSmoothingEnabled, true);
   assert.equal(layerContext.imageSmoothingQuality, "high");
-  assert.equal(calls.filter((call) => call.operation === "stroke").length, 0);
+  assert.equal(calls.filter((call) => call.operation === "stroke").length, 2,
+    "the shared highlighted frame is drawn once on the main canvas");
   assert.equal(calls.filter((call) => call.operation === "drawImage").length, 2);
   assert.equal(layerCalls.filter((call) =>
     call.operation === "createLinearGradient").length, 0);
@@ -509,8 +580,8 @@ test("video slot layers render sharply without gradients or tint and add a subtl
     call.operation === "fillRect").length, 2,
   "each slot has only its flat idle background and no video tint overlay");
   assert.equal(layerCalls.filter((call) =>
-    call.operation === "stroke").length, 2,
-  "each cached slot layer gets one subtle ultimate-meter border");
+    call.operation === "stroke").length, 0,
+  "cached video layers do not duplicate the shared frame");
 });
 
 test("player projectile glow is painted once and reused for every shot", () => {

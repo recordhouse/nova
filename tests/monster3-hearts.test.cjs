@@ -306,7 +306,7 @@ test("the portrait HUD keeps three pixel hearts on the shared top row", () => {
   const header = scope.hudHeaderLayout();
   assert.equal(draws.length, 3);
   assert.equal(new Set(Array.from(draws, (draw) => draw.y)).size, 1);
-  assert.ok(draws[0].scale > 3 && draws[0].scale <= 3.2);
+  assert.ok(draws[0].scale > 2.7 && draws[0].scale <= 2.9);
   assert.ok(draws[0].x >= header.hearts.x);
   assert.ok(draws.at(-1).x + 7 * draws.at(-1).scale <=
     header.hearts.x + header.hearts.width);

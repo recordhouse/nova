@@ -47,8 +47,8 @@ function updateMovementJoystick(event) {
   if (event.pointerId !== movementJoystickPointerId || !movementJoystickElement) return;
   const rect = movementJoystickElement.getBoundingClientRect();
   const pointerDelta = screenDeltaToGameDelta(
-    event.clientX - movementJoystickOriginX,
-    event.clientY - movementJoystickOriginY,
+    event.clientX - (rect.left + rect.width / 2),
+    event.clientY - (rect.top + rect.height / 2),
   );
   const { dx, dy } = pointerDelta;
   const distance = Math.hypot(dx, dy);
@@ -161,18 +161,22 @@ document.querySelectorAll("[data-control]").forEach((button) => {
   button.addEventListener("lostpointercapture", release);
 });
 
+document.addEventListener("dblclick", (event) => {
+  if (event.target?.closest?.(".touch-controls")) event.preventDefault();
+}, { passive: false });
+
 movementJoystickElement = document.querySelector("[data-movement-joystick]");
 movementJoystickKnob = movementJoystickElement?.querySelector(".joystick-knob") ?? null;
-if (movementJoystickElement) {
+const movementJoystickTouchZone = document.querySelector("[data-movement-zone]") ??
+  movementJoystickElement;
+if (movementJoystickElement && movementJoystickTouchZone) {
   const pressJoystick = (event) => {
     event.preventDefault();
     releaseMovementJoystick();
     movementJoystickPointerId = event.pointerId;
-    movementJoystickOriginX = event.clientX;
-    movementJoystickOriginY = event.clientY;
-    movementJoystickElement.setPointerCapture?.(event.pointerId);
+    movementJoystickTouchZone.setPointerCapture?.(event.pointerId);
     movementJoystickElement.classList.add("active");
-    setJoystickControls({});
+    updateMovementJoystick(event);
   };
   const moveJoystick = (event) => {
     event.preventDefault();
@@ -183,11 +187,11 @@ if (movementJoystickElement) {
     releaseMovementJoystick(event.pointerId);
   };
 
-  movementJoystickElement.addEventListener("pointerdown", pressJoystick);
-  movementJoystickElement.addEventListener("pointermove", moveJoystick);
-  movementJoystickElement.addEventListener("pointerup", releaseJoystick);
-  movementJoystickElement.addEventListener("pointercancel", releaseJoystick);
-  movementJoystickElement.addEventListener("lostpointercapture", releaseJoystick);
+  movementJoystickTouchZone.addEventListener("pointerdown", pressJoystick);
+  movementJoystickTouchZone.addEventListener("pointermove", moveJoystick);
+  movementJoystickTouchZone.addEventListener("pointerup", releaseJoystick);
+  movementJoystickTouchZone.addEventListener("pointercancel", releaseJoystick);
+  movementJoystickTouchZone.addEventListener("lostpointercapture", releaseJoystick);
 }
 
 const releasePointerAnywhere = (event) => {
@@ -336,6 +340,7 @@ function scheduleCanvasOrientationSync() {
   if (orientationSyncFrame !== null) cancelAnimationFrame(orientationSyncFrame);
   orientationSyncFrame = requestAnimationFrame(() => {
     orientationSyncFrame = null;
+    syncMobileLandscapeShellSize();
     syncCanvasOrientation();
   });
 }
@@ -343,6 +348,7 @@ function scheduleCanvasOrientationSync() {
 window.addEventListener("resize", scheduleCanvasOrientationSync);
 window.addEventListener("orientationchange", scheduleCanvasOrientationSync);
 window.screen?.orientation?.addEventListener("change", scheduleCanvasOrientationSync);
+window.visualViewport?.addEventListener("resize", scheduleCanvasOrientationSync);
 window.addEventListener("blur", resetAllInputs);
 window.addEventListener("pagehide", resetAllInputs);
 document.addEventListener("visibilitychange", () => {

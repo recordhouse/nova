@@ -103,6 +103,31 @@ test("a sustained run builds speed to a cap and coasts to a stop", () => {
   assert.equal(read(scope, "player.runSpeed"), startingSpeed);
 });
 
+test("holding the joystick down during a run keeps moving and looks below", () => {
+  const { scope } = createGame();
+  read(scope, "fixtureRoad.end=10000; maxWorldX=10000; controls.right=true");
+  for (let i = 0; i < 90; i += 1) scope.updatePlayer(frame);
+  const runningSpeed = read(scope, "player.vx");
+  const runningX = read(scope, "player.x");
+
+  read(scope, "controls.right=false; controls.down=true");
+  for (let i = 0; i < 60; i += 1) scope.updatePlayer(frame);
+
+  assert.ok(read(scope, "player.x") > runningX + runningSpeed * 0.8,
+    "down-look keeps the existing run direction instead of stopping");
+  assert.ok(read(scope, "player.vx") >= runningSpeed);
+  assert.equal(read(scope, "player.crouching"), false,
+    "a moving player keeps the running pose while looking down");
+  assert.ok(read(scope, "player.crouchCameraLookTime") > 0,
+    "the lower camera view still activates during the run");
+
+  const heldSpeed = read(scope, "player.vx");
+  read(scope, "controls.down=false");
+  scope.updatePlayer(frame);
+  assert.ok(read(scope, "player.vx") < heldSpeed,
+    "releasing the joystick starts the normal stopping behavior");
+});
+
 test("the run-animation clock accelerates with movement and slows during a skid", () => {
   const { scope } = createGame();
   read(scope, "fixtureRoad.end=10000; maxWorldX=10000; controls.right=true");

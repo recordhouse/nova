@@ -3737,12 +3737,15 @@ function drawHeartItems() {
 
 const TOP_VIDEO_SLOT_SCALE = 1.28;
 const TOP_VIDEO_SLOT_SIZE_RATIO = 2 / 3;
-const TOP_VIDEO_SLOT_ENLARGEMENT = 1.3;
+const TOP_VIDEO_SLOT_ENLARGEMENT = 1.5;
+const TOP_VIDEO_SLOT_HUD_CLEARANCE = 1.5;
 const TOP_VIDEO_SLOT_TOP_ASPECT = 1.04;
 const TOP_VIDEO_SLOT_BOTTOM_RATIO = 0.88;
 const TOP_VIDEO_SLOT_REFERENCE_Y = 30;
-const HUD_ULTIMATE_FRAME_COLOR = "rgba(132, 92, 157, 0.42)";
-const HUD_STATUS_ICON_MAX_SCALE = 3.2;
+const HUD_STATUS_CONTENT_GLOW = "rgba(170, 218, 235, 0.38)";
+const HUD_TOP_FRAME_GLOW_COLOR = "rgba(154, 70, 220, 0.38)";
+const HUD_TOP_FRAME_CORE_COLOR = "rgba(122, 226, 240, 0.88)";
+const HUD_STATUS_ICON_MAX_SCALE = 2.9;
 const HUD_STATUS_ICON_GAP_UNITS = 1.4;
 const MINIMAP_HEIGHT_RATIO = 1.05;
 
@@ -3774,7 +3777,6 @@ function topVideoSlotMetrics(mapX, mapWidth) {
 function hudHeaderLayout() {
   const portrait = HEIGHT > WIDTH;
   const gap = WIDTH < 650 ? 10 : 12;
-  const infoY = 13;
   const infoHeight = 22;
   const mapY = 7;
   const mapWidth = Math.round(WIDTH * (portrait ? 0.44 : 0.38));
@@ -3784,7 +3786,15 @@ function hudHeaderLayout() {
   const compactSideLayout = WIDTH < 800;
   const groupGap = compactSideLayout ? 1 : 6;
   const videoGap = compactSideLayout ? 1 : 8;
-  const leftGroupX = video.topWidth + videoGap;
+  // Landscape HUD stays beside the full enlarged video. In portrait, move the
+  // row below the slot so the icons remain readable without covering it.
+  const statusBelowVideo = portrait;
+  const infoY = statusBelowVideo ? Math.ceil(video.height + 5) : 13;
+  const hudVideoWidth = statusBelowVideo
+    ? video.bottomWidth
+    : video.originalHeight * TOP_VIDEO_SLOT_HUD_CLEARANCE *
+      TOP_VIDEO_SLOT_TOP_ASPECT;
+  const leftGroupX = hudVideoWidth + videoGap;
   const halfInnerEdge = WIDTH / 2 - video.centerGap;
   const sideAvailableWidth = Math.max(2, halfInnerEdge - leftGroupX);
   const sideRegionWidth = Math.min(
@@ -3792,7 +3802,7 @@ function hudHeaderLayout() {
     Math.max(1, (sideAvailableWidth - groupGap) / 2),
   );
   const sideGroupWidth = sideRegionWidth * 2 + groupGap;
-  const rightGroupX = WIDTH - video.topWidth - videoGap - sideGroupWidth;
+  const rightGroupX = WIDTH - hudVideoWidth - videoGap - sideGroupWidth;
   return {
     top: mapY,
     mainHeight: mapHeight,
@@ -3859,12 +3869,58 @@ function traceTopVideoSlot(points, renderContext = ctx) {
   renderContext.lineTo(points[0].x, points[0].y);
 }
 
-function drawTopVideoSlotBorder(points, renderContext = ctx) {
+function traceTopHudFrame(layout, renderContext = ctx) {
+  const topY = 1;
+  const bottomY = Math.max(topY, layout.height - 1);
+  renderContext.beginPath();
+  renderContext.moveTo(0, bottomY);
+  renderContext.lineTo(layout.left[2].x, bottomY);
+  renderContext.lineTo(layout.left[1].x, topY);
+  renderContext.moveTo(layout.right[1].x, topY);
+  renderContext.lineTo(layout.right[2].x, bottomY);
+  renderContext.lineTo(WIDTH, bottomY);
+}
+
+function drawTopHudFrame(layout, renderContext = ctx) {
   renderContext.save();
   renderContext.lineJoin = "round";
-  traceTopVideoSlot(points, renderContext);
-  renderContext.strokeStyle = HUD_ULTIMATE_FRAME_COLOR;
-  renderContext.lineWidth = 1.5;
+  renderContext.lineCap = "round";
+  traceTopHudFrame(layout, renderContext);
+  renderContext.strokeStyle = HUD_TOP_FRAME_GLOW_COLOR;
+  renderContext.lineWidth = 5;
+  renderContext.shadowColor = "#a84cff";
+  renderContext.shadowBlur = 8;
+  renderContext.stroke();
+  renderContext.shadowColor = "#69dce9";
+  renderContext.shadowBlur = 3;
+  renderContext.strokeStyle = HUD_TOP_FRAME_CORE_COLOR;
+  renderContext.lineWidth = 1.25;
+  renderContext.stroke();
+  renderContext.restore();
+}
+
+function drawGameScreenFrame(renderContext = ctx) {
+  const inset = 0.75;
+  renderContext.save();
+  renderContext.lineJoin = "round";
+  renderContext.beginPath();
+  renderContext.moveTo(inset, inset);
+  renderContext.lineTo(Math.max(inset, WIDTH - inset), inset);
+  renderContext.lineTo(
+    Math.max(inset, WIDTH - inset),
+    Math.max(inset, HEIGHT - inset),
+  );
+  renderContext.lineTo(inset, Math.max(inset, HEIGHT - inset));
+  renderContext.closePath();
+  renderContext.strokeStyle = HUD_TOP_FRAME_GLOW_COLOR;
+  renderContext.lineWidth = 5;
+  renderContext.shadowColor = "#a84cff";
+  renderContext.shadowBlur = 8;
+  renderContext.stroke();
+  renderContext.shadowColor = "#69dce9";
+  renderContext.shadowBlur = 3;
+  renderContext.strokeStyle = HUD_TOP_FRAME_CORE_COLOR;
+  renderContext.lineWidth = 1.25;
   renderContext.stroke();
   renderContext.restore();
 }
@@ -4000,12 +4056,11 @@ function prepareTopVideoSlotLayer(
     context.restore();
   }
   context.restore();
-  drawTopVideoSlotBorder(localPoints, context);
   layer.frameKey = frameKey;
   return { surface, originX, slotWidth };
 }
 
-function drawTopVideoSlots() {
+function drawTopVideoSlots(drawFrame = true) {
   const layout = topVideoSlotLayout();
   const forceStartVideo =
     typeof isFemaleStartVoiceVideoActive === "function" &&
@@ -4113,8 +4168,9 @@ function drawTopVideoSlots() {
       ctx.restore();
     }
     ctx.restore();
-    drawTopVideoSlotBorder(points);
   }
+  if (drawFrame) drawTopHudFrame(layout);
+  return layout;
 }
 
 const MINIMAP_RENDER_INTERVAL = 1 / 30;
@@ -4723,75 +4779,6 @@ function digitalHudScoreValue() {
   );
 }
 
-function ultimateMeterFillRatio() {
-  if (player.ultimateCharges >= PLAYER_MAX_ULTIMATE_CHARGES) return 1;
-  return Math.max(0, Math.min(
-    1,
-    (player.ultimateMeterScore ?? 0) / ULTIMATE_SCORE_PER_CHARGE,
-  ));
-}
-
-function ultimateMeterLayout() {
-  return {
-    x: 0,
-    y: 0,
-    width: WIDTH,
-    height: 6,
-    inset: 1,
-  };
-}
-
-function drawUltimateScoreMeter() {
-  const layout = ultimateMeterLayout();
-  const barWidth = layout.width;
-  const barHeight = layout.height;
-  const barX = layout.x;
-  const barY = layout.y;
-  const inset = layout.inset;
-  const innerWidth = barWidth - inset * 2;
-  const innerHeight = barHeight - inset * 2;
-  const ratio = ultimateMeterFillRatio();
-  const fillWidth = Math.round(innerWidth * ratio);
-  const flashElapsed = gameTime - player.ultimateChargeStartedAt;
-  const flash = flashElapsed >= 0 && flashElapsed < HUD_ULTIMATE_CHARGE_FLASH_DURATION
-    ? 1 - flashElapsed / HUD_ULTIMATE_CHARGE_FLASH_DURATION
-    : 0;
-
-  ctx.save();
-  ctx.fillStyle = "rgba(8, 4, 14, 0.82)";
-  ctx.fillRect(barX, barY, barWidth, barHeight);
-  ctx.fillStyle = HUD_ULTIMATE_FRAME_COLOR;
-  ctx.fillRect(barX, barY, barWidth, 1);
-  ctx.fillRect(barX, barY + barHeight - 1, barWidth, 1);
-  if (fillWidth > 0) {
-    const fill = ctx.createLinearGradient(barX, 0, barX + barWidth, 0);
-    fill.addColorStop(0, "#6f24c7");
-    fill.addColorStop(0.62, "#b04fff");
-    fill.addColorStop(1, "#f0d0ff");
-    ctx.fillStyle = fill;
-    ctx.shadowColor = "#a942ff";
-    ctx.shadowBlur = 4 + flash * 9;
-    ctx.fillRect(barX + inset, barY + inset, fillWidth, innerHeight);
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 0.7;
-    ctx.fillStyle = "#f4ddff";
-    ctx.fillRect(barX + inset, barY + inset, fillWidth, 1);
-  }
-  ctx.globalAlpha = 0.24;
-  ctx.fillStyle = "#06030a";
-  for (let segment = 1; segment < 10; segment += 1) {
-    const segmentX = barX + inset + Math.round(innerWidth * segment / 10);
-    ctx.fillRect(segmentX, barY + inset, 1, innerHeight);
-  }
-  if (flash > 0) {
-    ctx.globalAlpha = flash * 0.85;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(barX, barY, barWidth, 1);
-    ctx.fillRect(barX, barY + barHeight - 1, barWidth, 1);
-  }
-  ctx.restore();
-}
-
 function drawHud() {
   const header = hudHeaderLayout();
   const labelScale = 1;
@@ -4823,15 +4810,16 @@ function drawHud() {
 
   if (TEST_MODE && showFullMap) {
     drawMinimap(true);
+    drawGameScreenFrame();
     return;
   }
-  drawTopVideoSlots();
-  drawUltimateScoreMeter();
+  const topVideoLayout = drawTopVideoSlots(false);
+  drawTopHudFrame(topVideoLayout);
   drawMinimap(false);
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.shadowColor = "rgba(101, 218, 230, 0.35)";
-  ctx.shadowBlur = 3;
+  ctx.shadowColor = HUD_STATUS_CONTENT_GLOW;
+  ctx.shadowBlur = 4;
   ctx.save();
   if (canTransformHudText) {
     ctx.translate(scoreCenterX, scoreCenterY);
@@ -4877,8 +4865,6 @@ function drawHud() {
   );
   ctx.restore();
 
-  ctx.shadowColor = "rgba(255, 87, 117, 0.44)";
-  ctx.shadowBlur = 6;
   const maximumHearts = Math.min(PLAYER_MAX_HEARTS, player.maxHp ?? 3);
   const heartScale = Math.min(
     HUD_STATUS_ICON_MAX_SCALE,
@@ -4943,6 +4929,7 @@ function drawHud() {
   }
 
   if (gameOver && !playerIsDown()) drawOverlay("GAME OVER", "화면을 눌러 재시작");
+  drawGameScreenFrame();
 }
 
 function drawOverlay(title, subtitle) {

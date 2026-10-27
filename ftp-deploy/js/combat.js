@@ -46,6 +46,14 @@ function addPlayerScore(amount) {
   player.scoreGainStartedAt = gameTime;
 }
 
+function ultimateControlFillRatio() {
+  if ((player.ultimateCharges ?? 0) > 0) return 1;
+  return Math.max(0, Math.min(
+    1,
+    (player.ultimateMeterScore ?? 0) / ULTIMATE_SCORE_PER_CHARGE,
+  ));
+}
+
 function updateUltimateControlButton() {
   if (!ultimateControlButton) return;
   const charges = Math.max(0, Math.min(
@@ -53,8 +61,15 @@ function updateUltimateControlButton() {
     player.ultimateCharges ?? 0,
   ));
   const ready = charges > 0;
+  const progress = ultimateControlFillRatio();
+  const progressPercent = Math.round(progress * 1000) / 10;
   ultimateControlButton.classList.toggle("ready", ready);
   ultimateControlButton.dataset.charges = String(charges);
+  ultimateControlButton.dataset.progress = String(progressPercent);
+  ultimateControlButton.style?.setProperty(
+    "--ultimate-progress",
+    `${progressPercent}%`,
+  );
   ultimateControlButton.setAttribute("aria-disabled", String(!ready));
   ultimateControlButton.setAttribute("aria-label", `필살기, 충전 ${charges}개`);
 }

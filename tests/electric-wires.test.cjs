@@ -16,7 +16,7 @@ function createGame() {
     setTransform() {}, save() {}, restore() {},
     clip() {},
     createLinearGradient() { return { addColorStop() {} }; },
-    beginPath() { line = []; },
+    beginPath() { line = []; }, closePath() {}, fill() {},
     moveTo(x, y) { line.push({ x, y }); },
     lineTo(x, y) { line.push({ x, y }); },
     stroke() { strokes.push({ color: this.strokeStyle, points: [...line] }); },

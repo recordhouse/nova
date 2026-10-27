@@ -26,6 +26,12 @@ const TEST_RESOLUTION_SHORT_SIDES = [540, 720];
 const DEFAULT_CANVAS_SHORT_SIDE = 720;
 
 function viewportIsLandscape() {
+  const layoutWidth = Number(window.innerWidth);
+  const layoutHeight = Number(window.innerHeight);
+  if (layoutWidth > 0 && layoutHeight > 0) return layoutWidth > layoutHeight;
+  const visualWidth = Number(window.visualViewport?.width);
+  const visualHeight = Number(window.visualViewport?.height);
+  if (visualWidth > 0 && visualHeight > 0) return visualWidth > visualHeight;
   return window.matchMedia?.("(orientation: landscape)").matches ?? (
     window.innerWidth > window.innerHeight
   );
@@ -41,6 +47,43 @@ function mobileTouchDevice() {
 
 const MOBILE_LANDSCAPE_MODE = !TEST_MODE && mobileTouchDevice();
 gameShellElement?.classList?.toggle("mobile-landscape", MOBILE_LANDSCAPE_MODE);
+
+function syncMobileLandscapeShellSize() {
+  if (!MOBILE_LANDSCAPE_MODE || !gameShellElement?.style?.setProperty) {
+    return false;
+  }
+  // Samsung Internet can report a temporarily shrunken visualViewport after
+  // rotating. The layout viewport stays aligned with the actual page area.
+  const viewportWidth = Number(window.innerWidth) || Number(window.visualViewport?.width);
+  const viewportHeight = Number(window.innerHeight) || Number(window.visualViewport?.height);
+  if (!(viewportWidth > 0) || !(viewportHeight > 0)) return false;
+
+  const portraitViewport = viewportHeight > viewportWidth;
+  gameShellElement.classList?.toggle("mobile-landscape-portrait", portraitViewport);
+  if (!portraitViewport) {
+    const hadWidth = Boolean(gameShellElement.style.getPropertyValue?.("--mobile-game-width"));
+    const hadHeight = Boolean(gameShellElement.style.getPropertyValue?.("--mobile-game-height"));
+    gameShellElement.style.removeProperty?.("--mobile-game-width");
+    gameShellElement.style.removeProperty?.("--mobile-game-height");
+    return hadWidth || hadHeight;
+  }
+
+  const availableWidth = portraitViewport ? viewportHeight : viewportWidth;
+  const availableHeight = portraitViewport ? viewportWidth : viewportHeight;
+  const shellWidth = Math.min(availableWidth, availableHeight * 16 / 9);
+  const shellHeight = shellWidth * 9 / 16;
+  const widthValue = `${Math.round(shellWidth * 100) / 100}px`;
+  const heightValue = `${Math.round(shellHeight * 100) / 100}px`;
+  if (
+    gameShellElement.style.getPropertyValue?.("--mobile-game-width") === widthValue &&
+    gameShellElement.style.getPropertyValue?.("--mobile-game-height") === heightValue
+  ) return false;
+  gameShellElement.style.setProperty("--mobile-game-width", widthValue);
+  gameShellElement.style.setProperty("--mobile-game-height", heightValue);
+  return true;
+}
+
+syncMobileLandscapeShellSize();
 
 function mobileLandscapeRotationActive() {
   return MOBILE_LANDSCAPE_MODE && !viewportIsLandscape();
@@ -230,7 +273,7 @@ const PLAYER_ULTIMATE_TARGET_CELL_SIZE = 192;
 const PLAYER_ULTIMATE_EFFECT_DENSITY = 0.4;
 const PLAYER_ULTIMATE_HIT_EFFECT_LIMIT_PER_FRAME = 8;
 const PLAYER_ULTIMATE_RICOCHET_SOUND_INTERVAL = 0.07;
-const HUD_INFO_TEXT_VISUAL_SCALE = 1.72;
+const HUD_INFO_TEXT_VISUAL_SCALE = 1.55;
 const HUD_SCORE_DIGITAL_DURATION = 0.36;
 const HEART_ITEM_RADIUS = 26;
 const HEART_ITEM_DRAW_SCALE = 6;

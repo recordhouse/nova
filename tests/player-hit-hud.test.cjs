@@ -146,11 +146,11 @@ test("five HUD regions keep score, hearts, map, empty ultimates and stage separa
     assert.ok(Math.abs(labels[1].y - numbers[1].y) <= 1);
     assert.ok(numbers[0].x > labels[0].x, "score stays on one line");
     assert.ok(numbers[1].x > labels[1].x, "stage stays on one line");
-    assert.equal(read(scope, "HUD_INFO_TEXT_VISUAL_SCALE"), 1.72);
+    assert.equal(read(scope, "HUD_INFO_TEXT_VISUAL_SCALE"), 1.55);
     assert.ok(hearts.every((heart) => heart.scale === hearts[0].scale));
-    assert.ok(hearts[0].scale > 1.5 && hearts[0].scale <= 3.2);
+    assert.ok(hearts[0].scale > 1.5 && hearts[0].scale <= 2.9);
     assert.ok(ultimates.every((slot) => slot.scale === ultimates[0].scale));
-    assert.ok(ultimates[0].scale > 1.5 && ultimates[0].scale <= 3.2);
+    assert.ok(ultimates[0].scale > 1.5 && ultimates[0].scale <= 2.9);
     const scoreEnd = numbers[0].x + scope.hudNumeralWidth(numbers[0].text, numbers[0].scale);
     const stageEnd = numbers[1].x + scope.hudNumeralWidth(numbers[1].text, numbers[1].scale);
     const scoreRowWidth = scoreEnd - labels[0].x;
@@ -166,15 +166,21 @@ test("five HUD regions keep score, hearts, map, empty ultimates and stage separa
     const visualScoreEnd = scoreCenterX + (scoreEnd - scoreCenterX) * infoVisualScale;
     const visualStageStart = stageCenterX + (labels[1].x - stageCenterX) * infoVisualScale;
     const visualStageEnd = stageCenterX + (stageEnd - stageCenterX) * infoVisualScale;
-    assert.ok(visualScoreEnd <= header.score.x + header.score.width,
+    const layoutTolerance = 1e-9;
+    assert.ok(visualScoreEnd <= header.score.x + header.score.width + layoutTolerance,
       `${width}px score leaves its region`);
-    assert.ok(visualScoreStart >= header.score.x, `${width}px score leaves its region`);
+    assert.ok(visualScoreStart >= header.score.x - layoutTolerance,
+      `${width}px score leaves its region`);
     assert.ok(header.score.x >= width / 2,
       `${width}px score is not in the right-side group`);
-    assert.equal(header.score.y, 13);
+    if (height > width) {
+      assert.ok(header.score.y > scope.topVideoSlotLayout().height);
+    } else {
+      assert.equal(header.score.y, 13);
+    }
     assert.equal(header.map.y, 7);
-    assert.ok(visualStageStart >= header.stage.x &&
-      visualStageEnd <= header.stage.x + header.stage.width,
+    assert.ok(visualStageStart >= header.stage.x - layoutTolerance &&
+      visualStageEnd <= header.stage.x + header.stage.width + layoutTolerance,
     `${width}px stage leaves its region`);
     assert.ok(header.stage.x < header.score.x, `${width}px stage and score overlap`);
     assert.ok(header.hearts.x < header.ultimate.x &&
@@ -182,7 +188,6 @@ test("five HUD regions keep score, hearts, map, empty ultimates and stage separa
     `${width}px hearts and ultimates are not grouped on the left`);
     assert.ok(header.hearts.width <= 96 && header.ultimate.width <= 96,
       `${width}px side icons stay in the inner safe regions`);
-    const layoutTolerance = 1e-9;
     assert.ok(hearts.every((heart) =>
       heart.x >= header.hearts.x - layoutTolerance &&
       heart.x + 7 * heart.scale <=
@@ -199,32 +204,26 @@ test("five HUD regions keep score, hearts, map, empty ultimates and stage separa
   }
 });
 
-test("score fills the top meter and converts every fifteen hundred points into an ultimate", () => {
+test("score fills the ultimate button ring and converts every fifteen hundred points", () => {
   const { scope } = createGame();
-  for (const [width, height] of [[540, 960], [960, 540], [1280, 720]]) {
-    read(scope, `WIDTH=${width}; HEIGHT=${height}`);
-    const layout = scope.ultimateMeterLayout();
-    assert.equal(layout.x, 0);
-    assert.equal(layout.y, 0);
-    assert.equal(layout.width, width);
-    assert.equal(layout.height, 6);
-    assert.equal(layout.inset, 1);
-  }
+  assert.equal(read(scope, "typeof drawUltimateScoreMeter"), "undefined");
+  assert.equal(read(scope, "typeof ultimateMeterLayout"), "undefined");
   assert.equal(read(scope, "ULTIMATE_SCORE_PER_CHARGE"), 1500);
   scope.addPlayerScore(1400);
   assert.equal(read(scope, "player.ultimateCharges"), 0);
   assert.equal(read(scope, "player.ultimateMeterScore"), 1400);
-  assert.ok(Math.abs(read(scope, "ultimateMeterFillRatio()") - 14 / 15) < 1e-9);
+  assert.ok(Math.abs(read(scope, "ultimateControlFillRatio()") - 14 / 15) < 1e-9);
 
   scope.addPlayerScore(200);
   assert.equal(read(scope, "player.ultimateCharges"), 1);
   assert.equal(read(scope, "player.ultimateMeterScore"), 100);
-  assert.ok(Math.abs(read(scope, "ultimateMeterFillRatio()") - 1 / 15) < 1e-9);
+  assert.equal(read(scope, "ultimateControlFillRatio()"), 1,
+    "the ring stays full while an ultimate is ready");
 
   scope.addPlayerScore(4400);
   assert.equal(read(scope, "player.ultimateCharges"), 3);
   assert.equal(read(scope, "player.ultimateMeterScore"), 0);
-  assert.equal(read(scope, "ultimateMeterFillRatio()"), 1);
+  assert.equal(read(scope, "ultimateControlFillRatio()"), 1);
 });
 
 test("gaining score changes only the numerals in discrete digital steps", () => {
