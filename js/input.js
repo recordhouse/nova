@@ -270,6 +270,7 @@ function toggleTestInvincibility() {
   updateTestInvincibilityButton();
 }
 
+if (TEST_MODE && testInvincibilityButton) testInvincibility = true;
 testInvincibilityButton?.addEventListener("click", (event) => {
   event.preventDefault();
   toggleTestInvincibility();

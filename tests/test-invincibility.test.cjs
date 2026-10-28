@@ -38,11 +38,9 @@ function click(button) { button.listeners.click({ preventDefault() {} }); }
 
 test("GOD toggles test-only damage immunity without changing the timed blink", () => {
   const { scope, button } = createGame();
-  assert.equal(button.attributes["aria-pressed"], "false");
-  assert.equal(read(scope, "testInvincibility"), false);
-  click(button);
   assert.equal(button.attributes["aria-pressed"], "true");
   assert.ok(button.attributes["aria-label"].includes("켜짐"));
+  assert.equal(read(scope, "testInvincibility"), true);
   assert.equal(read(scope, "player.invincible"), 0);
   assert.equal(scope.takePlayerDamage(1), false);
   assert.equal(read(scope, "player.hp"), 3);
@@ -65,7 +63,6 @@ test("GOD prevents electric wire damage and its hit reaction", () => {
     player.y=point.y+PLAYER_HITBOX_HEIGHT/2-player.height;
     player.grounded=false;
   `, scope);
-  click(button);
   scope.updateElectricWires();
   assert.equal(read(scope, "player.hp"), 3);
   assert.equal(read(scope, "player.downPhase"), "");
@@ -78,7 +75,6 @@ test("GOD prevents electric wire damage and its hit reaction", () => {
 
 test("GOD protects against moving enemy projectiles", () => {
   const { scope, button } = createGame();
-  click(button);
   vm.runInContext(`
     const hitbox=getPlayerHitbox();
     enemyBullets.push({kind:'monster2-fireball',x:hitbox.x+hitbox.width/2,

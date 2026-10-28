@@ -48,7 +48,9 @@ test("touch controls place ultimate above jump to the left of fire with uppercas
   assert.match(html, /data-control="jump"[\s\S]*?>JUMP<\/button>/);
   assert.match(css, /\.control-button\.action\s*\{[^}]*width:\s*clamp\(54px,\s*15vw,\s*74px\)/s);
   assert.match(css, /\.control-button\.ultimate::before\s*\{[^}]*conic-gradient\([^}]*--ultimate-progress/s);
-  assert.match(css, /\.control-button\.ultimate\.ready::before\s*\{[^}]*#ffffff[^}]*drop-shadow[^}]*ultimate-ready-glow/s);
+  assert.match(css, /\.control-button\.ultimate::before\s*\{[^}]*#fff4ff[^}]*#c9a7ff/s);
+  assert.match(css, /\.control-button\.ultimate\.ready::before\s*\{[^}]*#fffaff[^}]*#c9a7ff[^}]*drop-shadow/s);
+  assert.doesNotMatch(css, /\.touch-controls\s*\{[^}]*opacity:/s);
 });
 
 test("rapid taps on touch controls cannot trigger browser zoom", () => {

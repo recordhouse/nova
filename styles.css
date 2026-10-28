@@ -408,11 +408,13 @@ button {
   background: conic-gradient(
     from -90deg,
     #fff4ff 0%,
-    #df8cff var(--ultimate-progress),
-    rgb(229 185 255 / 38%) var(--ultimate-progress),
-    rgb(229 185 255 / 38%) 100%
+    #c9a7ff var(--ultimate-progress),
+    #56376f var(--ultimate-progress),
+    #56376f 100%
   );
-  filter: drop-shadow(0 0 3px rgb(206 111 255 / 38%));
+  filter:
+    drop-shadow(0 0 2px rgb(245 193 255 / 82%))
+    drop-shadow(0 0 6px rgb(185 49 255 / 68%));
   pointer-events: none;
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -437,20 +439,14 @@ button {
 .control-button.ultimate.ready::before {
   background: conic-gradient(
     from -90deg,
-    #ffffff 0%,
-    #f2c4ff 34%,
-    #d96fff 70%,
-    #ffffff 100%
+    #fffaff 0%,
+    #e7b6ff 34%,
+    #c9a7ff 70%,
+    #fff4ff 100%
   );
   filter:
     drop-shadow(0 0 4px rgb(246 211 255 / 100%))
     drop-shadow(0 0 10px rgb(202 91 255 / 92%));
-  animation: ultimate-ready-glow 1.05s ease-in-out infinite alternate;
-}
-
-@keyframes ultimate-ready-glow {
-  from { opacity: 0.82; }
-  to { opacity: 1; }
 }
 
 .control-button.jump {
@@ -473,10 +469,4 @@ button {
 .control-button:active {
   transform: scale(0.92);
   filter: brightness(1.35);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .touch-controls {
-    opacity: 0.54;
-  }
 }
