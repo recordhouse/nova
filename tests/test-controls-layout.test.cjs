@@ -32,6 +32,16 @@ test("test controls include an immediate ultimate button", () => {
   assert.match(css, /\.test-ultimate-button\s*\{/);
 });
 
+test("test controls include a direct portal preview button", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+  const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
+  assert.match(html, /data-test-portal/);
+  assert.match(html, /aria-label="포털 입구 바로 보기"/);
+  assert.match(css, /\.test-portal-button\s*\{/);
+  assert.match(input, /testPortalButton\?\.addEventListener\("click"/);
+});
+
 test("touch controls place ultimate above jump to the left of fire with uppercase labels", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");

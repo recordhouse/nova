@@ -2,11 +2,82 @@
 
 // Sprite and background image loading.
 
+const visualAssetLoadTasks = [];
+let settledVisualAssetCount = 0;
+let failedVisualAssetCount = 0;
+
+function visualAssetLoadingSnapshot() {
+  const total = visualAssetLoadTasks.length;
+  const loaded = settledVisualAssetCount;
+  return {
+    total,
+    loaded,
+    failed: failedVisualAssetCount,
+    progress: total > 0 ? loaded / total : 1,
+  };
+}
+
+function updateInitialVisualLoadingUi() {
+  const snapshot = visualAssetLoadingSnapshot();
+  const percentage = Math.max(0, Math.min(100, Math.round(snapshot.progress * 100)));
+  if (
+    typeof gameLoadingProgressElement !== "undefined" &&
+    gameLoadingProgressElement
+  ) {
+    gameLoadingProgressElement.style?.setProperty?.("--loading-progress", `${percentage}%`);
+    gameLoadingProgressElement.setAttribute?.("aria-valuenow", String(percentage));
+  }
+  if (
+    typeof gameLoadingPercentElement !== "undefined" &&
+    gameLoadingPercentElement
+  ) gameLoadingPercentElement.textContent = `${percentage}%`;
+}
+
+function registerVisualAsset(kind, source) {
+  let resolveReady;
+  const task = {
+    kind,
+    source,
+    settled: false,
+    loaded: false,
+    promise: new Promise((resolve) => {
+      resolveReady = resolve;
+    }),
+    settle(loaded) {
+      if (task.settled) return;
+      task.settled = true;
+      task.loaded = Boolean(loaded);
+      settledVisualAssetCount += 1;
+      if (!task.loaded) failedVisualAssetCount += 1;
+      updateInitialVisualLoadingUi();
+      resolveReady(task);
+    },
+  };
+  visualAssetLoadTasks.push(task);
+  updateInitialVisualLoadingUi();
+  return task;
+}
+
+function visualAssetsAreReady() {
+  return settledVisualAssetCount >= visualAssetLoadTasks.length;
+}
+
+function waitForVisualAssets() {
+  return Promise.all(visualAssetLoadTasks.map((task) => task.promise))
+    .then(() => visualAssetLoadingSnapshot());
+}
+
 function loadPlayerSprite(source, fps, frames) {
   const image = new Image();
-  const sprite = { image, fps, frames, loaded: false };
+  const task = registerVisualAsset("image", source);
+  const sprite = { image, fps, frames, loaded: false, error: false, ready: task.promise };
   image.onload = () => {
     sprite.loaded = true;
+    task.settle(true);
+  };
+  image.onerror = () => {
+    sprite.error = true;
+    task.settle(false);
   };
   image.src = `${source}?v=${Date.now()}`;
   return sprite;
@@ -14,15 +85,22 @@ function loadPlayerSprite(source, fps, frames) {
 
 function loadImageAsset(source) {
   const image = new Image();
-  const asset = { image, loaded: false };
+  const task = registerVisualAsset("image", source);
+  const asset = { image, loaded: false, error: false, ready: task.promise };
   image.onload = () => {
     asset.loaded = true;
+    task.settle(true);
+  };
+  image.onerror = () => {
+    asset.error = true;
+    task.settle(false);
   };
   image.src = `${source}?v=${Date.now()}`;
   return asset;
 }
 
 function loadVideoAsset(source, options = {}) {
+  const task = registerVisualAsset("video", source);
   const loop = options.loop ?? true;
   const playbackRate = options.playbackRate ?? 1;
   const onStart = typeof options.onStart === "function" ? options.onStart : null;
@@ -35,8 +113,14 @@ function loadVideoAsset(source, options = {}) {
     active: false,
     pendingPlay: false,
     onStart,
+    error: false,
+    ready: task.promise,
   };
-  if (!video) return asset;
+  if (!video) {
+    asset.error = true;
+    task.settle(false);
+    return asset;
+  }
   video.preload = "auto";
   video.muted = true;
   video.defaultMuted = true;
@@ -45,6 +129,7 @@ function loadVideoAsset(source, options = {}) {
   video.playbackRate = playbackRate;
   video.addEventListener("loadeddata", () => {
     asset.loaded = true;
+    task.settle(true);
     if (asset.pendingPlay) startVideoAssetPlayback(asset);
   });
   video.addEventListener("ended", () => {
@@ -55,6 +140,8 @@ function loadVideoAsset(source, options = {}) {
   video.addEventListener("error", () => {
     asset.active = false;
     asset.pendingPlay = false;
+    asset.error = true;
+    task.settle(false);
   });
   video.src = source;
   video.load?.();
@@ -385,7 +472,7 @@ playMonsterBasicVideo();
 playSpaceBackgroundVideo();
 
 const GameAudioContext = window.AudioContext ?? window.webkitAudioContext;
-const STAGE_MUSIC_VOLUME = 0.18;
+const STAGE_MUSIC_VOLUME = 0.03;
 const stage01Music = typeof Audio === "function"
   ? new Audio("./assets/music/stage_01.mp3?v=20260924-1") : null;
 let stageMusicPaused = TEST_MODE;
@@ -470,12 +557,14 @@ function createGameAudioContext() {
 const gameAudioContext = createGameAudioContext();
 const gameSfxOutput = gameAudioContext ? gameAudioContext.createGain() : null;
 const femaleVoiceOutput = gameAudioContext ? gameAudioContext.createGain() : null;
+const GAME_SFX_MASTER_GAIN = 2;
+const FEMALE_VOICE_MASTER_GAIN = 2;
 if (gameSfxOutput) {
-  gameSfxOutput.gain.value = 1;
+  gameSfxOutput.gain.value = GAME_SFX_MASTER_GAIN;
   gameSfxOutput.connect(gameAudioContext.destination);
 }
 if (femaleVoiceOutput) {
-  femaleVoiceOutput.gain.value = 1;
+  femaleVoiceOutput.gain.value = FEMALE_VOICE_MASTER_GAIN;
   femaleVoiceOutput.connect(gameAudioContext.destination);
 }
 let playerGunSoundBuffer = null;
@@ -979,11 +1068,4 @@ window.addEventListener("keydown", prepareGameAudio, {
   once: true,
 });
 
-const fixedBackground = {
-  image: new Image(),
-  loaded: false,
-};
-fixedBackground.image.onload = () => {
-  fixedBackground.loaded = true;
-};
-fixedBackground.image.src = `./assets/images/bg/space.png?v=${Date.now()}`;
+const fixedBackground = loadImageAsset("./assets/images/bg/space.png");

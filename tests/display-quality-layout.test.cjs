@@ -75,6 +75,34 @@ function createDisplay(cssWidth = 390, pixelRatio = 3, mobile = false) {
 
 function read(scope, expression) { return vm.runInContext(expression, scope); }
 
+test("the boss entrance is a larger red vortex without a BOSS label", () => {
+  const { scope, calls, gradients } = createDisplay();
+  read(scope, `
+    bossDoor = {platform: {kind: 'flat'}, centerX: 360, width: 126, height: 184};
+    cameraX = 0;
+    cameraY = 0;
+    player.x = 320;
+    gameTime = 1;
+    globalThis.platformSurfaceY = () => 600;
+  `);
+  calls.length = 0;
+  gradients.length = 0;
+  scope.drawBossGate();
+  assert.equal(calls.some((call) => call.operation === "fillText" &&
+    call.args[0] === "BOSS"), false);
+  assert.ok(calls.filter((call) => call.operation === "arc").length >= 4);
+  assert.ok(calls.filter((call) => call.operation === "lineTo").length >= 100);
+  assert.ok(calls.some((call) => call.operation === "scale" && call.args[1] > 1));
+  assert.ok(gradients.some((gradient) => gradient.operation === "createRadialGradient"));
+  assert.ok(Math.max(...calls.filter((call) => call.operation === "arc")
+    .map((call) => call.args[2])) > 70);
+  assert.ok(gradients.some((gradient) => gradient.stops.some((stop) =>
+    String(stop.color).includes("235, 42, 79"))));
+  const beacon = gradients.find((gradient) => gradient.operation === "createLinearGradient");
+  assert.equal(beacon.stops.at(-1).color, "rgba(255, 177, 185, 0)");
+  assert.ok(calls.some((call) => call.operation === "quadraticCurveTo"));
+});
+
 test("a phone's physical pixel density sets the canvas backing size", () => {
   const { scope, canvas, calls, setCssWidth } = createDisplay();
   assert.equal(read(scope, "WIDTH"), 720);
@@ -268,8 +296,8 @@ test("two mirrored video slots are enlarged fifty percent and keep wider tops", 
   const slotLines = calls.filter((call) => call.operation === "stroke");
   assert.equal(slotLines.length, 2,
     "the shared top frame has a glow stroke and a bright core");
-  assert.equal(slotLines[0].strokeColor, "rgba(154, 70, 220, 0.38)");
-  assert.equal(slotLines[1].strokeColor, "rgba(122, 226, 240, 0.88)");
+  assert.equal(slotLines[0].strokeColor, "rgba(154, 70, 220, 0.32)");
+  assert.equal(slotLines[1].strokeColor, "rgba(122, 226, 240, 0.74)");
   const frameMoves = calls.filter((call) => call.operation === "moveTo").slice(-2);
   const frameLines = calls.filter((call) => call.operation === "lineTo").slice(-4);
   const layout = scope.topVideoSlotLayout();
@@ -301,8 +329,8 @@ test("the matching neon line also frames the full game screen", () => {
   assert.equal(calls.filter((call) => call.operation === "closePath").length, 1);
   const strokes = calls.filter((call) => call.operation === "stroke");
   assert.equal(strokes.length, 2);
-  assert.equal(strokes[0].strokeColor, "rgba(154, 70, 220, 0.38)");
-  assert.equal(strokes[1].strokeColor, "rgba(122, 226, 240, 0.88)");
+  assert.equal(strokes[0].strokeColor, "rgba(154, 70, 220, 0.32)");
+  assert.equal(strokes[1].strokeColor, "rgba(122, 226, 240, 0.74)");
 });
 
 test("the active gun video fills only the clipped left trapezoid", () => {

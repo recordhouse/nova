@@ -142,7 +142,9 @@ test("combat sounds preload and use their intended audio segments", async () => 
   assert.equal(musicInstances.length, 1);
   assert.equal(musicInstances[0].source, "./assets/music/stage_01.mp3?v=20260924-1");
   assert.equal(musicInstances[0].loop, true);
-  assert.equal(musicInstances[0].volume, 0.18);
+  assert.equal(musicInstances[0].volume, 0.03);
+  assert.equal(vm.runInContext("gameSfxOutput.gain.value", scope), 2);
+  assert.equal(vm.runInContext("femaleVoiceOutput.gain.value", scope), 2);
   assert.equal(musicInstances[0].preload, "auto");
   assert.equal(musicInstances[0].playsInline, true);
   assert.equal(vm.runInContext("stageMusicPaused", scope), false);

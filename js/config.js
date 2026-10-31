@@ -2,12 +2,16 @@
 
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
+const gameLoadingElement = document.querySelector("[data-game-loading]");
+const gameLoadingProgressElement = document.querySelector("[data-game-loading-progress]");
+const gameLoadingPercentElement = document.querySelector("[data-game-loading-percent]");
 const TEST_MODE = /(?:^|[?&])test=1(?:&|$)/.test(window.location?.search ?? "");
 const testControlsElement = document.querySelector("[data-test-controls]");
 const testJumpPathButton = document.querySelector("[data-test-jump-path]");
 const testResolutionButton = document.querySelector("[data-test-resolution]");
 const testOrientationButton = document.querySelector("[data-test-orientation]");
 const testMapButton = document.querySelector("[data-test-map]");
+const testPortalButton = document.querySelector("[data-test-portal]");
 const testMusicButton = document.querySelector("[data-test-music]");
 const testInvincibilityButton = document.querySelector("[data-test-invincibility]");
 const testPlayerAreaButton = document.querySelector("[data-test-player-area]");
@@ -227,6 +231,7 @@ const CAMERA_LOOK_SWITCH_DELAY = 0.25;
 const CAMERA_LOOK_MOVEMENT_SPEED_THRESHOLD = 32;
 const CAMERA_HORIZONTAL_FOLLOW_SPEED = 10;
 const CAMERA_MAX_PAN_SPEED_RATIO = 0.75;
+const PLAYER_CROUCH_INPUT_DELAY = 0.2;
 const PLAYER_CROUCH_CAMERA_LOOK_DELAY = 0.32;
 const PLAYER_CROUCH_CAMERA_LOOK_BLEND_DURATION = 0.38;
 const PLAYER_CROUCH_CAMERA_LOOK_DISTANCE_RATIO = 0.16;

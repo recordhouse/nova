@@ -230,6 +230,11 @@ testMapButton?.addEventListener("click", (event) => {
   toggleTestMap();
 });
 
+testPortalButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  movePlayerToPortalEntrance();
+});
+
 let testMusicPaused = true;
 function updateTestMusicButton() {
   if (!TEST_MODE || !testMusicButton) return;

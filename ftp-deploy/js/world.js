@@ -2864,6 +2864,47 @@ function movePlayerToHorizontalJumpPath() {
   updateTestJumpPathButton(testJumpRouteIndex + 1, testRoutes.length);
 }
 
+function movePlayerToPortalEntrance() {
+  if (!TEST_MODE || !bossDoor?.platform) return false;
+
+  const platform = bossDoor.platform;
+  const direction = bossDoor.direction || (
+    bossDoor.centerX < (platform.start + platform.end) / 2 ? -1 : 1
+  );
+  const minimumCenterX = platform.start + player.width / 2 + 4;
+  const maximumCenterX = platform.end - player.width / 2 - 4;
+  const previewCenterX = Math.max(
+    minimumCenterX,
+    Math.min(maximumCenterX, bossDoor.centerX - direction * 180),
+  );
+
+  resetAllInputs();
+  bullets.length = 0;
+  enemyBullets.length = 0;
+  particles.length = 0;
+  resetPlayerPosition();
+  player.x = previewCenterX - player.width / 2;
+  player.y = platformSurfaceY(platform, previewCenterX) - player.height;
+  player.platform = platform;
+  player.facing = direction;
+  player.grounded = true;
+  player.fallReferenceY = player.y + player.height;
+  player.invincible = Math.max(player.invincible, 1);
+  gameOver = false;
+  showFullMap = false;
+  updateTestMapButton();
+
+  cameraLookDirection = direction;
+  cameraPendingDirection = 0;
+  cameraDirectionHoldTime = 0;
+  cameraX = Math.max(
+    minWorldX,
+    Math.min(maxWorldX - WIDTH, previewCenterX - cameraAnchorScreenX(direction)),
+  );
+  cameraY = player.y + player.height - BASE_GROUND_Y;
+  return true;
+}
+
 function updateTestResolutionButton() {
   if (!testResolutionButton || !TEST_MODE) return;
   const landscape = WIDTH > HEIGHT;

@@ -80,6 +80,135 @@ button {
   height: min(100dvh, calc(100vw * 9 / 16));
 }
 
+.game-loading {
+  position: absolute;
+  z-index: 12;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #dffcff;
+  background:
+    radial-gradient(circle at 50% 45%, rgb(74 25 105 / 42%) 0%, transparent 35%),
+    linear-gradient(180deg, #08040f 0%, #020407 58%, #040108 100%);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 240ms ease, visibility 0s linear 240ms;
+}
+
+.game-loading::before {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    180deg,
+    rgb(126 226 240 / 3%) 0,
+    rgb(126 226 240 / 3%) 1px,
+    transparent 1px,
+    transparent 5px
+  );
+  content: "";
+  pointer-events: none;
+}
+
+.game-loading.complete {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.game-loading-panel {
+  position: relative;
+  width: min(68%, 420px);
+  min-width: 220px;
+  padding: 20px 22px 18px;
+  border: 1px solid rgb(144 225 238 / 34%);
+  background: rgb(4 8 14 / 76%);
+  box-shadow:
+    0 0 30px rgb(154 70 220 / 22%),
+    inset 0 0 18px rgb(90 210 230 / 7%);
+  clip-path: polygon(
+    10px 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    10px 100%,
+    0 calc(100% - 10px),
+    0 10px
+  );
+}
+
+.game-loading-logo {
+  margin-bottom: 16px;
+  color: #efd9ff;
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  font-size: clamp(30px, 8vw, 54px);
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-align: center;
+  text-indent: 0.18em;
+  text-shadow:
+    0 0 7px rgb(199 126 255 / 72%),
+    2px 2px 0 #3a1554;
+}
+
+.game-loading-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  color: #bdeef4;
+  font-family: "Arial Narrow", Arial, sans-serif;
+  font-size: clamp(10px, 2.4vw, 13px);
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.game-loading-status output {
+  color: #f4e7ff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+
+.game-loading-track {
+  --loading-progress: 0%;
+
+  position: relative;
+  height: clamp(12px, 2.6vw, 16px);
+  overflow: hidden;
+  border: 1px solid rgb(149 223 237 / 48%);
+  background: rgb(1 5 9 / 88%);
+  box-shadow: inset 0 0 8px rgb(0 0 0 / 82%);
+}
+
+.game-loading-fill {
+  display: block;
+  width: var(--loading-progress);
+  height: 100%;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 8px,
+      rgb(3 13 18 / 54%) 8px,
+      rgb(3 13 18 / 54%) 10px
+    ),
+    linear-gradient(90deg, #7435a8 0%, #bf72eb 48%, #86edf5 100%);
+  box-shadow: 0 0 13px rgb(132 232 246 / 62%);
+  transition: width 160ms ease-out;
+}
+
+.game-loading-caption {
+  margin-top: 8px;
+  color: rgb(155 203 213 / 58%);
+  font-family: "Arial Narrow", Arial, sans-serif;
+  font-size: clamp(8px, 1.9vw, 10px);
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  text-align: right;
+}
+
 #game {
   display: block;
   width: 100%;
@@ -112,6 +241,7 @@ button {
 .test-resolution-button,
 .test-orientation-button,
 .test-map-button,
+.test-portal-button,
 .test-music-button,
 .test-invincibility-button,
 .test-ultimate-button,
@@ -153,6 +283,7 @@ button {
 .test-resolution-button:active,
 .test-orientation-button:active,
 .test-map-button:active,
+.test-portal-button:active,
 .test-music-button:active,
 .test-invincibility-button:active,
 .test-ultimate-button:active,
@@ -180,6 +311,13 @@ button {
   color: #fff1b8;
   border-color: rgb(255 205 91 / 88%);
   background: rgb(255 205 91 / 16%);
+}
+
+.test-portal-button {
+  min-width: 66px;
+  color: #f2d7ff;
+  border-color: rgb(201 130 255 / 86%);
+  background: rgb(131 54 188 / 14%);
 }
 
 .test-music-button {

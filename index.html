@@ -38,10 +38,31 @@
     <link rel="preload" href="./assets/sound/voice_monster_03.mp3?v=20261021-1" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/voice_turret_01.mp3?v=20261021-1" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/music/stage_01.mp3?v=20260924-1" as="audio" />
-    <link rel="stylesheet" href="./styles.css?v=20261028-3" />
+    <link rel="stylesheet" href="./styles.css?v=20261031-1" />
   </head>
   <body>
     <main class="game-shell" aria-label="NOVA 게임 프로토타입">
+      <section class="game-loading" data-game-loading aria-label="게임 이미지와 영상 로딩 중">
+        <div class="game-loading-panel">
+          <div class="game-loading-logo" aria-hidden="true">NOVA</div>
+          <div class="game-loading-status">
+            <span>LOADING</span>
+            <output data-game-loading-percent>0%</output>
+          </div>
+          <div
+            class="game-loading-track"
+            data-game-loading-progress
+            role="progressbar"
+            aria-label="이미지와 영상 로딩 진행률"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <span class="game-loading-fill"></span>
+          </div>
+          <div class="game-loading-caption">VISUAL ASSETS</div>
+        </div>
+      </section>
       <canvas id="game" width="720" height="1280" aria-label="게임 화면"></canvas>
 
       <section class="test-controls" data-test-controls hidden aria-label="테스트 모드 도구">
@@ -77,6 +98,14 @@
           aria-pressed="false"
         >
           MAP
+        </button>
+        <button
+          type="button"
+          class="test-portal-button"
+          data-test-portal
+          aria-label="포털 입구 바로 보기"
+        >
+          PORTAL
         </button>
         <button
           type="button"
@@ -196,15 +225,15 @@
       </section>
     </main>
 
-    <script src="./js/config.js?v=20261027-4"></script>
-    <script src="./js/assets.js?v=20261025-1"></script>
-    <script src="./js/state.js?v=20261027-1"></script>
-    <script src="./js/world.js?v=20261025-1"></script>
+    <script src="./js/config.js?v=20261031-2"></script>
+    <script src="./js/assets.js?v=20261031-5"></script>
+    <script src="./js/state.js?v=20261031-1"></script>
+    <script src="./js/world.js?v=20261030-1"></script>
     <script src="./js/combat.js?v=20261027-4"></script>
-    <script src="./js/player.js?v=20261027-2"></script>
+    <script src="./js/player.js?v=20261031-1"></script>
     <script src="./js/enemies.js?v=20261025-1"></script>
-    <script src="./js/renderer.js?v=20261027-11"></script>
-    <script src="./js/input.js?v=20261028-1"></script>
-    <script src="./js/main.js?v=20261025-1"></script>
+    <script src="./js/renderer.js?v=20261031-1"></script>
+    <script src="./js/input.js?v=20261030-1"></script>
+    <script src="./js/main.js?v=20261031-1"></script>
   </body>
 </html>

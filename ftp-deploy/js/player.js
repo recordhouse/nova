@@ -339,6 +339,7 @@ function updatePlayerUltimate(dt) {
   player.grounded = false;
   player.platform = null;
   player.crouching = false;
+  player.crouchInputTime = 0;
   player.deepFalling = false;
   player.jumpAnimationTime += dt;
   player.fireWasActive = false;
@@ -420,9 +421,19 @@ function updatePlayer(dt) {
     !downForThisFrame && controls.down && player.grounded &&
     Math.abs(player.vx) > 1
   );
-  player.crouching = (
+  const crouchInputEligible = (
     !downForThisFrame && controls.down && player.grounded &&
     !continuingRunWithDown
+  );
+  player.crouchInputTime = crouchInputEligible
+    ? Math.min(
+      PLAYER_CROUCH_INPUT_DELAY,
+      (player.crouchInputTime ?? 0) + dt,
+    )
+    : 0;
+  player.crouching = (
+    crouchInputEligible &&
+    player.crouchInputTime >= PLAYER_CROUCH_INPUT_DELAY - 1e-9
   );
   const canUseCoyoteJump = (
     !player.grounded &&
@@ -621,6 +632,7 @@ function updatePlayer(dt) {
 
   if (!player.grounded) {
     player.crouching = false;
+    player.crouchInputTime = 0;
     player.jumpAnimationTime += dt;
     player.vy = Math.min(PLAYER_MAX_FALL_SPEED, player.vy + GRAVITY * dt);
     player.y += player.vy * dt;

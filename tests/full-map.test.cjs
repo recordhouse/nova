@@ -42,6 +42,11 @@ function createGame(testMode = true, landscape = false) {
     setAttribute(key, value) { this.attributes[key] = value; },
     addEventListener(key, callback) { this.listeners[key] = callback; },
   };
+  const portalButton = {
+    attributes: {}, listeners: {},
+    setAttribute(key, value) { this.attributes[key] = value; },
+    addEventListener(key, callback) { this.listeners[key] = callback; },
+  };
   const tools = { getBoundingClientRect: () => ({ bottom: landscape ? 148 : 180 }) };
   const canvas = {
     getContext: () => ctx,
@@ -53,6 +58,7 @@ function createGame(testMode = true, landscape = false) {
     document: {
       querySelector: (selector) => selector === "#game" ? canvas
         : selector === "[data-test-map]" ? button
+          : selector === "[data-test-portal]" ? portalButton
           : selector === "[data-test-controls]" ? tools : null,
       querySelectorAll: () => [], addEventListener() {},
     },
@@ -65,7 +71,7 @@ function createGame(testMode = true, landscape = false) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "js", `${name}.js`), "utf8"),
       scope, { filename: `${name}.js` });
   }
-  return { scope, button, tools, strokes, strokeRects, clips, fills, gradients };
+  return { scope, button, portalButton, tools, strokes, strokeRects, clips, fills, gradients };
 }
 
 test("MAP button toggles the full map, clears held controls and pauses the game clock", () => {
@@ -96,6 +102,30 @@ test("normal mode hides MAP tools and cannot open or pause for the full map", ()
   assert.equal(vm.runInContext("showFullMap", scope), false);
   scope.update(1 / 60);
   assert.ok(vm.runInContext("gameTime", scope) > 0);
+});
+
+test("the test PORTAL button places the player safely with the entrance in view", () => {
+  const { scope, button, portalButton } = createGame();
+  button.listeners.click({ preventDefault() {} });
+  assert.equal(vm.runInContext("showFullMap", scope), true);
+  portalButton.listeners.click({ preventDefault() {} });
+  const preview = vm.runInContext(`(() => ({
+    samePlatform: player.platform === bossDoor.platform,
+    grounded: player.grounded,
+    facing: player.facing,
+    direction: bossDoor.direction,
+    portalScreenX: bossDoor.centerX - cameraX,
+    portalScreenY: platformSurfaceY(bossDoor.platform, bossDoor.centerX) - cameraY,
+    width: WIDTH,
+    height: HEIGHT,
+    showFullMap,
+  }))()`, scope);
+  assert.equal(preview.samePlatform, true);
+  assert.equal(preview.grounded, true);
+  assert.equal(preview.facing, preview.direction);
+  assert.equal(preview.showFullMap, false);
+  assert.ok(preview.portalScreenX >= 0 && preview.portalScreenX <= preview.width);
+  assert.ok(preview.portalScreenY >= 0 && preview.portalScreenY <= preview.height);
 });
 
 test("the active particle budget preserves critical effects during effect spikes", () => {
@@ -155,7 +185,7 @@ test("reduced quality trims cosmetic particles before critical effects", () => {
 });
 
 for (const [landscape, shortSide] of [[false, 540], [false, 720], [true, 540], [true, 720]]) {
-  test(`full ${shortSide}px ${landscape ? "landscape" : "portrait"} map fits every road and shows player and boss gate`, () => {
+  test(`full ${shortSide}px ${landscape ? "landscape" : "portrait"} map fits every road and shows player and portal`, () => {
     const { scope, strokes, clips, fills } = createGame(true, landscape);
     scope.resizeGameResolution(landscape ? shortSide * 16 / 9 : shortSide,
       landscape ? shortSide : shortSide * 16 / 9);
@@ -171,7 +201,7 @@ for (const [landscape, shortSide] of [[false, 540], [false, 720], [true, 540], [
         assert.ok(point.y >= y && point.y <= y + height);
       }
     }
-    for (const color of ["#ff6940", "#ffe071"]) {
+    for (const color of ["#fff0f2", "#ffe071"]) {
       const marker = fills.find((fill) => fill.color === color);
       assert.ok(marker, `${color} map marker must exist`);
       assert.ok(marker.points[0].x >= x && marker.points[0].x <= x + width);

@@ -173,6 +173,28 @@ test("the run video continues through jumps and also starts on a standing jump",
     "a jump from standing also starts the run video");
 });
 
+test("crouching starts after a 0.2 second hold and cancels immediately on release", () => {
+  const { scope } = createGame();
+  const delay = read(scope, "PLAYER_CROUCH_INPUT_DELAY");
+  assert.equal(delay, 0.2);
+  read(scope, "controls.down=true");
+
+  scope.updatePlayer(delay - 0.01);
+  assert.equal(read(scope, "player.crouching"), false,
+    "a short down input keeps the standing pose");
+  assert.ok(read(scope, "player.crouchInputTime") < delay);
+
+  scope.updatePlayer(0.01);
+  assert.equal(read(scope, "player.crouching"), true,
+    "holding down for 0.2 seconds starts crouching");
+
+  read(scope, "controls.down=false");
+  scope.updatePlayer(1 / 60);
+  assert.equal(read(scope, "player.crouching"), false);
+  assert.equal(read(scope, "player.crouchInputTime"), 0,
+    "releasing down cancels the crouch timer");
+});
+
 test("the stand video plays while the grounded player is idle or crouching", () => {
   const { scope, videoCalls, runVideoCalls, standVideoCalls } = createGame();
   scope.updatePlayer(1 / 60);
@@ -181,7 +203,7 @@ test("the stand video plays while the grounded player is idle or crouching", () 
   assert.deepEqual(standVideoCalls, ["play"], "remaining idle does not restart it");
 
   read(scope, "controls.down=true");
-  scope.updatePlayer(1 / 60);
+  scope.updatePlayer(0.2);
   assert.equal(read(scope, "player.crouching"), true);
   assert.deepEqual(standVideoCalls, ["play"], "crouching keeps the stand video active");
   read(scope, "controls.down=false");

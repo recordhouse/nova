@@ -80,6 +80,7 @@ const player = {
   scoreGainAmount: 0,
   scoreGainStartedAt: -Infinity,
   crouching: false,
+  crouchInputTime: 0,
   crouchCameraLookTime: 0,
   platform: null,
   jumpLatch: false,
@@ -102,6 +103,7 @@ function playerIsDown() {
 function resetPlayerDownState() {
   player.downPhase = "";
   player.downTime = 0;
+  player.crouchInputTime = 0;
   player.hitKnockbackVelocity = 0;
   player.hitKnockbackTime = 0;
   player.runSpeed = player.speed;

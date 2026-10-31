@@ -289,15 +289,45 @@ function loop(currentTime) {
   const dt = Math.min(0.033, frameSeconds);
   update(dt);
   draw();
+  if (initialLoadingOverlayPending) {
+    initialLoadingOverlayPending = false;
+    completeInitialLoadingUi();
+  }
   requestAnimationFrame(loop);
 }
 
-buildStars();
-resetGame();
-if (
-  typeof getPlayerUltimateLaserSprite === "function" &&
-  typeof PLAYER_ULTIMATE_LASER_LENGTH === "number"
-) {
-  getPlayerUltimateLaserSprite();
+let gameRuntimeStarted = false;
+let initialLoadingOverlayPending = true;
+
+function completeInitialLoadingUi() {
+  if (typeof gameLoadingElement === "undefined" || !gameLoadingElement) return;
+  gameLoadingElement.classList?.add("complete");
+  gameLoadingElement.setAttribute?.("aria-hidden", "true");
 }
-requestAnimationFrame(loop);
+
+function startGameRuntime() {
+  if (gameRuntimeStarted) return false;
+  gameRuntimeStarted = true;
+  buildStars();
+  resetGame();
+  if (
+    typeof getPlayerUltimateLaserSprite === "function" &&
+    typeof PLAYER_ULTIMATE_LASER_LENGTH === "number"
+  ) {
+    getPlayerUltimateLaserSprite();
+  }
+  requestAnimationFrame(loop);
+  return true;
+}
+
+function startGameAfterVisualAssets() {
+  if (
+    typeof visualAssetsAreReady !== "function" ||
+    visualAssetsAreReady()
+  ) return startGameRuntime();
+  if (typeof waitForVisualAssets !== "function") return startGameRuntime();
+  waitForVisualAssets().then(startGameRuntime, startGameRuntime);
+  return false;
+}
+
+startGameAfterVisualAssets();

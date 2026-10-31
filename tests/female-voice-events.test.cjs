@@ -191,15 +191,19 @@ test("female voice files preload and share one non-overlapping priority channel"
   finishLatest();
   assert.equal(scope.playFemaleDeathVoice(), true);
   assert.equal(started.at(-1).source, "./assets/sound/voice_female_die_01.mp3");
-  assert.equal(read(scope, "gameSfxOutput.gain.value"), 1,
-    "the damage voice does not lower gameplay effects");
-  assert.equal(read(scope, "stage01Music.volume"), 0.18,
+  assert.equal(read(scope, "gameSfxOutput.gain.value"), 2,
+    "the damage voice does not lower boosted gameplay effects");
+  assert.equal(read(scope, "femaleVoiceOutput.gain.value"), 2,
+    "character speech keeps its boosted master level");
+  assert.equal(read(scope, "stage01Music.volume"), 0.03,
     "the damage voice does not lower background music");
   assert.equal(scope.playFemaleEndVoice(), true);
   assert.equal(started.at(-1).source, "./assets/sound/voice_female_end.mp3");
-  assert.equal(read(scope, "gameSfxOutput.gain.value"), 1,
-    "effects remain at full volume when the damage voice ends");
-  assert.equal(read(scope, "stage01Music.volume"), 0.18,
+  assert.equal(read(scope, "gameSfxOutput.gain.value"), 2,
+    "effects remain at their boosted volume when the damage voice ends");
+  assert.equal(read(scope, "femaleVoiceOutput.gain.value"), 2,
+    "character speech master remains boosted when the damage voice ends");
+  assert.equal(read(scope, "stage01Music.volume"), 0.03,
     "background music remains unchanged when the damage voice ends");
   finishLatest();
 

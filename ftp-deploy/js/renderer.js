@@ -3540,90 +3540,95 @@ function drawBossGate() {
   const proximity = Math.max(0, 1 - Math.abs(playerCenterX - centerX) / 760);
   const pulse = 0.72 + Math.sin(gameTime * 3.4) * 0.18;
   const halfWidth = width / 2;
+  const portalRadius = halfWidth * 0.96;
+  const portalCenterY = -height * 0.48;
+  const swirlPhase = gameTime * 1.8;
 
   ctx.save();
   ctx.translate(centerX, surfaceY);
 
-  const beacon = ctx.createLinearGradient(0, -height - 210, 0, -height + 6);
-  beacon.addColorStop(0, "rgba(255, 70, 42, 0)");
-  beacon.addColorStop(0.58, `rgba(255, 82, 38, ${0.08 + proximity * 0.08})`);
-  beacon.addColorStop(1, `rgba(255, 177, 58, ${0.22 + proximity * 0.16})`);
+  const beaconTop = -height - 210;
+  const beaconBottom = -height + 18;
+  const beacon = ctx.createLinearGradient(0, beaconTop, 0, beaconBottom);
+  beacon.addColorStop(0, "rgba(255, 45, 79, 0)");
+  beacon.addColorStop(0.58, `rgba(255, 65, 91, ${0.07 + proximity * 0.09})`);
+  beacon.addColorStop(0.82, `rgba(255, 177, 185, ${0.2 + proximity * 0.18})`);
+  beacon.addColorStop(1, "rgba(255, 177, 185, 0)");
   ctx.fillStyle = beacon;
-  ctx.fillRect(-34, -height - 210, 68, 216);
-
-  ctx.shadowColor = "rgba(255, 72, 31, 0.72)";
-  ctx.shadowBlur = 16 + proximity * 18;
-  ctx.fillStyle = "#431511";
   ctx.beginPath();
-  ctx.moveTo(-halfWidth, 0);
-  ctx.lineTo(-halfWidth, -height + 30);
-  ctx.lineTo(-halfWidth + 27, -height);
-  ctx.lineTo(halfWidth - 27, -height);
-  ctx.lineTo(halfWidth, -height + 30);
-  ctx.lineTo(halfWidth, 0);
+  ctx.moveTo(-16, beaconTop);
+  ctx.lineTo(16, beaconTop);
+  ctx.bezierCurveTo(24, beaconTop + 80, 42, beaconBottom - 44, 50, beaconBottom - 20);
+  ctx.quadraticCurveTo(0, beaconBottom + 12, -50, beaconBottom - 20);
+  ctx.bezierCurveTo(-42, beaconBottom - 44, -24, beaconTop + 80, -16, beaconTop);
   ctx.closePath();
   ctx.fill();
 
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = "#151b22";
+  ctx.save();
+  ctx.translate(0, portalCenterY);
+  ctx.scale(1, 1.38);
+  ctx.globalCompositeOperation = "lighter";
+
+  const halo = ctx.createRadialGradient(0, 0, 3, 0, 0, portalRadius * 1.18);
+  halo.addColorStop(0, "rgba(255, 250, 250, 0.99)");
+  halo.addColorStop(0.2, "rgba(255, 164, 177, 0.84)");
+  halo.addColorStop(0.56, `rgba(235, 42, 79, ${0.44 + proximity * 0.22})`);
+  halo.addColorStop(1, "rgba(96, 5, 24, 0)");
+  ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.moveTo(-halfWidth + 14, -4);
-  ctx.lineTo(-halfWidth + 14, -height + 38);
-  ctx.lineTo(-halfWidth + 34, -height + 16);
-  ctx.lineTo(halfWidth - 34, -height + 16);
-  ctx.lineTo(halfWidth - 14, -height + 38);
-  ctx.lineTo(halfWidth - 14, -4);
-  ctx.closePath();
+  ctx.arc(0, 0, portalRadius * 1.18, 0, Math.PI * 2);
   ctx.fill();
 
-  const doorGradient = ctx.createLinearGradient(-halfWidth, 0, halfWidth, 0);
-  doorGradient.addColorStop(0, "#11171d");
-  doorGradient.addColorStop(0.46, "#29313a");
-  doorGradient.addColorStop(0.54, "#202730");
-  doorGradient.addColorStop(1, "#0d1217");
-  ctx.fillStyle = doorGradient;
-  ctx.fillRect(-halfWidth + 23, -height + 40, width - 46, height - 44);
-
-  ctx.strokeStyle = `rgba(255, 105, 49, ${0.7 + pulse * 0.24})`;
-  ctx.lineWidth = 4;
-  ctx.strokeRect(-halfWidth + 15, -height + 31, width - 30, height - 34);
-  ctx.strokeStyle = "rgba(255, 197, 86, 0.52)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(-halfWidth + 24, -height + 41, width - 48, height - 46);
-
-  ctx.shadowColor = "#ff5d2e";
-  ctx.shadowBlur = 9 + proximity * 13;
-  ctx.strokeStyle = `rgba(255, 102, 43, ${pulse})`;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(0, -height + 43);
-  ctx.lineTo(0, -7);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  for (const side of [-1, 1]) {
-    ctx.fillStyle = "#28323b";
-    ctx.fillRect(side * (halfWidth - 12) - (side < 0 ? 12 : 0), -height + 54, 12, height - 66);
-    ctx.fillStyle = `rgba(255, 104, 39, ${0.55 + pulse * 0.36})`;
-    for (let markerY = -height + 68; markerY < -24; markerY += 29) {
-      ctx.fillRect(side * (halfWidth - 9) - 3, markerY, 6, 13);
-    }
+  ctx.shadowColor = "#ff315c";
+  ctx.shadowBlur = 10 + proximity * 12;
+  for (let ring = 0; ring < 3; ring += 1) {
+    const ringRadius = portalRadius - ring * 7;
+    const direction = ring % 2 === 0 ? 1 : -1;
+    const start = swirlPhase * direction + ring * 1.7;
+    ctx.strokeStyle = ring === 0
+      ? `rgba(255, 204, 211, ${0.72 + pulse * 0.2})`
+      : `rgba(255, 59, 91, ${0.6 + pulse * 0.18})`;
+    ctx.lineWidth = 3 - ring * 0.55;
+    ctx.beginPath();
+    ctx.arc(0, 0, ringRadius, start, start + Math.PI * 1.46);
+    ctx.stroke();
   }
 
-  ctx.fillStyle = "#080b0f";
-  ctx.fillRect(-33, -height - 12, 66, 27);
-  ctx.strokeStyle = "#ff6a32";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(-32, -height - 11, 64, 25);
-  ctx.fillStyle = "#ffd17a";
-  ctx.font = "700 13px Arial";
-  ctx.textAlign = "center";
-  ctx.fillText("BOSS", 0, -height + 7);
+  for (let arm = 0; arm < 6; arm += 1) {
+    ctx.strokeStyle = arm % 2 === 0
+      ? "rgba(255, 239, 241, 0.92)"
+      : "rgba(255, 73, 101, 0.82)";
+    ctx.lineWidth = arm % 2 === 0 ? 2.2 : 1.6;
+    ctx.beginPath();
+    for (let step = 0; step <= 24; step += 1) {
+      const progress = step / 24;
+      const radius = 3 + progress * (portalRadius - 8);
+      const angle = swirlPhase + arm * Math.PI / 3 + progress * 4.9;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      if (step === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
 
-  ctx.fillStyle = "#111820";
-  ctx.fillRect(-halfWidth - 9, -8, width + 18, 11);
-  ctx.fillStyle = `rgba(255, 94, 35, ${0.62 + pulse * 0.28})`;
-  ctx.fillRect(-halfWidth + 4, -5, width - 8, 3);
+  const core = ctx.createRadialGradient(0, 0, 0, 0, 0, portalRadius * 0.28);
+  core.addColorStop(0, "#ffffff");
+  core.addColorStop(0.32, "#ffd7dc");
+  core.addColorStop(1, "rgba(255, 52, 87, 0)");
+  ctx.fillStyle = core;
+  ctx.beginPath();
+  ctx.arc(0, 0, portalRadius * 0.28, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.shadowColor = "#ff315c";
+  ctx.shadowBlur = 9 + proximity * 8;
+  ctx.fillStyle = "rgba(255, 139, 154, 0.34)";
+  ctx.fillRect(-halfWidth, -5, width, 4);
+  ctx.fillStyle = `rgba(255, 220, 224, ${0.76 + pulse * 0.2})`;
+  ctx.fillRect(-halfWidth * 0.7, -4, width * 0.7, 2);
+  ctx.shadowBlur = 0;
   ctx.restore();
 }
 
@@ -3743,8 +3748,8 @@ const TOP_VIDEO_SLOT_TOP_ASPECT = 1.04;
 const TOP_VIDEO_SLOT_BOTTOM_RATIO = 0.88;
 const TOP_VIDEO_SLOT_REFERENCE_Y = 30;
 const HUD_STATUS_CONTENT_GLOW = "rgba(170, 218, 235, 0.38)";
-const HUD_TOP_FRAME_GLOW_COLOR = "rgba(154, 70, 220, 0.38)";
-const HUD_TOP_FRAME_CORE_COLOR = "rgba(122, 226, 240, 0.88)";
+const HUD_TOP_FRAME_GLOW_COLOR = "rgba(154, 70, 220, 0.32)";
+const HUD_TOP_FRAME_CORE_COLOR = "rgba(122, 226, 240, 0.74)";
 const HUD_STATUS_ICON_MAX_SCALE = 2.9;
 const HUD_STATUS_ICON_GAP_UNITS = 1.4;
 const MINIMAP_HEIGHT_RATIO = 1.05;
@@ -4437,15 +4442,25 @@ function drawMinimap(fullMap = false) {
     const doorY = platformSurfaceY(bossDoor.platform, bossDoor.centerX);
     const markerX = mapX(bossDoor.centerX);
     const markerY = mapY(doorY);
-    ctx.fillStyle = "#ff6940";
-    ctx.shadowColor = "#ff6a32";
+    const markerPhase = gameTime * 2.1;
+    ctx.shadowColor = "#ff315c";
     ctx.shadowBlur = 6;
+    for (let ring = 0; ring < 2; ring += 1) {
+      ctx.strokeStyle = ring === 0 ? "#ff9aaa" : "#e42f55";
+      ctx.lineWidth = ring === 0 ? 1.5 : 1;
+      ctx.beginPath();
+      ctx.arc(
+        markerX,
+        markerY,
+        5 - ring * 1.8,
+        markerPhase + ring * Math.PI,
+        markerPhase + ring * Math.PI + Math.PI * 1.5,
+      );
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#fff0f2";
     ctx.beginPath();
-    ctx.moveTo(markerX, markerY - 5);
-    ctx.lineTo(markerX + 4, markerY);
-    ctx.lineTo(markerX, markerY + 5);
-    ctx.lineTo(markerX - 4, markerY);
-    ctx.closePath();
+    ctx.arc(markerX, markerY, 1.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
   }
@@ -4925,7 +4940,7 @@ function drawHud() {
     player.platform === goalPlatform &&
     Math.abs(player.x + player.width / 2 - goalX) < BOSS_GATE_TRIGGER_DISTANCE
   ) {
-    drawOverlay("BOSS GATE", "보스 구역 진입 준비");
+    drawOverlay("PORTAL", "구역 진입 준비");
   }
 
   if (gameOver && !playerIsDown()) drawOverlay("GAME OVER", "화면을 눌러 재시작");
