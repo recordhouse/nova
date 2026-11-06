@@ -2,6 +2,8 @@
 
 // Procedural path generation, stage population, and resets.
 
+let generatedMapMode = "normal";
+
 function createSeededRandom(seed) {
   let state = seed >>> 0;
   return () => {
@@ -1012,8 +1014,9 @@ function chooseMapFlowTransition(
   currentLevel,
   previousVerticalTrend,
   verticalStreak,
+  reverseChance = MAP_FLOW_REVERSE_CHANCE,
 ) {
-  const reversesDirection = mapRandom() < MAP_FLOW_REVERSE_CHANCE;
+  const reversesDirection = mapRandom() < reverseChance;
   const continuesVerticalFlow = (
     previousVerticalTrend !== 0 &&
     verticalStreak < MAP_FLOW_VERTICAL_STREAK_MAX &&
@@ -1653,10 +1656,43 @@ function finalizePlatformVariety() {
 
 function generateMap() {
   for (let attempt = 0; attempt < MAP_LAYOUT_MAX_ATTEMPTS; attempt += 1) {
-    if (generateMapCandidate()) return;
+    if (generateMapCandidate("normal") && generatedMapHasOrganicFlow()) {
+      generatedMapMode = "normal";
+      return;
+    }
   }
-  // A bounded serpentine fallback keeps a varied map without intersecting lanes.
-  if (!generateMapCandidate(true)) throw new Error("Unable to generate a clear main route");
+  for (
+    let attempt = 0;
+    attempt < MAP_CONSERVATIVE_LAYOUT_MAX_ATTEMPTS;
+    attempt += 1
+  ) {
+    if (
+      generateMapCandidate("conservative") &&
+      generatedMapHasOrganicFlow()
+    ) {
+      generatedMapMode = "conservative";
+      return;
+    }
+  }
+  // Last-resort monotonic terrain is varied, but avoids the stacked-line layout.
+  if (!generateMapCandidate("monotonic")) {
+    throw new Error("Unable to generate a clear main route");
+  }
+  generatedMapMode = "monotonic";
+}
+
+function generatedMapHasOrganicFlow() {
+  const transitions = branches
+    .map((branch) => branch.flowTransition)
+    .filter(Boolean);
+  const reverseCount = transitions.filter(
+    (transition) => transition.horizontal === "reverse",
+  ).length;
+  const forwardCount = transitions.length - reverseCount;
+  const verticalProfiles = new Set(transitions.map((transition) => (
+    Math.round((transition.levelOffset ?? 0) * 10) / 10
+  )));
+  return reverseCount >= 3 && forwardCount >= 3 && verticalProfiles.size >= 3;
 }
 
 function generateBossMap() {
@@ -1811,7 +1847,10 @@ function generateBossMap() {
   return arena;
 }
 
-function generateMapCandidate(safeForwardFlow = false) {
+function generateMapCandidate(flowMode = "normal") {
+  if (flowMode === true) flowMode = "conservative";
+  const conservativeFlow = flowMode === "conservative";
+  const monotonicFlow = flowMode === "monotonic";
   platforms.length = 0;
   invalidatePlatformSpatialIndex();
   branches.length = 0;
@@ -1828,13 +1867,13 @@ function generateMapCandidate(safeForwardFlow = false) {
   let traveledDistance = 0;
   let distanceSinceFlowChange = 0;
   let distanceSinceDip = 0;
-  const fallbackLaneDistanceFor = () => (
-    MAP_FALLBACK_LANE_DISTANCE_MIN + mapRandom() * (
-      MAP_FALLBACK_LANE_DISTANCE_MAX - MAP_FALLBACK_LANE_DISTANCE_MIN
+  const conservativeFlowDistanceFor = () => (
+    MAP_CONSERVATIVE_FLOW_DISTANCE_MIN + mapRandom() * (
+      MAP_CONSERVATIVE_FLOW_DISTANCE_MAX - MAP_CONSERVATIVE_FLOW_DISTANCE_MIN
     )
   );
-  let nextFlowDistance = safeForwardFlow
-    ? fallbackLaneDistanceFor() : flowDistanceFor();
+  let nextFlowDistance = conservativeFlow
+    ? conservativeFlowDistanceFor() : flowDistanceFor();
   let verticalFlowTrend = 0;
   let verticalFlowStreak = 0;
   let lastHorizontalJumpGroup = -4;
@@ -1849,22 +1888,6 @@ function generateMapCandidate(safeForwardFlow = false) {
     minimumFirstTread = 0,
   ) => {
     const pathLength = Math.abs(exitX - entryX);
-    if (safeForwardFlow) {
-      const platform = addPlatform(
-        entryX,
-        exitX,
-        startLevel,
-        type,
-        pathGroup,
-      );
-      platform.routeRole = "main";
-      distanceSinceDip += pathLength;
-      return {
-        endLevel: startLevel,
-        endPlatform: platform,
-        pattern: "fallback-lane",
-      };
-    }
     const forceDip = (
       pathGroup > 0 &&
       elevationChange >= 0 &&
@@ -1947,9 +1970,7 @@ function generateMapCandidate(safeForwardFlow = false) {
     );
     const layout = useHorizontalJumpPath
       ? { levels: [currentLevel], mergeLevel: currentLevel }
-      : safeForwardFlow
-        ? { levels: [currentLevel], mergeLevel: currentLevel }
-        : chooseRouteLayout(currentLevel, branchLength);
+      : chooseRouteLayout(currentLevel, branchLength);
     const hasSubPath = !useHorizontalJumpPath && layout.levels.length === 2;
     const routeData = [];
     let branchExitLevel = layout.mergeLevel;
@@ -2072,19 +2093,19 @@ function generateMapCandidate(safeForwardFlow = false) {
       traveledDistance < WORLD_LENGTH - 1400
     );
     if (shouldChangeFlow) {
-      const transition = safeForwardFlow ? {
-        direction: -direction,
-        horizontal: "reverse",
-        vertical: "up",
-        verticalTrend: 1,
-        levelOffset: -MAP_FALLBACK_LANE_LEVEL_OFFSET,
-        gap: MAP_FALLBACK_LANE_GAP,
-      } : chooseMapFlowTransition(
+      const transition = chooseMapFlowTransition(
           direction,
           branchExitLevel,
           verticalFlowTrend,
           verticalFlowStreak,
+          conservativeFlow
+            ? MAP_CONSERVATIVE_REVERSE_CHANCE
+            : MAP_FLOW_REVERSE_CHANCE,
         );
+      if (monotonicFlow && transition.horizontal === "reverse") {
+        transition.direction = direction;
+        transition.horizontal = "forward";
+      }
       if (
         transition.horizontal === "reverse" &&
         MID_BOSS_ENABLED
@@ -2107,8 +2128,8 @@ function generateMapCandidate(safeForwardFlow = false) {
       }
       distanceSinceFlowChange = 0;
       distanceSinceDip = 0;
-      nextFlowDistance = safeForwardFlow
-        ? fallbackLaneDistanceFor() : flowDistanceFor();
+      nextFlowDistance = conservativeFlow
+        ? conservativeFlowDistanceFor() : flowDistanceFor();
     } else {
       const exitGaps = [0, 24, 42, 62, 82, 102, 122];
       const exitGap = exitGaps[Math.floor(mapRandom() * exitGaps.length)];

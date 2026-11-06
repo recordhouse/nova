@@ -81,6 +81,12 @@ function validateMap(game) {
       turret.platform, turret.x, TURRET)).length,
     routeIds: branches.flatMap(b=>b.routes.flatMap(r=>r.platforms??[])),
     reversals: branches.filter(b=>b.flowTransition?.horizontal==='reverse').length,
+    forwards: branches.filter(b=>b.flowTransition?.horizontal==='forward').length,
+    transitionProfiles: new Set(branches.filter(b=>b.flowTransition).map(b=>(
+      b.flowTransition.horizontal+':' +
+      Math.round((b.flowTransition.levelOffset??0)*10)/10
+    ))).size,
+    mode: generatedMapMode,
     connectionLimit: MAIN_PATH_MAX_CONNECTION_HEIGHT,
   }))()`, game);
   const ids = new Set(data.roads.map((road) => road.id));
@@ -160,12 +166,27 @@ for (const landscape of [false, true]) {
 
 test("bounded fallback also produces clear roads and valid boss placement", () => {
   const game = createGame();
+  let successfulCandidates = 0;
   for (let map = 0; map < 20; map += 1) {
-    assert.equal(vm.runInContext("generateMapCandidate(true)", game), true);
-    assert.ok(validateMap(game).reversals > 0,
-      "the safe fallback must use reachable serpentine lanes instead of one straight line");
+    if (!vm.runInContext("generateMapCandidate('conservative')", game)) continue;
+    const data = validateMap(game);
+    successfulCandidates += 1;
+    assert.ok(data.reversals >= 3);
+    assert.ok(data.forwards >= 3);
+    assert.ok(data.transitionProfiles >= 3,
+      "conservative maps must retain irregular flow instead of stacked parallel lines");
   }
-  vm.runInContext("generateMapCandidate = (() => { const original=generateMapCandidate; return safe => safe ? original(true) : false; })()", game);
+  assert.ok(successfulCandidates >= 10,
+    "conservative generation must succeed often enough for a bounded retry");
+  vm.runInContext(`generateMapCandidate = ((original) => (mode) => {
+    if (mode === 'normal') return false;
+    if (mode === 'monotonic') throw new Error('conservative retries exhausted');
+    return original(mode);
+  })(generateMapCandidate)`, game);
   vm.runInContext("resetGame()", game);
-  assert.ok(validateMap(game).reversals > 0);
+  const fallback = validateMap(game);
+  assert.equal(fallback.mode, "conservative");
+  assert.ok(fallback.reversals >= 3);
+  assert.ok(fallback.forwards >= 3);
+  assert.ok(fallback.transitionProfiles >= 3);
 });
