@@ -414,16 +414,11 @@ function updatePlayer(dt) {
   } else {
     player.coyoteTime = Math.max(0, player.coyoteTime - dt);
   }
-  const horizontalInput = downForThisFrame
+  const horizontalInput = downForThisFrame || (controls.down && player.grounded)
     ? 0
     : Number(controls.right) - Number(controls.left);
-  const continuingRunWithDown = (
-    !downForThisFrame && controls.down && player.grounded &&
-    Math.abs(player.vx) > 1
-  );
   const crouchInputEligible = (
-    !downForThisFrame && controls.down && player.grounded &&
-    !continuingRunWithDown
+    !downForThisFrame && controls.down && player.grounded
   );
   player.crouchInputTime = crouchInputEligible
     ? Math.min(
@@ -446,16 +441,13 @@ function updatePlayer(dt) {
     !player.crouching &&
     (player.grounded || canUseCoyoteJump || player.airJumpAvailable)
   );
-  const preservedDownRunDirection = continuingRunWithDown && horizontalInput === 0
-    ? Math.sign(player.vx)
-    : horizontalInput;
   const groundFireAction = (
     !downForThisFrame && controls.fire && player.grounded &&
     !PLAYER_RUNNING_FIRE_ENABLED
   );
   const move = player.crouching || groundFireAction
     ? 0
-    : preservedDownRunDirection;
+    : horizontalInput;
   const canReverseOnGround = player.grounded && !canStartJump && move !== 0;
   const canStopSkid = (
     player.grounded && !canStartJump && !downForThisFrame &&

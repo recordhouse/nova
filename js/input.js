@@ -244,6 +244,13 @@ testBossButton?.addEventListener("click", (event) => {
   movePlayerToFinalBoss();
 });
 
+for (const button of testBossAttackButtons) {
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    triggerTestFinalBossAttack(button.dataset.testBossAttack);
+  });
+}
+
 testLoadingButton?.addEventListener("click", (event) => {
   event.preventDefault();
   if (typeof previewTestLoadingScreen === "function") {

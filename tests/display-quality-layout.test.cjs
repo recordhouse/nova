@@ -183,7 +183,7 @@ test("the final boss switches to the five-frame run sheet only while moving", ()
   assert.equal(draw.args[0], standImage);
 });
 
-test("the boss map leaves the background untouched and makes only the road massive and red", () => {
+test("the boss map leaves the background untouched and renders a detailed rust-blood road", () => {
   const { scope, calls, gradients } = createDisplay();
   read(scope, `
     currentArea='stage';
@@ -213,9 +213,38 @@ test("the boss map leaves the background untouched and makes only the road massi
   const source = fs.readFileSync(path.join(__dirname, "..", "js", "renderer.js"), "utf8");
   assert.doesNotMatch(source, /drawBossBackgroundAtmosphere/);
   assert.match(source, /function drawBossRoadFoundation\(platform\)/);
+  assert.match(source, /function drawBossRustBloodSurface\(platform\)/);
+  assert.match(source, /#8b351d/);
+  assert.match(source, /#700713/);
   assert.match(source, /const bossDeckPalettes = \[/);
-  assert.match(source, /const bossRailColors = \["#ff6a78", "#ff8a79", "#ea4568"\]/);
+  assert.match(source, /const bossRailColors = \["#b64d36", "#cf623d", "#9f342f"\]/);
   assert.match(source, /if \(currentArea !== "boss"\) drawPlatformLights\(platform\)/);
+});
+
+test("rust, blood, scratches and rivets render on both flat and sloped boss roads", () => {
+  const { scope, calls } = createDisplay();
+  read(scope, `
+    currentArea='boss'; cameraX=0; cameraY=0;
+    platformFeatureNoise=()=>0.86;
+    platformSurfaceY=(platform,x)=>platform.kind==='ramp'
+      ? platform.entryY+(platform.exitY-platform.entryY)*
+        ((x-platform.entryX)/(platform.exitX-platform.entryX))
+      : platform.y;
+  `);
+  scope.drawBossRustBloodSurface({
+    id: 1, kind: "flat", start: 0, end: 500, y: 600,
+    bossRustBloodRoad: true,
+  });
+  scope.drawBossRustBloodSurface({
+    id: 2, kind: "ramp", start: 500, end: 900,
+    entryX: 500, exitX: 900, entryY: 600, exitY: 540,
+    bossRustBloodRoad: true,
+  });
+  assert.ok(calls.some((call) => call.operation === "fill" && call.color === "#8b351d"));
+  assert.ok(calls.some((call) => call.operation === "fill" && call.color === "#700713"));
+  assert.ok(calls.some((call) => call.operation === "fillRect" && call.color === "#941426"));
+  assert.ok(calls.some((call) => call.operation === "rotate" && call.args[0] < 0));
+  assert.ok(calls.filter((call) => call.operation === "fillRect").length >= 20);
 });
 
 test("the final boss gathers energy at its mouth and renders one powerful angled beam", () => {
@@ -238,14 +267,31 @@ test("the final boss gathers energy at its mouth and renders one powerful angled
     x:300,y:240,width:250,height:250,hp:120,maxHp:120,
     facing:-1,animationTime:0,finalBoss:true,
     attackState:'fire',chargeProgress:1,fireProgress:0.3,
-    beamDirectionX:-0.9,beamDirectionY:0.435
+    beamDirectionX:-0.9,beamDirectionY:0.435,
+    beamTravelDistance:180
   })`);
   assert.ok(gradients.some((gradient) =>
     gradient.operation === "createLinearGradient"));
-  const beamPoints = calls.filter((call) => call.operation === "lineTo");
-  assert.ok(beamPoints.length >= 17);
-  assert.ok(beamPoints.some((call) => call.args[0] < -700 && call.args[1] > 700));
+  const shortBeamPoints = calls.filter((call) => call.operation === "lineTo");
+  const shortBeamMinimumX = Math.min(...shortBeamPoints.map((call) => call.args[0]));
+  assert.ok(shortBeamPoints.length >= 17);
+  assert.ok(shortBeamMinimumX > 130);
   assert.ok(calls.filter((call) => call.operation === "stroke").length >= 4);
+
+  calls.length = 0;
+  gradients.length = 0;
+  read(scope, `drawFinalBossStand({
+    x:300,y:240,width:250,height:250,hp:120,maxHp:120,
+    facing:-1,animationTime:0,finalBoss:true,
+    attackState:'fire',chargeProgress:1,fireProgress:0.3,
+    beamDirectionX:-0.9,beamDirectionY:0.435,
+    beamTravelDistance:900
+  })`);
+  const longBeamPoints = calls.filter((call) => call.operation === "lineTo");
+  const longBeamMinimumX = Math.min(...longBeamPoints.map((call) => call.args[0]));
+  assert.ok(longBeamMinimumX < shortBeamMinimumX - 500);
+  assert.equal(read(scope, "FINAL_BOSS.beamSpeed"), 3000);
+  assert.equal(read(scope, "FINAL_BOSS.beamRadius"), 20);
 });
 
 test("the longer final-boss ground wave uses layered neon shells and sparks", () => {
@@ -259,6 +305,59 @@ test("the longer final-boss ground wave uses layered neon shells and sparks", ()
   assert.ok(calls.filter((call) => call.operation === "stroke").length >= 12);
   assert.ok(calls.some((call) => call.shadowColor === "#ff285f"));
   assert.ok(calls.some((call) => call.strokeColor === "#fff7ff"));
+});
+
+test("the final-boss three-way projectile is rendered as a round purple laser orb", () => {
+  const { scope, calls, gradients } = createDisplay();
+  read(scope, `enemyBullets.push({
+    kind:'final-boss-fan',x:360,y:300,vx:-730,vy:0,radius:13,life:5.5
+  }); gameTime=1;`);
+  calls.length = 0;
+  gradients.length = 0;
+  scope.drawProjectiles();
+  assert.ok(calls.filter((call) => call.operation === "arc").length >= 2);
+  assert.ok(gradients.some((gradient) => (
+    gradient.operation === "createRadialGradient" &&
+    gradient.stops.some((stop) => stop.color === "#d9a8ff")
+  )));
+  assert.equal(calls.some((call) => call.operation === "lineTo"), false);
+});
+
+test("the final-boss jump has no extra effects before its landing shock rings", () => {
+  const { scope, calls, gradients } = createDisplay();
+  const image = { naturalWidth: 4400, naturalHeight: 800 };
+  scope.bossStandSprite = { loaded: true, image };
+  read(scope, `drawFinalBossStand({
+    x:440,y:250,width:250,height:250,hp:120,maxHp:120,
+    facing:-1,animationTime:0,finalBoss:true,
+    attackPattern:'jump-slam',attackState:'charge',chargeProgress:0.7,
+    jumpTargetX:160,jumpTargetY:250,jumpImpactTimer:0
+  })`);
+  assert.equal(calls.some((call) => call.operation === "quadraticCurveTo"), false);
+  assert.equal(calls.some((call) => call.operation === "ellipse"), false);
+  assert.equal(gradients.length, 0);
+
+  calls.length = 0;
+  gradients.length = 0;
+  read(scope, `drawFinalBossStand({
+    x:300,y:80,width:250,height:250,hp:120,maxHp:120,
+    facing:-1,animationTime:0,finalBoss:true,airborne:true,
+    attackPattern:'jump-slam',attackState:'fire',chargeProgress:1,
+    jumpTargetX:160,jumpTargetY:250,jumpImpactTimer:0
+  })`);
+  assert.equal(calls.some((call) => call.operation === "quadraticCurveTo"), false);
+  assert.equal(calls.some((call) => call.operation === "ellipse"), false);
+  assert.equal(gradients.length, 0);
+
+  calls.length = 0;
+  read(scope, `drawFinalBossStand({
+    x:160,y:250,width:250,height:250,hp:120,maxHp:120,
+    facing:-1,animationTime:0,finalBoss:true,
+    attackPattern:'jump-slam',attackState:'recovery',chargeProgress:0,
+    jumpTargetX:160,jumpTargetY:250,jumpImpactTimer:0.3
+  })`);
+  assert.ok(calls.filter((call) => call.operation === "ellipse").length >= 3);
+  assert.equal(calls.some((call) => call.operation === "lineTo"), false);
 });
 
 test("a phone's physical pixel density sets the canvas backing size", () => {
@@ -874,6 +973,31 @@ test("the ultimate aura centers on the finishing sprite and fades at its edge", 
   assert.equal(calls.filter((call) => call.operation === "arc").length, 1);
   assert.equal(calls.filter((call) => call.operation === "fill").length, 1);
   assert.equal(calls.filter((call) => call.operation === "stroke").length, 0);
+});
+
+test("the ultimate laser source glows on the finishing character's chest", () => {
+  const { scope, calls, gradients } = createDisplay();
+  read(scope, `
+    player.ultimateActive = true;
+    player.ultimateTime = PLAYER_ULTIMATE_LIFT_DURATION +
+      PLAYER_ULTIMATE_LASER_SWEEP_DURATION / 2;
+    player.x = 280;
+    player.y = 520;
+    player.facing = -1;
+    gameTime = 1;
+  `);
+  const chest = read(scope, "playerUltimateChestPosition()");
+  scope.drawPlayerUltimateChestGlow();
+
+  const translate = calls.find((call) => call.operation === "translate");
+  assert.deepEqual(translate.args, [chest.x, chest.y]);
+  assert.equal(gradients.length, 1);
+  assert.equal(gradients[0].operation, "createRadialGradient");
+  assert.match(gradients[0].stops[0].color, /255, 255, 255/);
+  assert.match(gradients[0].stops.at(-1).color, /, 0\)$/);
+  assert.equal(calls.filter((call) => call.operation === "fill").length, 2);
+  assert.equal(calls.filter((call) => call.operation === "stroke").length, 1);
+  assert.ok(calls.filter((call) => call.operation === "lineTo").length >= 2);
 });
 
 test("revival orbs and impact rays reuse glow sprites and skip offscreen particles", () => {

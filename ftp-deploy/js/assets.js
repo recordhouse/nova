@@ -3,8 +3,11 @@
 // Sprite and background image loading.
 
 const visualAssetLoadTasks = [];
+const audioAssetLoadTasks = [];
 let settledVisualAssetCount = 0;
 let failedVisualAssetCount = 0;
+let settledAudioAssetCount = 0;
+let failedAudioAssetCount = 0;
 
 function visualAssetLoadingSnapshot() {
   const total = visualAssetLoadTasks.length;
@@ -17,8 +20,19 @@ function visualAssetLoadingSnapshot() {
   };
 }
 
+function gameAssetLoadingSnapshot() {
+  const total = visualAssetLoadTasks.length + audioAssetLoadTasks.length;
+  const loaded = settledVisualAssetCount + settledAudioAssetCount;
+  return {
+    total,
+    loaded,
+    failed: failedVisualAssetCount + failedAudioAssetCount,
+    progress: total > 0 ? loaded / total : 1,
+  };
+}
+
 function updateInitialVisualLoadingUi() {
-  const snapshot = visualAssetLoadingSnapshot();
+  const snapshot = gameAssetLoadingSnapshot();
   const percentage = Math.max(0, Math.min(100, Math.round(snapshot.progress * 100)));
   if (
     typeof gameLoadingProgressElement !== "undefined" &&
@@ -31,6 +45,35 @@ function updateInitialVisualLoadingUi() {
     typeof gameLoadingPercentElement !== "undefined" &&
     gameLoadingPercentElement
   ) gameLoadingPercentElement.textContent = `${percentage}%`;
+}
+
+function registerAudioAsset(source, readyPromise) {
+  let resolveReady;
+  const task = {
+    kind: "audio",
+    source,
+    settled: false,
+    loaded: false,
+    promise: new Promise((resolve) => {
+      resolveReady = resolve;
+    }),
+    settle(loaded) {
+      if (task.settled) return;
+      task.settled = true;
+      task.loaded = Boolean(loaded);
+      settledAudioAssetCount += 1;
+      if (!task.loaded) failedAudioAssetCount += 1;
+      updateInitialVisualLoadingUi();
+      resolveReady(task);
+    },
+  };
+  audioAssetLoadTasks.push(task);
+  Promise.resolve(readyPromise).then(
+    (resource) => task.settle(Boolean(resource)),
+    () => task.settle(false),
+  );
+  updateInitialVisualLoadingUi();
+  return task;
 }
 
 function registerVisualAsset(kind, source) {
@@ -65,6 +108,20 @@ function visualAssetsAreReady() {
 function waitForVisualAssets() {
   return Promise.all(visualAssetLoadTasks.map((task) => task.promise))
     .then(() => visualAssetLoadingSnapshot());
+}
+
+function gameAssetsAreReady() {
+  return (
+    settledVisualAssetCount >= visualAssetLoadTasks.length &&
+    settledAudioAssetCount >= audioAssetLoadTasks.length
+  );
+}
+
+function waitForGameAssets() {
+  return Promise.all([
+    ...visualAssetLoadTasks.map((task) => task.promise),
+    ...audioAssetLoadTasks.map((task) => task.promise),
+  ]).then(() => gameAssetLoadingSnapshot());
 }
 
 function loadPlayerSprite(source, fps, frames) {
@@ -280,7 +337,7 @@ const enemyAttackVideoAssets = Object.freeze({
 });
 const monster2AttackVideoAsset = enemyAttackVideoAssets.monster2;
 const spaceBackgroundVideoAsset = loadVideoAsset(
-  "./assets/video/bg/space-optimized.mp4?v=20261019-2",
+  "./assets/video/bg/space_new-optimized.mp4?v=20261107-2",
 );
 let enemyAttackVideoCooldownUntil = -Infinity;
 const introducedEnemyVideoKinds = new Set();
@@ -544,6 +601,7 @@ function fetchSoundData(source) {
     : Promise.resolve(null);
 }
 
+const stageMusicData = fetchSoundData("./assets/music/stage_01.mp3?v=20260924-1");
 const playerGunSoundData = fetchSoundData("./assets/sound/gun.mp3");
 const playerGunImpactSoundData = fetchSoundData("./assets/sound/gun_impact.mp3?v=20261019-1");
 const gunHitSoundData = fetchSoundData("./assets/sound/gun_hit.mp3?v=20261019-1");
@@ -737,6 +795,78 @@ const enemyVideoVoiceSounds = Object.freeze({
   turret: createPreparedGameSound(
     enemyVideoVoiceData.turret, 0.68, 0, enemyVoiceOutput),
 });
+
+function registerPreparedAudioAsset(source, dataPromise, sound) {
+  return registerAudioAsset(
+    source,
+    gameAudioContext ? sound.decode : dataPromise,
+  );
+}
+
+registerAudioAsset("./assets/music/stage_01.mp3", stageMusicData);
+registerAudioAsset(
+  "./assets/sound/gun.mp3",
+  gameAudioContext ? playerGunSoundDecode : playerGunSoundData,
+);
+registerAudioAsset(
+  "./assets/sound/gun_impact.mp3",
+  gameAudioContext ? playerGunImpactSoundDecode : playerGunImpactSoundData,
+);
+registerPreparedAudioAsset("./assets/sound/gun_hit.mp3", gunHitSoundData, gunHitSound);
+for (let index = 0; index < metalHitSounds.length; index += 1) {
+  registerPreparedAudioAsset(
+    `./assets/sound/metal_0${index + 1}.mp3`,
+    metalHitSoundData[index],
+    metalHitSounds[index],
+  );
+}
+for (const [source, data, sound] of [
+  ["./assets/sound/laser.mp3", turretLaserSoundData, turretLaserSound],
+  ["./assets/sound/monster_die_01.mp3", monsterDie01SoundData, monsterDie01Sound],
+  ["./assets/sound/monster_die_03.mp3", monsterDie03SoundData, monsterDie03Sound],
+  ["./assets/sound/monster_die_01_01.mp3", monsterDie0101SoundData, monsterDie0101Sound],
+  ["./assets/sound/turret_die_01.mp3", turretDie01SoundData, turretDie01Sound],
+  ["./assets/sound/monster_fire_02.mp3", monsterFire02SoundData, monsterFire02Sound],
+  ["./assets/sound/resurrection.mp3", resurrectionSoundData, resurrectionSound],
+  ["./assets/sound/heart.mp3", heartPickupSoundData, heartPickupSound],
+  ["./assets/sound/shield.mp3", shieldSoundData, shieldSound],
+  ["./assets/sound/voice_female_start.mp3", femaleStartVoiceData, femaleStartVoice],
+  ["./assets/sound/voice_female_run.mp3", femaleRunVoiceData, femaleRunVoice],
+  ["./assets/sound/voice_female_end.mp3", femaleEndVoiceData, femaleEndVoice],
+  [
+    "./assets/sound/voice_female_resurrection.mp3",
+    femaleResurrectionVoiceData,
+    femaleResurrectionVoice,
+  ],
+]) registerPreparedAudioAsset(source, data, sound);
+for (let index = 0; index < femaleAttackVoices.length; index += 1) {
+  registerPreparedAudioAsset(
+    `./assets/sound/voice_female_attack_0${index + 1}.mp3`,
+    femaleAttackVoiceData[index],
+    femaleAttackVoices[index],
+  );
+}
+for (let index = 0; index < femaleDeathVoices.length; index += 1) {
+  registerPreparedAudioAsset(
+    `./assets/sound/voice_female_die_0${index + 1}.mp3`,
+    femaleDeathVoiceData[index],
+    femaleDeathVoices[index],
+  );
+}
+for (let index = 0; index < femaleFinishingVoices.length; index += 1) {
+  registerPreparedAudioAsset(
+    `./assets/sound/voice_female_finishing_0${index + 1}.mp3`,
+    femaleFinishingVoiceData[index],
+    femaleFinishingVoices[index],
+  );
+}
+for (const kind of Object.keys(enemyVideoVoiceSounds)) {
+  registerPreparedAudioAsset(
+    `./assets/sound/voice_${kind}.mp3`,
+    enemyVideoVoiceData[kind],
+    enemyVideoVoiceSounds[kind],
+  );
+}
 let lastMetalHitSoundIndex = -1;
 
 function createSharedGameSoundChannel(volume) {
@@ -1143,4 +1273,7 @@ window.addEventListener("keydown", prepareGameAudio, {
   once: true,
 });
 
-const fixedBackground = loadImageAsset("./assets/images/bg/space.png");
+const fixedBackground = loadImageAssetWithFallback([
+  "./assets/images/bg/space.png",
+  "./ftp-deploy/assets/images/bg/space.png",
+]);

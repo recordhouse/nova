@@ -44,6 +44,7 @@ function createGame() {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "js", `${name}.js`), "utf8"),
       scope, { filename: `${name}.js` });
   }
+  vm.runInContext("if (platforms.length === 0) resetGame();", scope);
   const generated = vm.runInContext(`({
     monster3: enemies.filter((enemy) => enemy.kind === "monster3").length,
     hearts: heartItems.length,

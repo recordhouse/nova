@@ -96,7 +96,7 @@ test("optimized action videos randomize and keep their playback lifecycles", asy
   assert.equal(turretVideo.src,
     "./assets/video/monsters/turret-attack-optimized.mp4?v=20261015-1");
   assert.equal(spaceVideo.src,
-    "./assets/video/bg/space-optimized.mp4?v=20261019-2");
+    "./assets/video/bg/space_new-optimized.mp4?v=20261107-2");
   assert.equal(spaceVideo.muted, true);
   assert.equal(spaceVideo.loop, true);
   assert.equal(spaceVideo.loadCalls, 2,

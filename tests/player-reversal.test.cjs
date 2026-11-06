@@ -103,29 +103,31 @@ test("a sustained run builds speed to a cap and coasts to a stop", () => {
   assert.equal(read(scope, "player.runSpeed"), startingSpeed);
 });
 
-test("holding the joystick down during a run keeps moving and looks below", () => {
+test("pressing down during a run brakes and crouches even while forward stays held", () => {
   const { scope } = createGame();
   read(scope, "fixtureRoad.end=10000; maxWorldX=10000; controls.right=true");
   for (let i = 0; i < 90; i += 1) scope.updatePlayer(frame);
   const runningSpeed = read(scope, "player.vx");
   const runningX = read(scope, "player.x");
 
-  read(scope, "controls.right=false; controls.down=true");
-  for (let i = 0; i < 60; i += 1) scope.updatePlayer(frame);
+  read(scope, "controls.down=true");
+  scope.updatePlayer(frame);
+  assert.ok(read(scope, "player.vx") < runningSpeed,
+    "down immediately starts braking instead of preserving run input");
+  for (let i = 0; i < 19; i += 1) scope.updatePlayer(frame);
 
-  assert.ok(read(scope, "player.x") > runningX + runningSpeed * 0.8,
-    "down-look keeps the existing run direction instead of stopping");
-  assert.ok(read(scope, "player.vx") >= runningSpeed);
-  assert.equal(read(scope, "player.crouching"), false,
-    "a moving player keeps the running pose while looking down");
+  assert.equal(read(scope, "player.vx"), 0);
+  assert.ok(read(scope, "player.x") < runningX + runningSpeed * 0.25,
+    "the player stops near the point where down was pressed");
+  assert.equal(read(scope, "player.crouching"), true,
+    "holding down finishes in the crouching pose");
   assert.ok(read(scope, "player.crouchCameraLookTime") > 0,
-    "the lower camera view still activates during the run");
+    "the lower camera view still activates while crouching");
 
-  const heldSpeed = read(scope, "player.vx");
   read(scope, "controls.down=false");
   scope.updatePlayer(frame);
-  assert.ok(read(scope, "player.vx") < heldSpeed,
-    "releasing the joystick starts the normal stopping behavior");
+  assert.ok(read(scope, "player.vx") > 0,
+    "releasing down resumes the still-held forward input");
 });
 
 test("the run-animation clock accelerates with movement and slows during a skid", () => {

@@ -136,9 +136,9 @@ test("road conflict geometry preserves joins and handles crossing slopes and tri
 
 const mapCount = Number(process.env.NOVA_MAP_TEST_COUNT ?? 200);
 
-test("the stage terrain runs twice the former distance before the boss gate", () => {
+test("the stage terrain runs three times the previous distance before the boss gate", () => {
   const game = createGame();
-  assert.equal(vm.runInContext("WORLD_LENGTH", game), 104000);
+  assert.equal(vm.runInContext("WORLD_LENGTH", game), 312000);
   vm.runInContext("resetGame()", game);
   validateMap(game);
 });
@@ -149,7 +149,10 @@ for (const landscape of [false, true]) {
     let reversals = 0;
     for (let map = 0; map < mapCount; map += 1) {
       vm.runInContext("resetGame()", game);
-      reversals += validateMap(game).reversals;
+      const mapReversals = validateMap(game).reversals;
+      assert.ok(mapReversals > 0,
+        "every generated map must change direction instead of becoming one straight line");
+      reversals += mapReversals;
     }
     assert.ok(reversals > 0, "normal maps must retain random left/right reversals");
   });
@@ -159,9 +162,10 @@ test("bounded fallback also produces clear roads and valid boss placement", () =
   const game = createGame();
   for (let map = 0; map < 20; map += 1) {
     assert.equal(vm.runInContext("generateMapCandidate(true)", game), true);
-    assert.equal(validateMap(game).reversals, 0);
+    assert.ok(validateMap(game).reversals > 0,
+      "the safe fallback must use reachable serpentine lanes instead of one straight line");
   }
   vm.runInContext("generateMapCandidate = (() => { const original=generateMapCandidate; return safe => safe ? original(true) : false; })()", game);
   vm.runInContext("resetGame()", game);
-  validateMap(game);
+  assert.ok(validateMap(game).reversals > 0);
 });

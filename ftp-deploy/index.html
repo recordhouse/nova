@@ -38,29 +38,24 @@
     <link rel="preload" href="./assets/sound/voice_monster_03.mp3?v=20261021-1" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/voice_turret_01.mp3?v=20261021-1" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/music/stage_01.mp3?v=20260924-1" as="audio" />
-    <link rel="stylesheet" href="./styles.css?v=20261104-2" />
+    <link rel="stylesheet" href="./styles.css?v=20261106-3" />
   </head>
   <body>
     <main class="game-shell" aria-label="NOVA 게임 프로토타입">
-      <section class="game-loading" data-game-loading aria-label="게임 이미지와 영상 로딩 중">
+      <section class="game-loading" data-game-loading aria-label="모든 게임 리소스 로딩 중">
+        <div class="game-loading-grid" aria-hidden="true"></div>
         <div class="game-loading-panel">
-          <div class="game-loading-logo" aria-hidden="true">NOVA</div>
-          <div class="game-loading-status">
-            <span>LOADING</span>
-            <output data-game-loading-percent>0%</output>
-          </div>
           <div
             class="game-loading-track"
             data-game-loading-progress
             role="progressbar"
-            aria-label="이미지와 영상 로딩 진행률"
+            aria-label="이미지 영상 음원 로딩 진행률"
             aria-valuemin="0"
             aria-valuemax="100"
             aria-valuenow="0"
           >
             <span class="game-loading-fill"></span>
           </div>
-          <div class="game-loading-caption">VISUAL ASSETS</div>
         </div>
       </section>
       <canvas id="game" width="720" height="1280" aria-label="게임 화면"></canvas>
@@ -115,6 +110,18 @@
         >
           BOSS
         </button>
+        <button type="button" class="test-boss-attack-button beam"
+          data-test-boss-attack="beam" aria-label="보스 직선 레이저 공격 실행" hidden>B·BEAM</button>
+        <button type="button" class="test-boss-attack-button fan"
+          data-test-boss-attack="fan" aria-label="보스 3방향 구형 레이저 공격 실행" hidden>B·ORB</button>
+        <button type="button" class="test-boss-attack-button rain"
+          data-test-boss-attack="rain" aria-label="보스 낙하 레이저 공격 실행" hidden>B·RAIN</button>
+        <button type="button" class="test-boss-attack-button ground-wave"
+          data-test-boss-attack="ground-wave" aria-label="보스 지면 충격파 공격 실행" hidden>B·WAVE</button>
+        <button type="button" class="test-boss-attack-button dash"
+          data-test-boss-attack="dash" aria-label="보스 돌진 공격 실행" hidden>B·DASH</button>
+        <button type="button" class="test-boss-attack-button jump-slam"
+          data-test-boss-attack="jump-slam" aria-label="보스 점프 강타 공격 실행" hidden>B·JUMP</button>
         <button
           type="button"
           class="test-loading-button"
@@ -241,15 +248,15 @@
       </section>
     </main>
 
-    <script src="./js/config.js?v=20261106-2"></script>
-    <script src="./js/assets.js?v=20261105-2"></script>
+    <script src="./js/config.js?v=20261107-2"></script>
+    <script src="./js/assets.js?v=20261107-2"></script>
     <script src="./js/state.js?v=20261101-1"></script>
-    <script src="./js/world.js?v=20261106-1"></script>
-    <script src="./js/combat.js?v=20261106-2"></script>
-    <script src="./js/player.js?v=20261101-1"></script>
-    <script src="./js/enemies.js?v=20261106-2"></script>
-    <script src="./js/renderer.js?v=20261106-2"></script>
-    <script src="./js/input.js?v=20261104-2"></script>
-    <script src="./js/main.js?v=20261104-1"></script>
+    <script src="./js/world.js?v=20261107-3"></script>
+    <script src="./js/combat.js?v=20261106-3"></script>
+    <script src="./js/player.js?v=20261106-1"></script>
+    <script src="./js/enemies.js?v=20261106-6"></script>
+    <script src="./js/renderer.js?v=20261106-8"></script>
+    <script src="./js/input.js?v=20261106-1"></script>
+    <script src="./js/main.js?v=20261106-2"></script>
   </body>
 </html>

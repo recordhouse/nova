@@ -18,6 +18,7 @@ function sourceIsEnemyAttack(source) {
     "final-boss-fan",
     "final-boss-rain",
     "final-boss-wave",
+    "final-boss-jump",
     "boss",
   ].includes(source?.kind);
 }

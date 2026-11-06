@@ -87,10 +87,10 @@ button {
   display: grid;
   place-items: center;
   overflow: hidden;
-  color: #dffcff;
+  color: #eaffff;
   background:
-    radial-gradient(circle at 50% 45%, rgb(74 25 105 / 42%) 0%, transparent 35%),
-    linear-gradient(180deg, #08040f 0%, #020407 58%, #040108 100%);
+    radial-gradient(circle at 50% 48%, rgb(116 26 163 / 38%) 0%, transparent 42%),
+    linear-gradient(180deg, #090213 0%, #02050c 52%, #05010c 100%);
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -100,15 +100,30 @@ button {
 .game-loading::before {
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(
-    180deg,
-    rgb(126 226 240 / 3%) 0,
-    rgb(126 226 240 / 3%) 1px,
-    transparent 1px,
-    transparent 5px
-  );
+  z-index: 2;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgb(150 247 255 / 5%) 0,
+      rgb(150 247 255 / 5%) 1px,
+      transparent 1px,
+      transparent 4px
+    );
   content: "";
   pointer-events: none;
+}
+
+.game-loading::after {
+  position: absolute;
+  z-index: 1;
+  top: -20%;
+  right: 0;
+  left: 0;
+  height: 16%;
+  background: linear-gradient(180deg, transparent, rgb(94 240 255 / 8%), transparent);
+  content: "";
+  pointer-events: none;
+  animation: game-loading-scan 3.2s steps(18, end) infinite;
 }
 
 .game-loading.complete {
@@ -117,96 +132,90 @@ button {
   pointer-events: none;
 }
 
+.game-loading-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgb(102 229 255 / 6%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(102 229 255 / 6%) 1px, transparent 1px),
+    linear-gradient(rgb(219 78 255 / 4%) 2px, transparent 2px),
+    linear-gradient(90deg, rgb(219 78 255 / 4%) 2px, transparent 2px);
+  background-position: center;
+  background-size: 24px 24px, 24px 24px, 96px 96px, 96px 96px;
+  mask-image: radial-gradient(circle at center, #000 8%, transparent 78%);
+}
+
 .game-loading-panel {
   position: relative;
-  width: min(68%, 420px);
+  z-index: 3;
+  width: min(72%, 480px);
   min-width: 220px;
-  padding: 20px 22px 18px;
-  border: 1px solid rgb(144 225 238 / 34%);
-  background: rgb(4 8 14 / 76%);
-  box-shadow:
-    0 0 30px rgb(154 70 220 / 22%),
-    inset 0 0 18px rgb(90 210 230 / 7%);
-  clip-path: polygon(
-    10px 0,
-    calc(100% - 10px) 0,
-    100% 10px,
-    100% calc(100% - 10px),
-    calc(100% - 10px) 100%,
-    10px 100%,
-    0 calc(100% - 10px),
-    0 10px
-  );
-}
-
-.game-loading-logo {
-  margin-bottom: 16px;
-  color: #efd9ff;
-  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
-  font-size: clamp(30px, 8vw, 54px);
-  letter-spacing: 0.18em;
-  line-height: 1;
-  text-align: center;
-  text-indent: 0.18em;
-  text-shadow:
-    0 0 7px rgb(199 126 255 / 72%),
-    2px 2px 0 #3a1554;
-}
-
-.game-loading-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 7px;
-  color: #bdeef4;
-  font-family: "Arial Narrow", Arial, sans-serif;
-  font-size: clamp(10px, 2.4vw, 13px);
-  font-weight: 900;
-  letter-spacing: 0.16em;
-}
-
-.game-loading-status output {
-  color: #f4e7ff;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.08em;
 }
 
 .game-loading-track {
   --loading-progress: 0%;
 
   position: relative;
-  height: clamp(12px, 2.6vw, 16px);
+  height: clamp(18px, 3.8vw, 24px);
   overflow: hidden;
-  border: 1px solid rgb(149 223 237 / 48%);
-  background: rgb(1 5 9 / 88%);
-  box-shadow: inset 0 0 8px rgb(0 0 0 / 82%);
+  border: 2px solid #66eaf7;
+  background:
+    repeating-linear-gradient(90deg, #060915 0 13px, #0d1020 13px 16px);
+  box-shadow:
+    0 0 10px rgb(77 234 255 / 38%),
+    inset 0 0 10px #000;
+}
+
+.game-loading-track::after {
+  position: absolute;
+  inset: 3px;
+  z-index: 2;
+  border: 1px solid rgb(255 255 255 / 12%);
+  content: "";
+  pointer-events: none;
 }
 
 .game-loading-fill {
+  position: relative;
   display: block;
   width: var(--loading-progress);
   height: 100%;
   background:
     repeating-linear-gradient(
       90deg,
-      transparent 0,
-      transparent 8px,
-      rgb(3 13 18 / 54%) 8px,
-      rgb(3 13 18 / 54%) 10px
+      #bd43f2 0 11px,
+      #e56bff 11px 13px,
+      transparent 13px 16px
     ),
-    linear-gradient(90deg, #7435a8 0%, #bf72eb 48%, #86edf5 100%);
-  box-shadow: 0 0 13px rgb(132 232 246 / 62%);
-  transition: width 160ms ease-out;
+    linear-gradient(90deg, #7a20b8 0%, #dc52ff 58%, #6ff5ff 100%);
+  box-shadow:
+    0 0 14px #ce4fff,
+    0 0 22px rgb(74 235 255 / 55%),
+    inset 0 0 5px #fff;
+  transition: width 120ms steps(10, end);
 }
 
-.game-loading-caption {
-  margin-top: 8px;
-  color: rgb(155 203 213 / 58%);
-  font-family: "Arial Narrow", Arial, sans-serif;
-  font-size: clamp(8px, 1.9vw, 10px);
-  font-weight: 800;
-  letter-spacing: 0.28em;
-  text-align: right;
+.game-loading-fill::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 7px;
+  height: 100%;
+  background: #efffff;
+  box-shadow: 0 0 9px #fff, 0 0 16px #7af6ff;
+  content: "";
+}
+
+@keyframes game-loading-scan {
+  from { transform: translateY(0); }
+  to { transform: translateY(750%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-loading::after {
+    animation: none;
+  }
 }
 
 #game {
@@ -243,6 +252,7 @@ button {
 .test-map-button,
 .test-portal-button,
 .test-boss-button,
+.test-boss-attack-button,
 .test-loading-button,
 .test-music-button,
 .test-invincibility-button,
@@ -287,6 +297,7 @@ button {
 .test-map-button:active,
 .test-portal-button:active,
 .test-boss-button:active,
+.test-boss-attack-button:active,
 .test-loading-button:active,
 .test-music-button:active,
 .test-invincibility-button:active,
@@ -329,6 +340,17 @@ button {
   color: #ffd5e6;
   border-color: rgb(255 88 143 / 86%);
   background: rgb(169 34 87 / 16%);
+}
+
+.test-boss-attack-button {
+  min-width: 66px;
+  color: #f4ddff;
+  border-color: rgb(210 135 255 / 88%);
+  background: rgb(115 40 170 / 18%);
+}
+
+.test-boss-attack-button[hidden] {
+  display: none;
 }
 
 .test-loading-button {

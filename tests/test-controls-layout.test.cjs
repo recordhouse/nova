@@ -65,6 +65,18 @@ test("test controls include a direct final-boss preview button", () => {
   assert.match(input, /movePlayerToFinalBoss\(\)/);
 });
 
+test("test controls expose all six final-boss attacks after the boss appears", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+  const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
+  for (const pattern of ["beam", "fan", "rain", "ground-wave", "dash", "jump-slam"]) {
+    assert.match(html, new RegExp(`data-test-boss-attack="${pattern}"`));
+  }
+  assert.match(css, /\.test-boss-attack-button\[hidden\]\s*\{[^}]*display:\s*none/s);
+  assert.match(input, /for \(const button of testBossAttackButtons\)/);
+  assert.match(input, /triggerTestFinalBossAttack\(button\.dataset\.testBossAttack\)/);
+});
+
 test("touch controls place ultimate above jump to the left of fire with uppercase labels", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");

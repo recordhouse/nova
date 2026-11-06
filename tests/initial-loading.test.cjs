@@ -6,16 +6,21 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-test("the initial screen contains a visual-asset loading bar", () => {
+test("the initial screen uses a neon pixel-art all-resource loading bar", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
   assert.match(html, /data-game-loading/);
   assert.match(html, /data-game-loading-progress/);
-  assert.match(html, /data-game-loading-percent>0%/);
   assert.match(html, /role="progressbar"/);
+  assert.doesNotMatch(html, /data-game-loading-percent/);
+  assert.doesNotMatch(html, /SYSTEM \/\/ NEON BOOT|LOADING RESOURCES|NOVA<\/div>/);
+  assert.doesNotMatch(html, /IMAGE \/\/ VIDEO \/\/ AUDIO|MEMORY LINK/);
   assert.match(css, /\.game-loading\s*\{[^}]*z-index:\s*12/s);
   assert.match(css, /\.game-loading-fill\s*\{[^}]*width:\s*var\(--loading-progress\)/s);
   assert.match(css, /\.game-loading\.complete\s*\{[^}]*visibility:\s*hidden/s);
+  assert.doesNotMatch(css, /game-loading-logo|game-loading-kicker|game-loading-caption/);
+  assert.match(css, /repeating-linear-gradient/);
+  assert.match(css, /steps\(10, end\)/);
 });
 
 test("both boss sheets contain five high-resolution frames", () => {
@@ -36,7 +41,7 @@ test("both boss sheets contain five high-resolution frames", () => {
   }
 });
 
-test("all registered images and videos advance one shared loading progress", async () => {
+test("images, videos and audio must all settle before shared loading reaches 100%", async () => {
   const images = [];
   const videos = [];
   const styleValues = new Map();
@@ -48,6 +53,7 @@ test("all registered images and videos advance one shared loading progress", asy
   const percent = { textContent: "0%" };
   const loading = {};
   const canvas = { getContext: () => ({ setTransform() {} }) };
+  const pendingAudioFetches = [];
 
   class FakeImage {
     constructor() { images.push(this); }
@@ -95,6 +101,14 @@ test("all registered images and videos advance one shared loading progress", asy
       matchMedia: () => ({ matches: false }),
       addEventListener() {},
     },
+    fetch(source) {
+      return new Promise((resolve) => {
+        pendingAudioFetches.push(() => resolve({
+          ok: true,
+          arrayBuffer: () => Promise.resolve({ source }),
+        }));
+      });
+    },
   };
   vm.createContext(scope);
   for (const name of ["config", "assets"]) {
@@ -106,11 +120,18 @@ test("all registered images and videos advance one shared loading progress", asy
   }
 
   assert.equal(vm.runInContext("visualAssetLoadTasks.length", scope), 35);
+  assert.equal(vm.runInContext("audioAssetLoadTasks.length", scope), 32);
+  assert.equal(pendingAudioFetches.length, 32);
   assert.equal(images.length, 20);
   assert.equal(videos.length, 15);
   assert.equal(scope.visualAssetsAreReady(), false);
+  assert.equal(scope.gameAssetsAreReady(), false);
   assert.equal(percent.textContent, "0%");
-  const ready = scope.waitForVisualAssets();
+  let gameReady = false;
+  const ready = scope.waitForGameAssets().then((snapshot) => {
+    gameReady = true;
+    return snapshot;
+  });
 
   const bossImage = images.find((image) => image.currentSrc.includes("images/boss/stand.png"));
   const bossRunImage = images.find((image) => image.currentSrc.includes("images/boss/run.png"));
@@ -130,18 +151,26 @@ test("all registered images and videos advance one shared loading progress", asy
   for (let index = 0; index < videos.length; index += 1) {
     videos[index].emit(index === videos.length - 1 ? "error" : "loadeddata");
   }
+  await Promise.resolve();
+  assert.equal(scope.visualAssetsAreReady(), true);
+  assert.equal(scope.gameAssetsAreReady(), false);
+  assert.equal(gameReady, false);
+  assert.equal(styleValues.get("--loading-progress"), "52%");
+
+  for (const releaseFetch of pendingAudioFetches) releaseFetch();
   const snapshot = await ready;
   assert.deepEqual(
     { total: snapshot.total, loaded: snapshot.loaded, failed: snapshot.failed },
-    { total: 35, loaded: 35, failed: 1 },
+    { total: 67, loaded: 67, failed: 1 },
   );
-  assert.equal(scope.visualAssetsAreReady(), true);
+  assert.equal(scope.gameAssetsAreReady(), true);
+  assert.equal(gameReady, true);
   assert.equal(styleValues.get("--loading-progress"), "100%");
   assert.equal(attributes["aria-valuenow"], "100");
   assert.equal(percent.textContent, "100%");
 });
 
-test("the game runtime waits for visual assets and hides loading after its first frame", async () => {
+test("the game runtime waits for every registered resource and hides loading after its first frame", async () => {
   let releaseAssets;
   const assetsReady = new Promise((resolve) => { releaseAssets = resolve; });
   const frames = [];
@@ -153,8 +182,8 @@ test("the game runtime waits for visual assets and hides loading after its first
     requestAnimationFrame(callback) { frames.push(callback); },
     buildStars() { scope.buildCalls += 1; },
     resetGame() { scope.resetCalls += 1; },
-    visualAssetsAreReady: () => false,
-    waitForVisualAssets: () => assetsReady,
+    gameAssetsAreReady: () => false,
+    waitForGameAssets: () => assetsReady,
     gameLoadingElement: {
       classList: { add(name) { loadingClasses.add(name); } },
       setAttribute(name, value) { loadingAttributes[name] = value; },

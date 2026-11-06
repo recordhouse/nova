@@ -456,6 +456,7 @@ for (const kind of [
   "final-boss-fan",
   "final-boss-rain",
   "final-boss-wave",
+  "final-boss-jump",
 ]) {
   test(`${kind} starts the same down sequence on contact`, () => {
     const { scope } = createGame();

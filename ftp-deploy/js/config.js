@@ -14,6 +14,9 @@ const testMapButton = document.querySelector("[data-test-map]");
 const testPortalButton = document.querySelector("[data-test-portal]");
 const testLoadingButton = document.querySelector("[data-test-loading]");
 const testBossButton = document.querySelector("[data-test-boss]");
+const testBossAttackButtons = [
+  ...(document.querySelectorAll?.("[data-test-boss-attack]") ?? []),
+];
 const testMusicButton = document.querySelector("[data-test-music]");
 const testInvincibilityButton = document.querySelector("[data-test-invincibility]");
 const testPlayerAreaButton = document.querySelector("[data-test-player-area]");
@@ -150,7 +153,7 @@ const PLAYER_MAX_FALL_SPEED = 760;
 const JUMP_ANIMATION_DURATION = (JUMP_SPEED * 2) / GRAVITY;
 const FIRE_AIM_ANGLE_DIAGONAL = Math.PI / 6;
 const CURRENT_STAGE = 1;
-const WORLD_LENGTH = 104000;
+const WORLD_LENGTH = 312000;
 const LEVEL_GAP = 180;
 const PLATFORM_DECK_THICKNESS = 16;
 const RAMP_ANGLE_DEGREES = [20];
@@ -198,6 +201,10 @@ const MAP_FLOW_TRANSITION_LEVEL_MIN = 1.15;
 const MAP_FLOW_TRANSITION_LEVEL_MAX = 1.9;
 const MAP_FLOW_TRANSITION_GAP_MIN = 42;
 const MAP_FLOW_TRANSITION_GAP_MAX = 86;
+const MAP_FALLBACK_LANE_DISTANCE_MIN = 14000;
+const MAP_FALLBACK_LANE_DISTANCE_MAX = 18000;
+const MAP_FALLBACK_LANE_LEVEL_OFFSET = 1.65;
+const MAP_FALLBACK_LANE_GAP = 72;
 const BOSS_GATE_WIDTH = 126;
 const BOSS_GATE_HEIGHT = 184;
 const BOSS_GATE_EDGE_INSET = 88;
@@ -429,17 +436,20 @@ const FINAL_BOSS = {
   mouthForwardOffset: 84,
   mouthBottomOffset: 238,
   beamRange: 1250,
-  beamRadius: 34,
+  beamSpeed: 3000,
+  beamRadius: 20,
   beamMaxAngle: Math.PI / 3,
   beamDamage: 1,
-  attackPatterns: ["beam", "fan", "rain", "ground-wave", "dash"],
+  attackPatterns: ["beam", "fan", "rain", "ground-wave", "dash", "jump-slam"],
   fanChargeDuration: 0.6,
   fanFireDuration: 0.68,
-  fanVolleyCount: 3,
-  fanVolleyInterval: 0.18,
-  fanProjectileCount: 5,
+  fanProjectileCount: 3,
+  fanProjectileInterval: 0.2,
   fanSpread: Math.PI * 0.42,
   fanProjectileSpeed: 730,
+  fanProjectileRadius: 13,
+  fanMaxRicochets: 5,
+  fanProjectileLife: 5.5,
   rainChargeDuration: 0.72,
   rainFireDuration: 1.05,
   rainProjectileCount: 7,
@@ -457,6 +467,11 @@ const FINAL_BOSS = {
   dashFireDuration: 0.6,
   dashSpeed: 980,
   dashPassDistance: 180,
+  jumpChargeDuration: 0.58,
+  jumpFireDuration: 0.9,
+  jumpHeight: 270,
+  jumpImpactRadius: 165,
+  jumpImpactDuration: 0.42,
 };
 const MONSTER_TYPES = {
   monster1: {

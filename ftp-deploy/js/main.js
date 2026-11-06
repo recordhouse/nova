@@ -190,6 +190,7 @@ function update(dt) {
   updateHeartItems();
   updateTurrets(dt);
   updateMidBosses(dt);
+  updateTestBossAttackButtons();
   updateBullets(dt);
   updateEnemies(dt);
   if (typeof playNextEnemyIntroductionVideo === "function") {
@@ -363,12 +364,15 @@ function startGameRuntime() {
 }
 
 function startGameAfterVisualAssets() {
-  if (
-    typeof visualAssetsAreReady !== "function" ||
-    visualAssetsAreReady()
-  ) return startGameRuntime();
-  if (typeof waitForVisualAssets !== "function") return startGameRuntime();
-  waitForVisualAssets().then(startGameRuntime, startGameRuntime);
+  const assetsAreReady = typeof gameAssetsAreReady === "function"
+    ? gameAssetsAreReady
+    : typeof visualAssetsAreReady === "function" ? visualAssetsAreReady : null;
+  const waitForAssets = typeof waitForGameAssets === "function"
+    ? waitForGameAssets
+    : typeof waitForVisualAssets === "function" ? waitForVisualAssets : null;
+  if (!assetsAreReady || assetsAreReady()) return startGameRuntime();
+  if (!waitForAssets) return startGameRuntime();
+  waitForAssets().then(startGameRuntime, startGameRuntime);
   return false;
 }
 

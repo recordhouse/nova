@@ -1226,6 +1226,12 @@ function finalBossPatternDurations(pattern) {
       fire: FINAL_BOSS.dashFireDuration,
     };
   }
+  if (pattern === "jump-slam") {
+    return {
+      charge: FINAL_BOSS.jumpChargeDuration,
+      fire: FINAL_BOSS.jumpFireDuration,
+    };
+  }
   return {
     charge: FINAL_BOSS.chargeDuration,
     fire: FINAL_BOSS.fireDuration,
@@ -1252,6 +1258,25 @@ function finalBossRainTargets(boss, targetX) {
   }));
 }
 
+function setFinalBossJumpTarget(boss, targetX) {
+  const platform = boss.platform;
+  const minimumCenterX = platform
+    ? Math.min(platform.start, platform.end) + boss.width / 2 + 24
+    : targetX;
+  const maximumCenterX = platform
+    ? Math.max(platform.start, platform.end) - boss.width / 2 - 24
+    : targetX;
+  const targetCenterX = Math.max(
+    minimumCenterX,
+    Math.min(maximumCenterX, targetX),
+  );
+  const surfaceY = platform
+    ? platformSurfaceY(platform, targetCenterX)
+    : boss.y + boss.height;
+  boss.jumpTargetX = targetCenterX - boss.width / 2;
+  boss.jumpTargetY = surfaceY - boss.height;
+}
+
 function prepareFinalBossAttack(boss, playerCenterX, playerCenterY) {
   const patterns = FINAL_BOSS.attackPatterns;
   const patternIndex = (boss.nextAttackIndex ?? 0) % patterns.length;
@@ -1267,11 +1292,15 @@ function prepareFinalBossAttack(boss, playerCenterX, playerCenterY) {
   boss.patternShotTimer = 0;
   boss.chargeProgress = 0;
   boss.fireProgress = 0;
+  boss.beamTravelDistance = 0;
   boss.rainTargets = pattern === "rain"
     ? finalBossRainTargets(boss, playerCenterX) : [];
   boss.facing = playerCenterX >= boss.x + boss.width / 2 ? 1 : -1;
   boss.patternTargetX = playerCenterX;
   boss.patternTargetY = playerCenterY;
+  if (pattern === "jump-slam") {
+    setFinalBossJumpTarget(boss, playerCenterX);
+  }
   if (pattern === "beam" || pattern === "fan") {
     const direction = finalBossAimDirection(boss, playerCenterX, playerCenterY);
     boss.beamDirectionX = direction.x;
@@ -1281,8 +1310,13 @@ function prepareFinalBossAttack(boss, playerCenterX, playerCenterY) {
 
 function finalBossBeamIntersectsRect(boss, rect) {
   const mouth = finalBossMouthPosition(boss);
-  const endX = mouth.x + boss.beamDirectionX * FINAL_BOSS.beamRange;
-  const endY = mouth.y + boss.beamDirectionY * FINAL_BOSS.beamRange;
+  const beamLength = Math.max(0, Math.min(
+    FINAL_BOSS.beamRange,
+    boss.beamTravelDistance ?? 0,
+  ));
+  if (beamLength <= 0) return false;
+  const endX = mouth.x + boss.beamDirectionX * beamLength;
+  const endY = mouth.y + boss.beamDirectionY * beamLength;
   const radius = FINAL_BOSS.beamRadius;
   const minimumX = rect.x - radius;
   const maximumX = rect.x + rect.width + radius;
@@ -1310,7 +1344,7 @@ function finalBossBeamIntersectsRect(boss, rect) {
   return true;
 }
 
-function spawnFinalBossFanVolley(boss) {
+function spawnFinalBossFanProjectile(boss, projectileIndex) {
   const mouth = finalBossMouthPosition(boss);
   const count = FINAL_BOSS.fanProjectileCount;
   const center = (count - 1) / 2;
@@ -1318,28 +1352,65 @@ function spawnFinalBossFanVolley(boss) {
     boss.beamDirectionY,
     Math.max(0.001, Math.abs(boss.beamDirectionX)),
   );
-  for (let index = 0; index < count; index += 1) {
-    const spreadRatio = center > 0 ? (index - center) / center : 0;
-    const angle = Math.max(
-      -Math.PI * 0.44,
-      Math.min(Math.PI * 0.44, baseAngle + spreadRatio * FINAL_BOSS.fanSpread / 2),
+  const index = Math.max(0, Math.min(count - 1, projectileIndex));
+  const spreadRatio = center > 0 ? (index - center) / center : 0;
+  const angle = Math.max(
+    -Math.PI * 0.44,
+    Math.min(Math.PI * 0.44, baseAngle + spreadRatio * FINAL_BOSS.fanSpread / 2),
+  );
+  enemyBullets.push({
+    kind: "final-boss-fan",
+    x: mouth.x,
+    y: mouth.y,
+    vx: boss.facing * Math.cos(angle) * FINAL_BOSS.fanProjectileSpeed,
+    vy: Math.sin(angle) * FINAL_BOSS.fanProjectileSpeed,
+    radius: FINAL_BOSS.fanProjectileRadius,
+    ricochets: 0,
+    maxRicochets: FINAL_BOSS.fanMaxRicochets,
+    ricochetScreenEdges: true,
+    life: FINAL_BOSS.fanProjectileLife,
+    ricochetColor: "#d9a8ff",
+  });
+  burst(mouth.x, mouth.y, "#d9a8ff", 9, 165);
+  burst(mouth.x, mouth.y, "#fff7ff", 4, 105);
+  shake = Math.max(shake, 6.5);
+}
+
+function triggerTestFinalBossAttack(pattern) {
+  if (!TEST_MODE || !FINAL_BOSS.attackPatterns.includes(pattern)) return false;
+  const boss = midBosses.find((candidate) => candidate.finalBoss && candidate.alive);
+  if (!boss) return false;
+
+  if (boss.platform) {
+    const minimumCenterX = Math.min(boss.platform.start, boss.platform.end) +
+      boss.width / 2 + 20;
+    const maximumCenterX = Math.max(boss.platform.start, boss.platform.end) -
+      boss.width / 2 - 20;
+    const centerX = Math.max(
+      minimumCenterX,
+      Math.min(maximumCenterX, boss.x + boss.width / 2),
     );
-    enemyBullets.push({
-      kind: "final-boss-fan",
-      x: mouth.x,
-      y: mouth.y,
-      vx: boss.facing * Math.cos(angle) * FINAL_BOSS.fanProjectileSpeed,
-      vy: Math.sin(angle) * FINAL_BOSS.fanProjectileSpeed,
-      radius: 9,
-      ricochets: 0,
-      maxRicochets: 0,
-      life: 2.6,
-      ricochetColor: "#ff62c8",
-    });
+    boss.x = centerX - boss.width / 2;
+    boss.y = platformSurfaceY(boss.platform, centerX) - boss.height;
+    boss.baseY = boss.y;
+    boss.targetY = boss.y;
   }
-  burst(mouth.x, mouth.y, "#ff70cf", 13, 190);
-  burst(mouth.x, mouth.y, "#fff0ff", 5, 120);
-  shake = Math.max(shake, 9);
+  boss.airborne = false;
+  boss.jumpLanded = false;
+  boss.jumpImpactTimer = 0;
+  boss.moving = false;
+  const playerHitbox = getPlayerHitbox();
+  const targetX = playerHitbox.x + playerHitbox.width / 2;
+  const targetY = playerHitbox.y + playerHitbox.height / 2;
+  for (let index = enemyBullets.length - 1; index >= 0; index -= 1) {
+    if (enemyBullets[index].kind?.startsWith("final-boss-")) {
+      enemyBullets.splice(index, 1);
+    }
+  }
+  boss.nextAttackIndex = FINAL_BOSS.attackPatterns.indexOf(pattern);
+  prepareFinalBossAttack(boss, targetX, targetY);
+  boss.active = true;
+  return true;
 }
 
 function spawnFinalBossRainLaser(boss) {
@@ -1405,7 +1476,19 @@ function beginFinalBossAttack(boss) {
   boss.fireProgress = 0;
   boss.patternShotsFired = 0;
   boss.patternShotTimer = 0;
+  boss.beamTravelDistance = 0;
   const mouth = finalBossMouthPosition(boss);
+  if (boss.attackPattern === "jump-slam") {
+    if (!Number.isFinite(boss.jumpTargetX) || !Number.isFinite(boss.jumpTargetY)) {
+      setFinalBossJumpTarget(boss, boss.patternTargetX);
+    }
+    boss.jumpStartX = boss.x;
+    boss.jumpStartY = boss.y;
+    boss.jumpLanded = false;
+    boss.airborne = true;
+    boss.facing = boss.jumpTargetX >= boss.x ? 1 : -1;
+    return;
+  }
   if (typeof playTurretLaserSound === "function") playTurretLaserSound();
   if (boss.attackPattern === "dash") {
     const platform = boss.platform;
@@ -1487,6 +1570,45 @@ function moveFinalBossDash(boss, dt) {
   return moved;
 }
 
+function resolveFinalBossJumpImpact(boss, playerHitbox) {
+  if (boss.jumpLanded) return;
+  boss.jumpLanded = true;
+  boss.airborne = false;
+  boss.x = boss.jumpTargetX;
+  boss.y = boss.jumpTargetY;
+  boss.baseY = boss.y;
+  boss.targetY = boss.y;
+  boss.jumpImpactTimer = FINAL_BOSS.jumpImpactDuration;
+  const impactX = boss.x + boss.width / 2;
+  const impactY = boss.y + boss.height;
+  if (typeof playMetalHitSound === "function") playMetalHitSound();
+  shake = Math.max(shake, 17);
+  if (overlapsCircleRect({
+    x: impactX,
+    y: impactY - 10,
+    radius: FINAL_BOSS.jumpImpactRadius,
+  }, playerHitbox)) {
+    takePlayerDamage(1, {
+      kind: "final-boss-jump",
+      x: impactX,
+      y: impactY,
+      vx: boss.facing,
+    });
+  }
+}
+
+function updateFinalBossJumpSlam(boss, playerHitbox) {
+  const progress = Math.max(0, Math.min(1, boss.fireProgress ?? 0));
+  const easedProgress = progress * progress * (3 - 2 * progress);
+  boss.x = boss.jumpStartX + (boss.jumpTargetX - boss.jumpStartX) * easedProgress;
+  const groundY = boss.jumpStartY +
+    (boss.jumpTargetY - boss.jumpStartY) * easedProgress;
+  boss.y = groundY - Math.sin(progress * Math.PI) * FINAL_BOSS.jumpHeight;
+  boss.moving = false;
+  boss.airborne = progress < 1;
+  if (progress >= 1) resolveFinalBossJumpImpact(boss, playerHitbox);
+}
+
 function updateFinalBossAttack(
   boss,
   dt,
@@ -1497,6 +1619,7 @@ function updateFinalBossAttack(
 ) {
   boss.phase += dt;
   boss.animationTime = (boss.animationTime ?? 0) + dt;
+  boss.jumpImpactTimer = Math.max(0, (boss.jumpImpactTimer ?? 0) - dt);
   const state = boss.attackState ?? "idle";
 
   if (state === "idle" && !withinActivationRange) {
@@ -1505,6 +1628,7 @@ function updateFinalBossAttack(
     boss.chargeProgress = 0;
     boss.fireProgress = 0;
     boss.moving = false;
+    boss.airborne = false;
     boss.facing = playerCenterX >= boss.x + boss.width / 2 ? 1 : -1;
     return;
   }
@@ -1541,6 +1665,8 @@ function updateFinalBossAttack(
       const direction = finalBossAimDirection(boss, playerCenterX, playerCenterY);
       boss.beamDirectionX = direction.x;
       boss.beamDirectionY = direction.y;
+    } else if (boss.attackPattern === "jump-slam") {
+      boss.facing = boss.jumpTargetX >= boss.x ? 1 : -1;
     } else {
       boss.facing = playerCenterX >= boss.x + boss.width / 2 ? 1 : -1;
     }
@@ -1557,6 +1683,12 @@ function updateFinalBossAttack(
     const fireDuration = boss.patternFireDuration ?? FINAL_BOSS.fireDuration;
     boss.chargeProgress = 1;
     boss.fireProgress = 1 - boss.attackTimer / fireDuration;
+    if (boss.attackPattern === "beam") {
+      boss.beamTravelDistance = Math.min(
+        FINAL_BOSS.beamRange,
+        (boss.beamTravelDistance ?? 0) + FINAL_BOSS.beamSpeed * dt,
+      );
+    }
     if (
       boss.attackPattern === "beam" &&
       finalBossBeamIntersectsRect(boss, playerHitbox)
@@ -1574,12 +1706,12 @@ function updateFinalBossAttack(
       boss.moving = false;
       boss.patternShotTimer -= dt;
       while (
-        boss.patternShotsFired < FINAL_BOSS.fanVolleyCount &&
+        boss.patternShotsFired < FINAL_BOSS.fanProjectileCount &&
         boss.patternShotTimer <= 0
       ) {
-        spawnFinalBossFanVolley(boss);
+        spawnFinalBossFanProjectile(boss, boss.patternShotsFired);
         boss.patternShotsFired += 1;
-        boss.patternShotTimer += FINAL_BOSS.fanVolleyInterval;
+        boss.patternShotTimer += FINAL_BOSS.fanProjectileInterval;
       }
     } else if (boss.attackPattern === "rain") {
       boss.moving = false;
@@ -1606,6 +1738,8 @@ function updateFinalBossAttack(
     } else if (boss.attackPattern === "dash") {
       boss.moving = moveFinalBossDash(boss, dt);
       shake = Math.max(shake, boss.moving ? 4.5 : 2);
+    } else if (boss.attackPattern === "jump-slam") {
+      updateFinalBossJumpSlam(boss, playerHitbox);
     } else {
       boss.moving = false;
     }
@@ -1615,6 +1749,7 @@ function updateFinalBossAttack(
       boss.chargeProgress = 0;
       boss.fireProgress = 0;
       boss.patternShotTimer = 0;
+      boss.airborne = false;
     }
     return;
   }

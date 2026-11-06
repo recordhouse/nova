@@ -1655,7 +1655,7 @@ function generateMap() {
   for (let attempt = 0; attempt < MAP_LAYOUT_MAX_ATTEMPTS; attempt += 1) {
     if (generateMapCandidate()) return;
   }
-  // A bounded, monotonic fallback always has room for the primary route.
+  // A bounded serpentine fallback keeps a varied map without intersecting lanes.
   if (!generateMapCandidate(true)) throw new Error("Unable to generate a clear main route");
 }
 
@@ -1669,78 +1669,139 @@ function generateBossMap() {
   mapSeed = Math.floor(Math.random() * 4294967295) >>> 0;
   mapRandom = createSeededRandom(mapSeed);
 
-  const routePlatforms = [];
+  const groundPlatforms = [];
+  const jumpPlatforms = [];
+  const decorateBossRoad = (platform, role = "ground") => {
+    platform.routeRisk = "safe";
+    platform.zone = role === "arena" ? "combat" : "connector";
+    platform.architecture = role === "arena" ? "fortified" : "open";
+    platform.bossRustBloodRoad = true;
+    platform.bossSafetyFloor = role === "ground" || role === "arena";
+    platform.lightColor = role === "upper" ? "#b94b55" : "#8f3229";
+    platform.lightSpacing = 72 + (platform.id % 4) * 14;
+    if (platform.bossSafetyFloor) groundPlatforms.push(platform);
+    return platform;
+  };
+
   const startingRoad = addPlatform(-200, 700, 0, "boss-entry", 0);
   startingRoad.startingRoad = true;
   startingRoad.zone = "rest";
-  startingRoad.lightColor = "#e8b6ff";
-  routePlatforms.push(startingRoad);
+  decorateBossRoad(startingRoad);
 
-  const jumpPlan = [
-    { gap: 150, width: 170, level: -0.35 },
-    { gap: 175, width: 130, level: -0.75 },
-    { gap: 155, width: 115, level: -0.2 },
-    { gap: 270, width: 145, level: -0.65 },
-    { gap: 165, width: 105, level: -1 },
-    { gap: 180, width: 120, level: -0.45 },
-    { gap: 195, width: 95, level: 0.05 },
-    { gap: 285, width: 150, level: -0.5 },
-    { gap: 160, width: 110, level: -0.9 },
-    { gap: 185, width: 105, level: -0.3 },
-    { gap: 175, width: 90, level: -0.75 },
-    { gap: 300, width: 155, level: -0.15 },
-    { gap: 170, width: 105, level: 0.25 },
-    { gap: 190, width: 115, level: -0.25 },
-    { gap: 205, width: 95, level: -0.7 },
-    { gap: 280, width: 145, level: -0.15 },
-    { gap: 175, width: 110, level: -0.55 },
-    { gap: 190, width: 125, level: -0.95 },
-    { gap: 165, width: 105, level: -0.4 },
-    { gap: 260, width: 190, level: 0 },
+  // The lower route is unbroken: missed jumps always land on solid ground.
+  // Gentle ramps keep the silhouette varied without exceeding normal movement.
+  const groundPlan = [
+    { kind: "flat", width: 420 },
+    { kind: "ramp", width: 260, level: -0.22 },
+    { kind: "flat", width: 440 },
+    { kind: "ramp", width: 220, level: 0.08 },
+    { kind: "flat", width: 360 },
+    { kind: "ramp", width: 240, level: -0.32 },
+    { kind: "flat", width: 500 },
+    { kind: "ramp", width: 280, level: 0.12 },
+    { kind: "flat", width: 380 },
+    { kind: "ramp", width: 220, level: -0.18 },
+    { kind: "flat", width: 470 },
+    { kind: "ramp", width: 260, level: -0.42 },
+    { kind: "flat", width: 420 },
+    { kind: "ramp", width: 260, level: 0.05 },
+    { kind: "flat", width: 520 },
+    { kind: "ramp", width: 300, level: 0 },
   ];
-  const bossLightColors = ["#efb4ff", "#ca7cff", "#ff789e"];
   let cursor = startingRoad.end;
-  for (let index = 0; index < jumpPlan.length; index += 1) {
-    const step = jumpPlan[index];
-    const start = cursor + step.gap;
+  let groundLevel = 0;
+  for (let index = 0; index < groundPlan.length; index += 1) {
+    const step = groundPlan[index];
+    const nextLevel = step.level ?? groundLevel;
+    const platform = step.kind === "ramp"
+      ? addRamp(
+          cursor,
+          cursor + step.width,
+          groundLevel,
+          nextLevel,
+          "boss-ground-ramp",
+          index + 1,
+        )
+      : addPlatform(
+          cursor,
+          cursor + step.width,
+          groundLevel,
+          "boss-ground",
+          index + 1,
+        );
+    decorateBossRoad(platform);
+    cursor = platform.end;
+    groundLevel = nextLevel;
+  }
+
+  // Optional upper lines reward jumping, but every gap has the lower route below it.
+  const upperPlan = [
+    { offset: 180, width: 150, lift: 0.48 },
+    { offset: 470, width: 190, lift: 0.62 },
+    { offset: 820, width: 135, lift: 0.5 },
+    { offset: 1080, width: 220, lift: 0.72 },
+    { offset: 1450, width: 160, lift: 0.55 },
+    { offset: 1760, width: 120, lift: 0.68 },
+    { offset: 2020, width: 200, lift: 0.46 },
+    { offset: 2380, width: 140, lift: 0.72 },
+    { offset: 2640, width: 180, lift: 0.55 },
+    { offset: 2980, width: 125, lift: 0.65 },
+    { offset: 3250, width: 230, lift: 0.48 },
+    { offset: 3660, width: 150, lift: 0.76 },
+    { offset: 3960, width: 180, lift: 0.58 },
+    { offset: 4300, width: 130, lift: 0.7 },
+    { offset: 4600, width: 210, lift: 0.52 },
+    { offset: 5000, width: 145, lift: 0.68 },
+  ];
+  for (let index = 0; index < upperPlan.length; index += 1) {
+    const step = upperPlan[index];
+    const start = startingRoad.end + step.offset;
+    const centerX = start + step.width / 2;
+    const supportingRoad = groundPlatforms.find((platform) => (
+      centerX >= platform.start && centerX <= platform.end
+    ));
+    if (!supportingRoad) continue;
+    const surfaceLevel = (
+      platformSurfaceY(supportingRoad, centerX) - BASE_GROUND_Y
+    ) / LEVEL_GAP;
     const platform = addPlatform(
       start,
       start + step.width,
-      step.level,
+      surfaceLevel - step.lift,
       "boss-jump",
-      index + 1,
+      groundPlan.length + index + 1,
     );
-    platform.routeRisk = "danger";
-    platform.zone = "connector";
-    platform.architecture = "open";
+    platform.routeRole = "boss-upper";
     platform.bossJumpPlatform = true;
-    platform.lightColor = bossLightColors[index % bossLightColors.length];
-    platform.lightSpacing = Math.max(52, step.width * 0.56);
-    routePlatforms.push(platform);
-    cursor = platform.end;
+    decorateBossRoad(platform, "upper");
+    jumpPlatforms.push(platform);
   }
 
-  const arenaStart = cursor + 180;
+  const arenaStart = cursor;
   const arena = addPlatform(
     arenaStart,
-    arenaStart + 1320,
+    arenaStart + 1500,
     0,
     "boss-arena",
-    jumpPlan.length + 1,
+    groundPlan.length + upperPlan.length + 1,
   );
-  arena.zone = "combat";
-  arena.architecture = "fortified";
-  arena.lightColor = "#f0b4ff";
-  routePlatforms.push(arena);
+  decorateBossRoad(arena, "arena");
   addFinalBoss(arena);
 
   branches.push({
     group: 0,
-    routes: [{
-      role: "main",
-      trick: "boss-jumps",
-      platforms: routePlatforms.map((platform) => platform.id),
-    }],
+    routes: [
+      {
+        role: "main",
+        trick: "boss-ground",
+        platforms: groundPlatforms.map((platform) => platform.id),
+      },
+      {
+        role: "sub",
+        trick: "boss-jumps",
+        platforms: jumpPlatforms.map((platform) => platform.id),
+      },
+    ],
   });
   goalPlatform = arena;
   goalX = (arena.start + arena.end) / 2;
@@ -1767,7 +1828,13 @@ function generateMapCandidate(safeForwardFlow = false) {
   let traveledDistance = 0;
   let distanceSinceFlowChange = 0;
   let distanceSinceDip = 0;
-  let nextFlowDistance = flowDistanceFor();
+  const fallbackLaneDistanceFor = () => (
+    MAP_FALLBACK_LANE_DISTANCE_MIN + mapRandom() * (
+      MAP_FALLBACK_LANE_DISTANCE_MAX - MAP_FALLBACK_LANE_DISTANCE_MIN
+    )
+  );
+  let nextFlowDistance = safeForwardFlow
+    ? fallbackLaneDistanceFor() : flowDistanceFor();
   let verticalFlowTrend = 0;
   let verticalFlowStreak = 0;
   let lastHorizontalJumpGroup = -4;
@@ -1782,6 +1849,22 @@ function generateMapCandidate(safeForwardFlow = false) {
     minimumFirstTread = 0,
   ) => {
     const pathLength = Math.abs(exitX - entryX);
+    if (safeForwardFlow) {
+      const platform = addPlatform(
+        entryX,
+        exitX,
+        startLevel,
+        type,
+        pathGroup,
+      );
+      platform.routeRole = "main";
+      distanceSinceDip += pathLength;
+      return {
+        endLevel: startLevel,
+        endPlatform: platform,
+        pattern: "fallback-lane",
+      };
+    }
     const forceDip = (
       pathGroup > 0 &&
       elevationChange >= 0 &&
@@ -1864,7 +1947,9 @@ function generateMapCandidate(safeForwardFlow = false) {
     );
     const layout = useHorizontalJumpPath
       ? { levels: [currentLevel], mergeLevel: currentLevel }
-      : chooseRouteLayout(currentLevel, branchLength);
+      : safeForwardFlow
+        ? { levels: [currentLevel], mergeLevel: currentLevel }
+        : chooseRouteLayout(currentLevel, branchLength);
     const hasSubPath = !useHorizontalJumpPath && layout.levels.length === 2;
     const routeData = [];
     let branchExitLevel = layout.mergeLevel;
@@ -1987,16 +2072,19 @@ function generateMapCandidate(safeForwardFlow = false) {
       traveledDistance < WORLD_LENGTH - 1400
     );
     if (shouldChangeFlow) {
-      const transition = chooseMapFlowTransition(
-        direction,
-        branchExitLevel,
-        verticalFlowTrend,
-        verticalFlowStreak,
-      );
-      if (safeForwardFlow && transition.horizontal === "reverse") {
-        transition.direction = direction;
-        transition.horizontal = "forward";
-      }
+      const transition = safeForwardFlow ? {
+        direction: -direction,
+        horizontal: "reverse",
+        vertical: "up",
+        verticalTrend: 1,
+        levelOffset: -MAP_FALLBACK_LANE_LEVEL_OFFSET,
+        gap: MAP_FALLBACK_LANE_GAP,
+      } : chooseMapFlowTransition(
+          direction,
+          branchExitLevel,
+          verticalFlowTrend,
+          verticalFlowStreak,
+        );
       if (
         transition.horizontal === "reverse" &&
         MID_BOSS_ENABLED
@@ -2019,7 +2107,8 @@ function generateMapCandidate(safeForwardFlow = false) {
       }
       distanceSinceFlowChange = 0;
       distanceSinceDip = 0;
-      nextFlowDistance = flowDistanceFor();
+      nextFlowDistance = safeForwardFlow
+        ? fallbackLaneDistanceFor() : flowDistanceFor();
     } else {
       const exitGaps = [0, 24, 42, 62, 82, 102, 122];
       const exitGap = exitGaps[Math.floor(mapRandom() * exitGaps.length)];
@@ -2400,10 +2489,13 @@ function addFinalBoss(platform) {
     fireProgress: 0,
     beamDirectionX: -1,
     beamDirectionY: 0,
+    beamTravelDistance: 0,
     patternShotsFired: 0,
     patternShotTimer: 0,
     rainTargets: [],
     moving: false,
+    airborne: false,
+    jumpImpactTimer: 0,
     finalBoss: true,
     alive: true,
   };
@@ -2866,6 +2958,7 @@ function enterBossMap() {
   updateTestMapButton();
   testJumpRouteIndex = -1;
   updateTestJumpPathButton();
+  updateTestBossAttackButtons();
   return true;
 }
 
@@ -3199,7 +3292,18 @@ function movePlayerToFinalBoss() {
     Math.min(maxWorldX - WIDTH, playerCenterX - cameraAnchorScreenX(1)),
   );
   cameraY = player.y + player.height - BASE_GROUND_Y;
+  updateTestBossAttackButtons();
   return true;
+}
+
+function updateTestBossAttackButtons() {
+  if (!TEST_MODE) return;
+  const bossIsVisible = currentArea === "boss" && midBosses.some(
+    (candidate) => candidate.finalBoss && candidate.alive,
+  );
+  for (const button of testBossAttackButtons) {
+    button.hidden = !bossIsVisible;
+  }
 }
 
 function updateTestResolutionButton() {
@@ -3402,6 +3506,7 @@ function resetGame() {
   gameOver = false;
   showFullMap = false;
   updateTestMapButton();
+  updateTestBossAttackButtons();
   buildStage();
   testJumpRouteIndex = -1;
   updateTestJumpPathButton();
