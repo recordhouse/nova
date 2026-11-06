@@ -449,7 +449,14 @@ test("movement, jumping and shooting are locked while down, then return after re
   assert.ok(read(scope, "player.vy") < 0);
 });
 
-for (const kind of ["turret-laser", "boss-laser", "monster2-fireball"]) {
+for (const kind of [
+  "turret-laser",
+  "boss-laser",
+  "monster2-fireball",
+  "final-boss-fan",
+  "final-boss-rain",
+  "final-boss-wave",
+]) {
   test(`${kind} starts the same down sequence on contact`, () => {
     const { scope } = createGame();
     read(scope, `const hit=getPlayerHitbox(); enemyBullets.push({kind:'${kind}',

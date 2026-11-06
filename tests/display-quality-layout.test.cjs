@@ -103,6 +103,164 @@ test("the boss entrance is a larger red vortex without a BOSS label", () => {
   assert.ok(calls.some((call) => call.operation === "quadraticCurveTo"));
 });
 
+test("the final boss stand sheet plays forward through five frames and then reverses", () => {
+  const { scope, calls } = createDisplay();
+  const image = { naturalWidth: 4400, naturalHeight: 800 };
+  scope.bossStandSprite = { loaded: true, image };
+  read(scope, `drawFinalBossStand({
+    x:300,y:240,width:250,height:250,hp:120,maxHp:120,
+    facing:-1,animationTime:0,finalBoss:true
+  })`);
+  let draw = calls.find((call) => call.operation === "drawImage");
+  assert.ok(draw);
+  assert.equal(draw.args[0], image);
+  assert.equal(draw.args[1], 0);
+  assert.equal(draw.args[2], 0);
+  assert.equal(draw.args[3], 880);
+  assert.equal(draw.args[4], 800);
+  assert.equal(draw.args[7], 372);
+  assert.equal(draw.args[8], 338);
+  assert.equal(draw.shadowColor, undefined);
+  assert.deepEqual(
+    calls.find((call) => call.operation === "translate").args,
+    [425, 515],
+  );
+
+  calls.length = 0;
+  read(scope, `drawFinalBossStand({
+    x:300,y:240,width:250,height:250,hp:120,maxHp:120,
+    facing:-1,animationTime:0.68,finalBoss:true
+  })`);
+  draw = calls.find((call) => call.operation === "drawImage");
+  assert.equal(draw.args[1], 3520);
+  assert.equal(draw.args[2], 0);
+
+  calls.length = 0;
+  read(scope, `drawFinalBossStand({
+    x:300,y:240,width:250,height:250,hp:120,maxHp:120,
+    facing:-1,animationTime:0.84,finalBoss:true
+  })`);
+  draw = calls.find((call) => call.operation === "drawImage");
+  assert.equal(draw.args[1], 2640);
+  assert.equal(draw.args[2], 0);
+
+  calls.length = 0;
+  read(scope, `drawFinalBossStand({
+    x:300,y:240,width:250,height:250,hp:120,maxHp:120,
+    facing:-1,animationTime:1.34,finalBoss:true
+  })`);
+  draw = calls.find((call) => call.operation === "drawImage");
+  assert.equal(draw.args[1], 0);
+  assert.equal(draw.args[2], 0);
+});
+
+test("the final boss switches to the five-frame run sheet only while moving", () => {
+  const { scope, calls } = createDisplay();
+  const standImage = { naturalWidth: 4400, naturalHeight: 800 };
+  const runImage = { naturalWidth: 4400, naturalHeight: 800 };
+  scope.bossStandSprite = { loaded: true, image: standImage };
+  scope.bossRunSprite = { loaded: true, image: runImage };
+  read(scope, `drawFinalBossStand({
+    x:300,y:240,width:250,height:250,hp:120,maxHp:120,
+    facing:-1,animationTime:0.4,finalBoss:true,moving:true
+  })`);
+  let draw = calls.find((call) => call.operation === "drawImage");
+  assert.equal(draw.args[0], runImage);
+  assert.equal(draw.args[1], 2640);
+  assert.equal(draw.args[3], 880);
+  assert.equal(draw.args[4], 800);
+  assert.deepEqual(
+    calls.find((call) => call.operation === "translate").args,
+    [425, 504],
+  );
+
+  calls.length = 0;
+  read(scope, `drawFinalBossStand({
+    x:300,y:240,width:250,height:250,hp:120,maxHp:120,
+    facing:-1,animationTime:0.4,finalBoss:true,moving:false
+  })`);
+  draw = calls.find((call) => call.operation === "drawImage");
+  assert.equal(draw.args[0], standImage);
+});
+
+test("the boss map leaves the background untouched and makes only the road massive and red", () => {
+  const { scope, calls, gradients } = createDisplay();
+  read(scope, `
+    currentArea='stage';
+    globalThis.fixedBackground={loaded:false,image:{naturalWidth:0,naturalHeight:0}};
+  `);
+  calls.length = 0;
+  gradients.length = 0;
+  scope.drawBackground();
+  const stageCalls = calls.map((call) => ({
+    operation: call.operation,
+    args: call.args,
+    color: typeof call.color === "string" ? call.color : call.color?.operation,
+  }));
+  const stageGradientStops = gradients.map((gradient) => gradient.stops);
+
+  calls.length = 0;
+  gradients.length = 0;
+  read(scope, "currentArea='boss'");
+  scope.drawBackground();
+  assert.deepEqual(calls.map((call) => ({
+    operation: call.operation,
+    args: call.args,
+    color: typeof call.color === "string" ? call.color : call.color?.operation,
+  })), stageCalls);
+  assert.deepEqual(gradients.map((gradient) => gradient.stops), stageGradientStops);
+
+  const source = fs.readFileSync(path.join(__dirname, "..", "js", "renderer.js"), "utf8");
+  assert.doesNotMatch(source, /drawBossBackgroundAtmosphere/);
+  assert.match(source, /function drawBossRoadFoundation\(platform\)/);
+  assert.match(source, /const bossDeckPalettes = \[/);
+  assert.match(source, /const bossRailColors = \["#ff6a78", "#ff8a79", "#ea4568"\]/);
+  assert.match(source, /if \(currentArea !== "boss"\) drawPlatformLights\(platform\)/);
+});
+
+test("the final boss gathers energy at its mouth and renders one powerful angled beam", () => {
+  const { scope, calls, gradients } = createDisplay();
+  const image = { naturalWidth: 4400, naturalHeight: 800 };
+  scope.bossStandSprite = { loaded: true, image };
+  read(scope, `drawFinalBossStand({
+    x:300,y:240,width:250,height:250,hp:120,maxHp:120,
+    facing:-1,animationTime:0,finalBoss:true,
+    attackState:'charge',chargeProgress:0.72,
+    beamDirectionX:-0.9,beamDirectionY:0.435
+  })`);
+  assert.ok(gradients.some((gradient) =>
+    gradient.operation === "createRadialGradient"));
+  assert.ok(calls.filter((call) => call.operation === "arc").length >= 2);
+
+  calls.length = 0;
+  gradients.length = 0;
+  read(scope, `drawFinalBossStand({
+    x:300,y:240,width:250,height:250,hp:120,maxHp:120,
+    facing:-1,animationTime:0,finalBoss:true,
+    attackState:'fire',chargeProgress:1,fireProgress:0.3,
+    beamDirectionX:-0.9,beamDirectionY:0.435
+  })`);
+  assert.ok(gradients.some((gradient) =>
+    gradient.operation === "createLinearGradient"));
+  const beamPoints = calls.filter((call) => call.operation === "lineTo");
+  assert.ok(beamPoints.length >= 17);
+  assert.ok(beamPoints.some((call) => call.args[0] < -700 && call.args[1] > 700));
+  assert.ok(calls.filter((call) => call.operation === "stroke").length >= 4);
+});
+
+test("the longer final-boss ground wave uses layered neon shells and sparks", () => {
+  const { scope, calls } = createDisplay();
+  read(scope, `enemyBullets.push({
+    kind:'final-boss-wave',x:360,y:520,vx:-780,vy:0,radius:23,life:2.4
+  })`);
+  calls.length = 0;
+  scope.drawProjectiles();
+  assert.ok(calls.filter((call) => call.operation === "arc").length >= 5);
+  assert.ok(calls.filter((call) => call.operation === "stroke").length >= 12);
+  assert.ok(calls.some((call) => call.shadowColor === "#ff285f"));
+  assert.ok(calls.some((call) => call.strokeColor === "#fff7ff"));
+});
+
 test("a phone's physical pixel density sets the canvas backing size", () => {
   const { scope, canvas, calls, setCssWidth } = createDisplay();
   assert.equal(read(scope, "WIDTH"), 720);
@@ -205,7 +363,7 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
     assert.equal(header.map.x + header.map.width / 2, width / 2);
     const portrait = height > width;
     assert.equal(header.map.width, Math.round(width * (portrait ? 0.44 : 0.38)));
-    assert.equal(header.map.height, Math.round(slots.originalHeight * 1.05),
+    assert.equal(header.map.height, Math.round(slots.originalHeight * 1.2),
       "the taller minimap keeps its intended proportion beside the videos");
     assert.ok(header.hearts.x + header.hearts.width < header.ultimate.x);
     assert.ok(header.stage.x + header.stage.width < header.score.x);
@@ -234,8 +392,8 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
       "the minimap stays clear of the screen-edge frame");
     assert.ok(header.infoY > 10, "status rows keep clear of the top meter");
     assert.ok(header.map.y < 34, "the minimap moves up");
-    assert.ok(header.map.y + header.map.height <= 170);
-    assert.ok(header.map.width / header.map.height >= 1.6,
+    assert.ok(header.map.y + header.map.height <= 185);
+    assert.ok(header.map.width / header.map.height >= 1.4,
       "the minimap remains horizontally oriented at the taller shared height");
   }
 });

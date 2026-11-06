@@ -185,6 +185,7 @@ function update(dt) {
     return;
   }
   updatePlayer(dt);
+  if (typeof tryEnterBossMap === "function" && tryEnterBossMap()) return;
   updatePlayerRevivalWave(dt);
   updateHeartItems();
   updateTurrets(dt);
@@ -292,12 +293,53 @@ function loop(currentTime) {
   if (initialLoadingOverlayPending) {
     initialLoadingOverlayPending = false;
     completeInitialLoadingUi();
+  } else {
+    updateTestLoadingPreview(currentTime);
   }
   requestAnimationFrame(loop);
 }
 
 let gameRuntimeStarted = false;
 let initialLoadingOverlayPending = true;
+const TEST_LOADING_PREVIEW_FILL_DURATION = 3200;
+const TEST_LOADING_PREVIEW_HOLD_DURATION = 700;
+let testLoadingPreviewStartedAt = -Infinity;
+
+function setTestLoadingPreviewProgress(percentage) {
+  const progress = Math.max(0, Math.min(100, Math.round(percentage)));
+  gameLoadingProgressElement?.style?.setProperty?.("--loading-progress", `${progress}%`);
+  gameLoadingProgressElement?.setAttribute?.("aria-valuenow", String(progress));
+  if (gameLoadingPercentElement) gameLoadingPercentElement.textContent = `${progress}%`;
+}
+
+function previewTestLoadingScreen() {
+  if (!TEST_MODE || !gameLoadingElement) return false;
+  if (typeof resetAllInputs === "function") resetAllInputs();
+  testLoadingPreviewStartedAt = performance.now();
+  setTestLoadingPreviewProgress(0);
+  gameLoadingElement.classList?.remove?.("complete");
+  gameLoadingElement.setAttribute?.("aria-hidden", "false");
+  return true;
+}
+
+function updateTestLoadingPreview(currentTime) {
+  if (!Number.isFinite(testLoadingPreviewStartedAt)) return false;
+  const elapsed = Math.max(0, currentTime - testLoadingPreviewStartedAt);
+  if (elapsed <= TEST_LOADING_PREVIEW_FILL_DURATION) {
+    setTestLoadingPreviewProgress(
+      elapsed / TEST_LOADING_PREVIEW_FILL_DURATION * 100,
+    );
+    return true;
+  }
+  setTestLoadingPreviewProgress(100);
+  if (
+    elapsed <= TEST_LOADING_PREVIEW_FILL_DURATION +
+      TEST_LOADING_PREVIEW_HOLD_DURATION
+  ) return true;
+  testLoadingPreviewStartedAt = -Infinity;
+  completeInitialLoadingUi();
+  return false;
+}
 
 function completeInitialLoadingUi() {
   if (typeof gameLoadingElement === "undefined" || !gameLoadingElement) return;

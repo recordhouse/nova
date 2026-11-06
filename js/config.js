@@ -12,6 +12,8 @@ const testResolutionButton = document.querySelector("[data-test-resolution]");
 const testOrientationButton = document.querySelector("[data-test-orientation]");
 const testMapButton = document.querySelector("[data-test-map]");
 const testPortalButton = document.querySelector("[data-test-portal]");
+const testLoadingButton = document.querySelector("[data-test-loading]");
+const testBossButton = document.querySelector("[data-test-boss]");
 const testMusicButton = document.querySelector("[data-test-music]");
 const testInvincibilityButton = document.querySelector("[data-test-invincibility]");
 const testPlayerAreaButton = document.querySelector("[data-test-player-area]");
@@ -148,7 +150,7 @@ const PLAYER_MAX_FALL_SPEED = 760;
 const JUMP_ANIMATION_DURATION = (JUMP_SPEED * 2) / GRAVITY;
 const FIRE_AIM_ANGLE_DIAGONAL = Math.PI / 6;
 const CURRENT_STAGE = 1;
-const WORLD_LENGTH = 52000;
+const WORLD_LENGTH = 104000;
 const LEVEL_GAP = 180;
 const PLATFORM_DECK_THICKNESS = 16;
 const RAMP_ANGLE_DEGREES = [20];
@@ -200,6 +202,7 @@ const BOSS_GATE_WIDTH = 126;
 const BOSS_GATE_HEIGHT = 184;
 const BOSS_GATE_EDGE_INSET = 88;
 const BOSS_GATE_TRIGGER_DISTANCE = 92;
+const BOSS_MAP_FALL_RECOVERY_DEPTH = 240;
 const HORIZONTAL_JUMP_PATH_CHANCE = 0.42;
 const HORIZONTAL_JUMP_PATH_MIN_LENGTH = 1250;
 const HORIZONTAL_JUMP_SINGLE_GAP_MIN = 180;
@@ -396,6 +399,64 @@ const MID_BOSS = {
   activationRangeY: 620,
   laserSpeed: 520,
   score: 1800,
+};
+const FINAL_BOSS = {
+  width: 250,
+  height: 250,
+  spriteWidth: 372,
+  spriteHeight: 338,
+  standColumns: 5,
+  standRows: 1,
+  standFrames: 5,
+  standFps: 6,
+  runColumns: 5,
+  runRows: 1,
+  runFrames: 5,
+  runFps: 8,
+  standGroundOffset: 25,
+  runGroundOffset: 14,
+  hp: 120,
+  score: 6000,
+  activationRangeX: 1100,
+  activationRangeY: 680,
+  idleDuration: 1.1,
+  moveDuration: 1.25,
+  moveSpeed: 205,
+  chaseStopDistance: 300,
+  chargeDuration: 0.88,
+  fireDuration: 0.82,
+  recoveryDuration: 0.95,
+  mouthForwardOffset: 84,
+  mouthBottomOffset: 238,
+  beamRange: 1250,
+  beamRadius: 34,
+  beamMaxAngle: Math.PI / 3,
+  beamDamage: 1,
+  attackPatterns: ["beam", "fan", "rain", "ground-wave", "dash"],
+  fanChargeDuration: 0.6,
+  fanFireDuration: 0.68,
+  fanVolleyCount: 3,
+  fanVolleyInterval: 0.18,
+  fanProjectileCount: 5,
+  fanSpread: Math.PI * 0.42,
+  fanProjectileSpeed: 730,
+  rainChargeDuration: 0.72,
+  rainFireDuration: 1.05,
+  rainProjectileCount: 7,
+  rainProjectileInterval: 0.12,
+  rainSpacing: 92,
+  rainProjectileSpeed: 930,
+  groundWaveChargeDuration: 0.52,
+  groundWaveFireDuration: 0.5,
+  groundWaveCount: 2,
+  groundWaveInterval: 0.2,
+  groundWaveSpeed: 780,
+  groundWaveRadius: 23,
+  groundWaveLife: 2.4,
+  dashChargeDuration: 0.48,
+  dashFireDuration: 0.6,
+  dashSpeed: 980,
+  dashPassDistance: 180,
 };
 const MONSTER_TYPES = {
   monster1: {

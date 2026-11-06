@@ -242,6 +242,8 @@ button {
 .test-orientation-button,
 .test-map-button,
 .test-portal-button,
+.test-boss-button,
+.test-loading-button,
 .test-music-button,
 .test-invincibility-button,
 .test-ultimate-button,
@@ -284,6 +286,8 @@ button {
 .test-orientation-button:active,
 .test-map-button:active,
 .test-portal-button:active,
+.test-boss-button:active,
+.test-loading-button:active,
 .test-music-button:active,
 .test-invincibility-button:active,
 .test-ultimate-button:active,
@@ -318,6 +322,20 @@ button {
   color: #f2d7ff;
   border-color: rgb(201 130 255 / 86%);
   background: rgb(131 54 188 / 14%);
+}
+
+.test-boss-button {
+  min-width: 62px;
+  color: #ffd5e6;
+  border-color: rgb(255 88 143 / 86%);
+  background: rgb(169 34 87 / 16%);
+}
+
+.test-loading-button {
+  min-width: 76px;
+  color: #d8faff;
+  border-color: rgb(125 225 241 / 84%);
+  background: rgb(63 156 177 / 14%);
 }
 
 .test-music-button {

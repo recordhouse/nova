@@ -47,6 +47,11 @@ function createGame(testMode = true, landscape = false) {
     setAttribute(key, value) { this.attributes[key] = value; },
     addEventListener(key, callback) { this.listeners[key] = callback; },
   };
+  const bossButton = {
+    attributes: {}, listeners: {},
+    setAttribute(key, value) { this.attributes[key] = value; },
+    addEventListener(key, callback) { this.listeners[key] = callback; },
+  };
   const tools = { getBoundingClientRect: () => ({ bottom: landscape ? 148 : 180 }) };
   const canvas = {
     getContext: () => ctx,
@@ -59,6 +64,7 @@ function createGame(testMode = true, landscape = false) {
       querySelector: (selector) => selector === "#game" ? canvas
         : selector === "[data-test-map]" ? button
           : selector === "[data-test-portal]" ? portalButton
+            : selector === "[data-test-boss]" ? bossButton
           : selector === "[data-test-controls]" ? tools : null,
       querySelectorAll: () => [], addEventListener() {},
     },
@@ -71,7 +77,7 @@ function createGame(testMode = true, landscape = false) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "js", `${name}.js`), "utf8"),
       scope, { filename: `${name}.js` });
   }
-  return { scope, button, portalButton, tools, strokes, strokeRects, clips, fills, gradients };
+  return { scope, button, portalButton, bossButton, tools, strokes, strokeRects, clips, fills, gradients };
 }
 
 test("MAP button toggles the full map, clears held controls and pauses the game clock", () => {
@@ -126,6 +132,220 @@ test("the test PORTAL button places the player safely with the entrance in view"
   assert.equal(preview.showFullMap, false);
   assert.ok(preview.portalScreenX >= 0 && preview.portalScreenX <= preview.width);
   assert.ok(preview.portalScreenY >= 0 && preview.portalScreenY <= preview.height);
+});
+
+test("entering the vortex replaces the stage with a harder boss jump map", () => {
+  const { scope } = createGame();
+  const result = vm.runInContext(`(() => {
+    player.hp=2;
+    player.score=345;
+    player.ultimateCharges=1;
+    player.platform=bossDoor.platform;
+    player.x=bossDoor.centerX-player.width/2;
+    player.y=platformSurfaceY(bossDoor.platform,bossDoor.centerX)-player.height;
+    player.grounded=true;
+    update(1/60);
+    const ordered=[...platforms].sort((a,b)=>a.start-b.start);
+    const gaps=ordered.slice(1).map((platform,index)=>platform.start-ordered[index].end);
+    return {
+      currentArea,
+      hasGate:Boolean(bossDoor),
+      platformCount:platforms.length,
+      jumpPads:platforms.filter(platform=>platform.bossJumpPlatform).length,
+      jumpGaps:gaps.filter(gap=>gap>=150).length,
+      doubleJumpGaps:gaps.filter(gap=>gap>=250).length,
+      maximumGap:Math.max(...gaps),
+      startsSafely:Boolean(player.platform?.startingRoad && player.grounded),
+      arenaType:goalPlatform?.type,
+      hp:player.hp,
+      score:player.score,
+      ultimateCharges:player.ultimateCharges,
+    };
+  })()`, scope);
+  assert.equal(result.currentArea, "boss");
+  assert.equal(result.hasGate, false);
+  assert.equal(result.platformCount, 22);
+  assert.equal(result.jumpPads, 20);
+  assert.ok(result.jumpGaps >= 20);
+  assert.ok(result.doubleJumpGaps >= 5);
+  assert.ok(result.maximumGap <= 300, "the hard gaps remain inside double-jump range");
+  assert.equal(result.startsSafely, true);
+  assert.equal(result.arenaType, "boss-arena");
+  assert.equal(result.hp, 2);
+  assert.equal(result.score, 345);
+  assert.equal(result.ultimateCharges, 1);
+});
+
+test("falling in the boss map returns to the last platform without death or health loss", () => {
+  const { scope } = createGame();
+  const result = vm.runInContext(`(() => {
+    enterBossMap();
+    const checkpointPlatform=platforms.find(platform=>platform.bossJumpPlatform);
+    player.platform=checkpointPlatform;
+    player.x=(checkpointPlatform.start+checkpointPlatform.end-player.width)/2;
+    player.y=checkpointPlatform.y-player.height;
+    player.grounded=true;
+    player.facing=-1;
+    rememberBossMapCheckpoint(checkpointPlatform);
+    const checkpointId=checkpointPlatform.id;
+    player.hp=2;
+    player.platform=null;
+    player.grounded=false;
+    player.y=lowestPlatformY+BOSS_MAP_FALL_RECOVERY_DEPTH+1;
+    player.vy=PLAYER_MAX_FALL_SPEED;
+    updatePlayer(1/60);
+    return {
+      checkpointId,
+      platformId:player.platform?.id,
+      grounded:player.grounded,
+      gameOver,
+      hp:player.hp,
+      invincible:player.invincible,
+      centered:Math.abs(
+        player.x+player.width/2-(checkpointPlatform.start+checkpointPlatform.end)/2
+      )<0.01,
+    };
+  })()`, scope);
+  assert.equal(result.platformId, result.checkpointId);
+  assert.equal(result.grounded, true);
+  assert.equal(result.gameOver, false);
+  assert.equal(result.hp, 2);
+  assert.ok(result.invincible >= 0.89);
+  assert.equal(result.centered, true);
+});
+
+test("the final boss waits, runs toward the player, then charges an angled beam", () => {
+  const { scope, bossButton } = createGame();
+  bossButton.listeners.click({ preventDefault() {} });
+  const result = vm.runInContext(`(() => {
+    const boss=midBosses.find(candidate=>candidate.finalBoss);
+    const before={x:boss.x,y:boss.y,bullets:enemyBullets.length};
+    let ran=false;
+    let movedTowardPlayer=false;
+    let charged=false;
+    for(let frame=0;frame<360&&boss.attackState!=='fire';frame+=1) {
+      updateMidBosses(1/60);
+      ran ||= boss.attackState==='move' && boss.moving;
+      movedTowardPlayer ||= boss.x<before.x;
+      charged ||= boss.attackState==='charge';
+    }
+    const fired=boss.attackState==='fire';
+    const direction={x:boss.beamDirectionX,y:boss.beamDirectionY};
+    testInvincibility=false;
+    player.invincible=0;
+    updateMidBosses(1/60);
+    return {
+      currentArea,
+      bossCount:midBosses.filter(candidate=>candidate.finalBoss&&candidate.alive).length,
+      idleOnly:boss.idleOnly,
+      ran,
+      movedTowardPlayer,
+      charged,
+      fired,
+      direction,
+      playerHp:player.hp,
+      playerDownPhase:player.downPhase,
+      samePlatform:player.platform===boss.platform,
+      playerFacesBoss:player.facing===1 && player.x<boss.x,
+      bossScreenX:boss.x+boss.width/2-cameraX,
+      bossScreenY:boss.y+boss.height/2-cameraY,
+      width:WIDTH,
+      height:HEIGHT,
+      stayedOnRoad:boss.y===before.y,
+      didNotFire:enemyBullets.length===before.bullets,
+    };
+  })()`, scope);
+  assert.equal(result.currentArea, "boss");
+  assert.equal(result.bossCount, 1);
+  assert.equal(result.idleOnly, false);
+  assert.equal(result.ran, true);
+  assert.equal(result.movedTowardPlayer, true);
+  assert.equal(result.charged, true);
+  assert.equal(result.fired, true);
+  assert.ok(result.direction.x < -0.65);
+  assert.ok(result.direction.y > 0.1);
+  assert.equal(result.playerHp, 2);
+  assert.equal(result.playerDownPhase, "fall");
+  assert.equal(result.samePlatform, true);
+  assert.equal(result.playerFacesBoss, true);
+  assert.ok(result.bossScreenX >= 0 && result.bossScreenX <= result.width);
+  assert.ok(result.bossScreenY >= 0 && result.bossScreenY <= result.height);
+  assert.equal(result.stayedOnRoad, true);
+  assert.equal(result.didNotFire, true);
+});
+
+test("the final boss cycles through five distinct attack patterns", () => {
+  const { scope, bossButton } = createGame();
+  bossButton.listeners.click({ preventDefault() {} });
+  const result = vm.runInContext(`(() => {
+    const boss=midBosses.find(candidate=>candidate.finalBoss);
+    const hit=getPlayerHitbox();
+    const targetX=hit.x+hit.width/2;
+    const targetY=hit.y+hit.height/2;
+    const patterns=[];
+    const shotCounts={};
+    let rainTargetCount=0;
+    let dashMoved=false;
+    let groundWaveTravel=0;
+    let groundWavePersistsOffscreen=false;
+    for(let index=0;index<FINAL_BOSS.attackPatterns.length;index+=1) {
+      enemyBullets.length=0;
+      prepareFinalBossAttack(boss,targetX,targetY);
+      patterns.push(boss.attackPattern);
+      rainTargetCount=Math.max(rainTargetCount,boss.rainTargets.length);
+      boss.attackTimer=0;
+      updateFinalBossAttack(boss,1/60,hit,targetX,targetY,true);
+      const beforeX=boss.x;
+      updateFinalBossAttack(boss,1/60,hit,targetX,targetY,true);
+      shotCounts[boss.attackPattern]=enemyBullets.length;
+      if(boss.attackPattern==='dash') dashMoved=boss.x!==beforeX;
+      if(boss.attackPattern==='ground-wave') {
+        const wave=enemyBullets.find(bullet=>bullet.kind==='final-boss-wave');
+        groundWaveTravel=Math.abs(wave.vx)*wave.life;
+        groundWavePersistsOffscreen=wave.keepOffscreen;
+      }
+      boss.attackState='recovery';
+      boss.attackTimer=0;
+      updateFinalBossAttack(boss,1/60,hit,targetX,targetY,true);
+    }
+    return {
+      patterns,shotCounts,rainTargetCount,dashMoved,
+      groundWaveTravel,groundWavePersistsOffscreen,
+      speedProfile:{
+        beamCharge:FINAL_BOSS.chargeDuration,
+        fanCharge:FINAL_BOSS.fanChargeDuration,
+        rainCharge:FINAL_BOSS.rainChargeDuration,
+        waveCharge:FINAL_BOSS.groundWaveChargeDuration,
+        dashCharge:FINAL_BOSS.dashChargeDuration,
+        fanSpeed:FINAL_BOSS.fanProjectileSpeed,
+        rainSpeed:FINAL_BOSS.rainProjectileSpeed,
+        dashSpeed:FINAL_BOSS.dashSpeed,
+      },
+    };
+  })()`, scope);
+  assert.deepEqual(
+    Array.from(result.patterns),
+    ["beam", "fan", "rain", "ground-wave", "dash"],
+  );
+  assert.equal(result.shotCounts.beam, 0);
+  assert.equal(result.shotCounts.fan, 5);
+  assert.equal(result.shotCounts.rain, 1);
+  assert.equal(result.shotCounts["ground-wave"], 1);
+  assert.equal(result.rainTargetCount, 7);
+  assert.equal(result.dashMoved, true);
+  assert.ok(result.groundWaveTravel >= 1800);
+  assert.equal(result.groundWavePersistsOffscreen, true);
+  assert.ok(Object.values(result.speedProfile).every(Number.isFinite));
+  assert.ok(Math.max(
+    result.speedProfile.beamCharge,
+    result.speedProfile.fanCharge,
+    result.speedProfile.rainCharge,
+    result.speedProfile.waveCharge,
+    result.speedProfile.dashCharge,
+  ) < 0.9);
+  assert.ok(result.speedProfile.fanSpeed >= 700);
+  assert.ok(result.speedProfile.rainSpeed >= 900);
+  assert.ok(result.speedProfile.dashSpeed >= 900);
 });
 
 test("the active particle budget preserves critical effects during effect spikes", () => {
@@ -237,7 +457,7 @@ test("closed map keeps the small, cropped minimap", () => {
   const header = scope.hudHeaderLayout();
   assert.equal(header.map.width, Math.round(720 * 0.44));
   assert.equal(header.map.height,
-    Math.round(scope.topVideoSlotLayout().originalHeight * 1.05));
+    Math.round(scope.topVideoSlotLayout().originalHeight * 1.2));
   assert.ok(width < header.map.width && height < header.map.height);
   const roads = strokes.filter((stroke) => stroke.color === "rgba(83, 221, 242, 0.62)");
   assert.ok(roads.length > 0);

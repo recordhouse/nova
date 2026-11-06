@@ -18,6 +18,24 @@ test("the initial screen contains a visual-asset loading bar", () => {
   assert.match(css, /\.game-loading\.complete\s*\{[^}]*visibility:\s*hidden/s);
 });
 
+test("both boss sheets contain five high-resolution frames", () => {
+  for (const file of ["stand.png", "run.png"]) {
+    const image = fs.readFileSync(path.join(
+      __dirname,
+      "..",
+      "ftp-deploy",
+      "assets",
+      "images",
+      "boss",
+      file,
+    ));
+    assert.equal(image.toString("ascii", 1, 4), "PNG");
+    assert.equal(image.readUInt32BE(16), 4400);
+    assert.equal(image.readUInt32BE(20), 800);
+    assert.equal(image.readUInt32BE(16) / 5, 880);
+  }
+});
+
 test("all registered images and videos advance one shared loading progress", async () => {
   const images = [];
   const videos = [];
@@ -87,21 +105,35 @@ test("all registered images and videos advance one shared loading progress", asy
     );
   }
 
-  assert.equal(vm.runInContext("visualAssetLoadTasks.length", scope), 33);
-  assert.equal(images.length, 18);
+  assert.equal(vm.runInContext("visualAssetLoadTasks.length", scope), 35);
+  assert.equal(images.length, 20);
   assert.equal(videos.length, 15);
   assert.equal(scope.visualAssetsAreReady(), false);
   assert.equal(percent.textContent, "0%");
   const ready = scope.waitForVisualAssets();
 
-  for (const image of images) image.onload();
+  const bossImage = images.find((image) => image.currentSrc.includes("images/boss/stand.png"));
+  const bossRunImage = images.find((image) => image.currentSrc.includes("images/boss/run.png"));
+  assert.ok(bossImage);
+  assert.ok(bossRunImage);
+  assert.match(bossImage.currentSrc, /^\.\/assets\/images\/boss\/stand\.png/);
+  assert.match(bossRunImage.currentSrc, /^\.\/assets\/images\/boss\/run\.png/);
+  for (const image of images) {
+    if (image !== bossImage && image !== bossRunImage) image.onload();
+  }
+  bossImage.onerror();
+  assert.match(bossImage.currentSrc, /^\.\/ftp-deploy\/assets\/images\/boss\/stand\.png/);
+  bossImage.onload();
+  bossRunImage.onerror();
+  assert.match(bossRunImage.currentSrc, /^\.\/ftp-deploy\/assets\/images\/boss\/run\.png/);
+  bossRunImage.onload();
   for (let index = 0; index < videos.length; index += 1) {
     videos[index].emit(index === videos.length - 1 ? "error" : "loadeddata");
   }
   const snapshot = await ready;
   assert.deepEqual(
     { total: snapshot.total, loaded: snapshot.loaded, failed: snapshot.failed },
-    { total: 33, loaded: 33, failed: 1 },
+    { total: 35, loaded: 35, failed: 1 },
   );
   assert.equal(scope.visualAssetsAreReady(), true);
   assert.equal(styleValues.get("--loading-progress"), "100%");
@@ -151,6 +183,58 @@ test("the game runtime waits for visual assets and hides loading after its first
   vm.runInContext("update=()=>{}; draw=()=>{drawCalls+=1}", scope);
   frames.shift()(116);
   assert.equal(scope.drawCalls, 1);
+  assert.equal(loadingClasses.has("complete"), true);
+  assert.equal(loadingAttributes["aria-hidden"], "true");
+});
+
+test("test mode can replay the loading screen with an animated progress bar", () => {
+  const loadingClasses = new Set(["complete"]);
+  const loadingAttributes = { "aria-hidden": "true" };
+  const progressValues = new Map();
+  const progressAttributes = {};
+  const percent = { textContent: "100%" };
+  const scope = {
+    TEST_MODE: true,
+    performance: { now: () => 100 },
+    requestAnimationFrame() {},
+    buildStars() {},
+    resetGame() {},
+    resetAllInputs() { scope.resetInputs += 1; },
+    visualAssetsAreReady: () => true,
+    gameLoadingElement: {
+      classList: {
+        add(name) { loadingClasses.add(name); },
+        remove(name) { loadingClasses.delete(name); },
+      },
+      setAttribute(name, value) { loadingAttributes[name] = value; },
+    },
+    gameLoadingProgressElement: {
+      style: { setProperty(name, value) { progressValues.set(name, value); } },
+      setAttribute(name, value) { progressAttributes[name] = value; },
+    },
+    gameLoadingPercentElement: percent,
+    resetInputs: 0,
+  };
+  vm.createContext(scope);
+  vm.runInContext(
+    fs.readFileSync(path.join(__dirname, "..", "js", "main.js"), "utf8"),
+    scope,
+    { filename: "main.js" },
+  );
+
+  assert.equal(scope.previewTestLoadingScreen(), true);
+  assert.equal(scope.resetInputs, 1);
+  assert.equal(loadingClasses.has("complete"), false);
+  assert.equal(loadingAttributes["aria-hidden"], "false");
+  assert.equal(progressValues.get("--loading-progress"), "0%");
+
+  assert.equal(scope.updateTestLoadingPreview(1700), true);
+  assert.equal(progressValues.get("--loading-progress"), "50%");
+  assert.equal(percent.textContent, "50%");
+  assert.equal(progressAttributes["aria-valuenow"], "50");
+
+  assert.equal(scope.updateTestLoadingPreview(4001), false);
+  assert.equal(progressValues.get("--loading-progress"), "100%");
   assert.equal(loadingClasses.has("complete"), true);
   assert.equal(loadingAttributes["aria-hidden"], "true");
 });

@@ -14,6 +14,7 @@ test("combat sounds preload and use their intended audio segments", async () => 
   const contexts = [];
   const fetchedSources = [];
   const musicInstances = [];
+  const mediaSourceElements = [];
   class FakeAudioContext {
     constructor(options) {
       contexts.push(options);
@@ -34,6 +35,10 @@ test("combat sounds preload and use their intended audio segments", async () => 
           startedSources.push(this.buffer?.source);
         },
       };
+    }
+    createMediaElementSource(element) {
+      mediaSourceElements.push(element);
+      return { connect() {} };
     }
     createGain() {
       const node = {
@@ -142,9 +147,14 @@ test("combat sounds preload and use their intended audio segments", async () => 
   assert.equal(musicInstances.length, 1);
   assert.equal(musicInstances[0].source, "./assets/music/stage_01.mp3?v=20260924-1");
   assert.equal(musicInstances[0].loop, true);
-  assert.equal(musicInstances[0].volume, 0.03);
-  assert.equal(vm.runInContext("gameSfxOutput.gain.value", scope), 2);
-  assert.equal(vm.runInContext("femaleVoiceOutput.gain.value", scope), 2);
+  assert.equal(musicInstances[0].volume, 1,
+    "the media element stays at full volume so mobile cannot bypass attenuation");
+  assert.deepEqual(mediaSourceElements, [musicInstances[0]]);
+  assert.equal(vm.runInContext("stageMusicOutput.gain.value", scope), 1.2,
+    "background music uses the same Web Audio gain path on every device");
+  assert.equal(vm.runInContext("gameSfxOutput.gain.value", scope), 5);
+  assert.equal(vm.runInContext("femaleVoiceOutput.gain.value", scope), 7);
+  assert.equal(vm.runInContext("enemyVoiceOutput.gain.value", scope), 2);
   assert.equal(musicInstances[0].preload, "auto");
   assert.equal(musicInstances[0].playsInline, true);
   assert.equal(vm.runInContext("stageMusicPaused", scope), false);

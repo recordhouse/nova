@@ -99,6 +99,33 @@ function loadImageAsset(source) {
   return asset;
 }
 
+function loadImageAssetWithFallback(sources) {
+  const image = new Image();
+  const task = registerVisualAsset("image", sources[0]);
+  const asset = { image, loaded: false, error: false, ready: task.promise };
+  let sourceIndex = 0;
+  const loadCurrentSource = () => {
+    const source = sources[sourceIndex];
+    const separator = source.includes("?") ? "&" : "?";
+    image.src = `${source}${separator}v=${Date.now()}`;
+  };
+  image.onload = () => {
+    asset.loaded = true;
+    task.settle(true);
+  };
+  image.onerror = () => {
+    sourceIndex += 1;
+    if (sourceIndex < sources.length) {
+      loadCurrentSource();
+      return;
+    }
+    asset.error = true;
+    task.settle(false);
+  };
+  loadCurrentSource();
+  return asset;
+}
+
 function loadVideoAsset(source, options = {}) {
   const task = registerVisualAsset("video", source);
   const loop = options.loop ?? true;
@@ -175,6 +202,14 @@ const enemySprites = {
 };
 
 const turretSprite = loadImageAsset("./assets/images/monsters/turret_01.png");
+const bossStandSprite = loadImageAssetWithFallback([
+  "./assets/images/boss/stand.png?v=20261105-1",
+  "./ftp-deploy/assets/images/boss/stand.png?v=20261105-1",
+]);
+const bossRunSprite = loadImageAssetWithFallback([
+  "./assets/images/boss/run.png?v=20261105-1",
+  "./ftp-deploy/assets/images/boss/run.png?v=20261105-1",
+]);
 const playerGunVideoAssets = Object.freeze([
   loadVideoAsset("./assets/video/main/gun-optimized.mp4?v=20261015-1"),
   loadVideoAsset("./assets/video/main/gun_02-optimized.mp4?v=20261021-2"),
@@ -472,13 +507,12 @@ playMonsterBasicVideo();
 playSpaceBackgroundVideo();
 
 const GameAudioContext = window.AudioContext ?? window.webkitAudioContext;
-const STAGE_MUSIC_VOLUME = 0.03;
+const STAGE_MUSIC_VOLUME = 1.2;
 const stage01Music = typeof Audio === "function"
   ? new Audio("./assets/music/stage_01.mp3?v=20260924-1") : null;
 let stageMusicPaused = TEST_MODE;
 if (stage01Music) {
   stage01Music.loop = true;
-  stage01Music.volume = STAGE_MUSIC_VOLUME;
   stage01Music.preload = "auto";
   stage01Music.playsInline = true;
 }
@@ -498,12 +532,9 @@ function setCurrentStageMusicPaused(paused) {
     stage01Music?.pause();
     return;
   }
+  resumeGameAudioContext();
   playCurrentStageMusic();
 }
-
-// Normal play starts immediately when autoplay is available. If a browser
-// blocks it, the existing pointer/key audio unlock retries on the first input.
-if (!stageMusicPaused) playCurrentStageMusic();
 
 function fetchSoundData(source) {
   return typeof fetch === "function"
@@ -555,10 +586,49 @@ function createGameAudioContext() {
 
 // Decode during page loading; the first input only has to resume the context.
 const gameAudioContext = createGameAudioContext();
+let stageMusicSource = null;
+let stageMusicOutput = null;
+
+function resumeGameAudioContext() {
+  if (gameAudioContext?.state !== "suspended") return;
+  gameAudioContext.resume().catch(() => {});
+}
+
+function connectStageMusicToAudioGraph() {
+  if (!stage01Music) return false;
+  if (!gameAudioContext ||
+      typeof gameAudioContext.createMediaElementSource !== "function") {
+    stage01Music.volume = Math.min(1, STAGE_MUSIC_VOLUME);
+    return false;
+  }
+  try {
+    const source = gameAudioContext.createMediaElementSource(stage01Music);
+    const output = gameAudioContext.createGain();
+    output.gain.value = STAGE_MUSIC_VOLUME;
+    source.connect(output);
+    output.connect(gameAudioContext.destination);
+    stage01Music.volume = 1;
+    stageMusicSource = source;
+    stageMusicOutput = output;
+    return true;
+  } catch {
+    stage01Music.volume = Math.min(1, STAGE_MUSIC_VOLUME);
+    return false;
+  }
+}
+
+connectStageMusicToAudioGraph();
+
+// Normal play starts immediately when autoplay is available. If a browser
+// blocks it, the existing pointer/key audio unlock retries on the first input.
+if (!stageMusicPaused) playCurrentStageMusic();
+
 const gameSfxOutput = gameAudioContext ? gameAudioContext.createGain() : null;
 const femaleVoiceOutput = gameAudioContext ? gameAudioContext.createGain() : null;
-const GAME_SFX_MASTER_GAIN = 2;
-const FEMALE_VOICE_MASTER_GAIN = 2;
+const enemyVoiceOutput = gameAudioContext ? gameAudioContext.createGain() : null;
+const GAME_SFX_MASTER_GAIN = 5;
+const FEMALE_VOICE_MASTER_GAIN = 7;
+const ENEMY_VOICE_MASTER_GAIN = 2;
 if (gameSfxOutput) {
   gameSfxOutput.gain.value = GAME_SFX_MASTER_GAIN;
   gameSfxOutput.connect(gameAudioContext.destination);
@@ -566,6 +636,10 @@ if (gameSfxOutput) {
 if (femaleVoiceOutput) {
   femaleVoiceOutput.gain.value = FEMALE_VOICE_MASTER_GAIN;
   femaleVoiceOutput.connect(gameAudioContext.destination);
+}
+if (enemyVoiceOutput) {
+  enemyVoiceOutput.gain.value = ENEMY_VOICE_MASTER_GAIN;
+  enemyVoiceOutput.connect(gameAudioContext.destination);
 }
 let playerGunSoundBuffer = null;
 const playerGunSoundDecode = gameAudioContext
@@ -656,9 +730,12 @@ const femaleResurrectionVoice = createPreparedGameSound(
   femaleVoiceOutput,
 );
 const enemyVideoVoiceSounds = Object.freeze({
-  monster2: createPreparedGameSound(enemyVideoVoiceData.monster2, 0.68),
-  monster3: createPreparedGameSound(enemyVideoVoiceData.monster3, 0.68),
-  turret: createPreparedGameSound(enemyVideoVoiceData.turret, 0.68),
+  monster2: createPreparedGameSound(
+    enemyVideoVoiceData.monster2, 0.68, 0, enemyVoiceOutput),
+  monster3: createPreparedGameSound(
+    enemyVideoVoiceData.monster3, 0.68, 0, enemyVoiceOutput),
+  turret: createPreparedGameSound(
+    enemyVideoVoiceData.turret, 0.68, 0, enemyVoiceOutput),
 });
 let lastMetalHitSoundIndex = -1;
 
@@ -679,11 +756,9 @@ const turretMetalHitChannel = createSharedGameSoundChannel(0.68);
 function prepareGameAudio() {
   playMonsterBasicVideo();
   playSpaceBackgroundVideo();
+  resumeGameAudioContext();
   playCurrentStageMusic();
   if (!gameAudioContext) return null;
-  if (gameAudioContext.state === "suspended") {
-    gameAudioContext.resume().catch(() => {});
-  }
   return playerGunSoundDecode;
 }
 

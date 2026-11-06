@@ -47,8 +47,8 @@ function updateMovementJoystick(event) {
   if (event.pointerId !== movementJoystickPointerId || !movementJoystickElement) return;
   const rect = movementJoystickElement.getBoundingClientRect();
   const pointerDelta = screenDeltaToGameDelta(
-    event.clientX - (rect.left + rect.width / 2),
-    event.clientY - (rect.top + rect.height / 2),
+    event.clientX - movementJoystickOriginX,
+    event.clientY - movementJoystickOriginY,
   );
   const { dx, dy } = pointerDelta;
   const distance = Math.hypot(dx, dy);
@@ -79,6 +79,8 @@ function releaseMovementJoystick(pointerId) {
   ) return;
 
   movementJoystickPointerId = null;
+  movementJoystickOriginX = 0;
+  movementJoystickOriginY = 0;
   movementJoystickElement?.classList.remove("active");
   movementJoystickKnob?.style.setProperty("transform", "translate3d(0, 0, 0)");
   setJoystickControls({});
@@ -174,6 +176,8 @@ if (movementJoystickElement && movementJoystickTouchZone) {
     event.preventDefault();
     releaseMovementJoystick();
     movementJoystickPointerId = event.pointerId;
+    movementJoystickOriginX = event.clientX;
+    movementJoystickOriginY = event.clientY;
     movementJoystickTouchZone.setPointerCapture?.(event.pointerId);
     movementJoystickElement.classList.add("active");
     updateMovementJoystick(event);
@@ -233,6 +237,18 @@ testMapButton?.addEventListener("click", (event) => {
 testPortalButton?.addEventListener("click", (event) => {
   event.preventDefault();
   movePlayerToPortalEntrance();
+});
+
+testBossButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  movePlayerToFinalBoss();
+});
+
+testLoadingButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  if (typeof previewTestLoadingScreen === "function") {
+    previewTestLoadingScreen();
+  }
 });
 
 let testMusicPaused = true;

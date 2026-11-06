@@ -90,11 +90,18 @@ function drawBackground() {
 
 function drawStationPanels(platform, thickness = PLATFORM_DECK_THICKNESS - 4) {
   const panelWidths = [96, 120, 144];
-  const panelPalettes = [
+  const standardPanelPalettes = [
     ["#18232d", "#1c2934"],
     ["#20252d", "#252c35"],
     ["#142a31", "#19343c"],
   ];
+  const bossPanelPalettes = [
+    ["#32121e", "#461422"],
+    ["#3b1720", "#501823"],
+    ["#28101d", "#411225"],
+  ];
+  const panelPalettes = currentArea === "boss"
+    ? bossPanelPalettes : standardPanelPalettes;
   const panelWidth = panelWidths[platform.style];
   const palette = panelPalettes[platform.style];
   const first = Math.max(0, Math.floor((cameraX - 48 - platform.start) / panelWidth));
@@ -165,7 +172,8 @@ function drawRoadPixelTexture(platform, palette, isSubPath = false) {
     ctx.fillRect(x + 9, y + 4, wear > 0.58 ? 6 : 3, 1);
     if (wear > 0.68) {
       ctx.globalAlpha = baseAlpha * 0.64;
-      ctx.fillStyle = isSubPath ? "#a286d0" : "#6eafbd";
+      ctx.fillStyle = isSubPath ? "#a286d0"
+        : currentArea === "boss" ? "#873143" : "#6eafbd";
       ctx.fillRect(x + 15, y + 6, 3, 1);
     }
   }
@@ -173,7 +181,9 @@ function drawRoadPixelTexture(platform, palette, isSubPath = false) {
 }
 
 function drawPixelRoadRail(platform, railColor, isSubPath = false) {
-  const highlight = isSubPath ? "rgba(201, 174, 255, 0.72)" : "rgba(105, 226, 238, 0.74)";
+  const highlight = isSubPath ? "rgba(201, 174, 255, 0.72)"
+    : currentArea === "boss" ? "rgba(177, 68, 82, 0.72)"
+      : "rgba(105, 226, 238, 0.74)";
   const visibleStart = Math.max(platform.start, cameraX - 16);
   const visibleEnd = Math.min(platform.end, cameraX + WIDTH + 16);
   if (visibleEnd <= visibleStart) return;
@@ -801,7 +811,7 @@ function drawRamp(platform, palette, railColor) {
     ctx.lineTo(bottomExitX, platform.exitY + PLATFORM_DECK_THICKNESS);
   }
   ctx.stroke();
-  drawRampLights(platform);
+  if (currentArea !== "boss") drawRampLights(platform);
 }
 
 function drawTriangleEnergyFrame(platform, palette, centerX, apexY) {
@@ -944,6 +954,67 @@ function drawInvertedTrianglePlatform(platform, palette, railColor) {
   }
 }
 
+function drawBossRoadFoundation(platform) {
+  if (currentArea !== "boss" || platform.kind !== "flat") return;
+  const visibleStart = Math.max(platform.start, cameraX - 80);
+  const visibleEnd = Math.min(platform.end, cameraX + WIDTH + 80);
+  if (visibleEnd <= visibleStart) return;
+  const foundationTop = platform.y + PLATFORM_DECK_THICKNESS - 1;
+  const isArena = platform.type === "boss-arena";
+  const foundationDepth = isArena ? 54 : 36;
+
+  ctx.fillStyle = isArena ? "#210810" : "#1a080f";
+  ctx.beginPath();
+  ctx.moveTo(platform.start + 5, foundationTop);
+  ctx.lineTo(platform.end - 5, foundationTop);
+  ctx.lineTo(platform.end - 18, foundationTop + foundationDepth);
+  ctx.lineTo(platform.start + 18, foundationTop + foundationDepth);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = isArena ? "#662032" : "#4e1928";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(visibleStart, foundationTop + 7);
+  ctx.lineTo(visibleEnd, foundationTop + 7);
+  ctx.stroke();
+
+  const supportSpacing = isArena ? 82 : 58;
+  const firstSupport = Math.max(
+    platform.start + supportSpacing / 2,
+    Math.floor((visibleStart - platform.start) / supportSpacing) * supportSpacing +
+      platform.start + supportSpacing / 2,
+  );
+  for (
+    let supportX = firstSupport;
+    supportX < visibleEnd && supportX < platform.end - 12;
+    supportX += supportSpacing
+  ) {
+    const supportWidth = isArena ? 14 : 10;
+    const supportBottom = foundationTop + foundationDepth + (isArena ? 14 : 10);
+    ctx.fillStyle = isArena ? "#35101b" : "#2a0d18";
+    ctx.fillRect(
+      pixelSnap(supportX - supportWidth / 2, 1),
+      foundationTop + 4,
+      supportWidth,
+      foundationDepth - 2,
+    );
+    ctx.beginPath();
+    ctx.moveTo(supportX - supportWidth, foundationTop + foundationDepth - 2);
+    ctx.lineTo(supportX + supportWidth, foundationTop + foundationDepth - 2);
+    ctx.lineTo(supportX, supportBottom);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#7a2638";
+    ctx.fillRect(
+      pixelSnap(supportX - 1, 1),
+      foundationTop + 9,
+      2,
+      Math.max(8, foundationDepth - 14),
+    );
+  }
+}
+
 function drawTerrainPlatform(platform, palette, railColor, isSubPath) {
   if (platform.kind === "ramp") {
     drawRamp(platform, palette, railColor);
@@ -988,7 +1059,7 @@ function drawTerrainPlatform(platform, palette, railColor, isSubPath) {
   drawPlatformArchitecture(platform);
   ctx.restore();
 
-  drawPlatformLights(platform);
+  if (currentArea !== "boss") drawPlatformLights(platform);
   drawPixelRoadRail(platform, isSubPath ? "#8873ad" : railColor, isSubPath);
   drawPlatformFeature(platform);
 
@@ -1019,6 +1090,12 @@ function drawTerrain() {
     ["#214049", "#172c32", "#0c181c"],
   ];
   const railColors = ["#718391", "#8b8378", "#668f96"];
+  const bossDeckPalettes = [
+    ["#5a1b2b", "#35101d", "#190811"],
+    ["#6b2430", "#42141d", "#1e0910"],
+    ["#501529", "#32101f", "#170810"],
+  ];
+  const bossRailColors = ["#ff6a78", "#ff8a79", "#ea4568"];
   for (const platform of platforms) {
     if (platform.end < cameraX - 120 || platform.start > cameraX + WIDTH + 120) {
       continue;
@@ -1036,8 +1113,13 @@ function drawTerrain() {
     const isSubPath = platform.routeRole === "sub";
     const palette = isSubPath
       ? ["#332a48", "#211c32", "#120f1e"]
-      : deckPalettes[platform.style];
-    const railColor = railColors[platform.style];
+      : currentArea === "boss"
+        ? bossDeckPalettes[platform.style]
+        : deckPalettes[platform.style];
+    const railColor = currentArea === "boss"
+      ? bossRailColors[platform.style]
+      : railColors[platform.style];
+    drawBossRoadFoundation(platform);
     drawTerrainPlatform(platform, palette, railColor, isSubPath);
   }
 }
@@ -1926,7 +2008,377 @@ function drawTurret(turret) {
   ctx.restore();
 }
 
+function finalBossVisualMouthPosition(boss) {
+  return {
+    x: boss.x + boss.width / 2 + boss.facing * FINAL_BOSS.mouthForwardOffset,
+    y: (
+      boss.y + boss.height - FINAL_BOSS.mouthBottomOffset +
+      FINAL_BOSS.standGroundOffset
+    ),
+  };
+}
+
+function finalBossVisualAttackOrigin(boss) {
+  const pattern = boss.attackPattern ?? "beam";
+  if (pattern === "rain") {
+    return {
+      x: boss.x + boss.width / 2,
+      y: boss.y - 48,
+    };
+  }
+  if (pattern === "ground-wave") {
+    return {
+      x: boss.x + boss.width / 2 + boss.facing * boss.width * 0.28,
+      y: boss.y + boss.height - 10,
+    };
+  }
+  if (pattern === "dash") {
+    return {
+      x: boss.x + boss.width / 2,
+      y: boss.y + boss.height * 0.56,
+    };
+  }
+  return finalBossVisualMouthPosition(boss);
+}
+
+function drawFinalBossPatternTelegraph(boss) {
+  const charging = boss.attackState === "charge";
+  const firing = boss.attackState === "fire";
+  if (!charging && !firing) return;
+  const pattern = boss.attackPattern ?? "beam";
+  const progress = charging
+    ? Math.max(0, Math.min(1, boss.chargeProgress ?? 0)) : 1;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.lineCap = "round";
+  ctx.shadowColor = "#ff3b91";
+  ctx.shadowBlur = 14 + progress * 16;
+  if (pattern === "rain") {
+    for (const target of boss.rainTargets ?? []) {
+      if (target.fired) continue;
+      const surfaceY = boss.platform
+        ? platformSurfaceY(boss.platform, target.x)
+        : boss.y + boss.height;
+      const pulse = 0.68 + Math.sin(gameTime * 18 + target.x * 0.02) * 0.22;
+      ctx.globalAlpha = (0.48 + progress * 0.46) * pulse;
+      ctx.strokeStyle = "#ff72c9";
+      ctx.lineWidth = 2 + progress * 2;
+      ctx.beginPath();
+      ctx.moveTo(target.x, cameraY + 12);
+      ctx.lineTo(target.x, surfaceY - 5);
+      ctx.stroke();
+      ctx.fillStyle = "#fff0fb";
+      ctx.beginPath();
+      ctx.arc(target.x, surfaceY - 5, 5 + progress * 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (pattern === "fan" && charging) {
+    const mouth = finalBossVisualMouthPosition(boss);
+    const count = FINAL_BOSS.fanProjectileCount;
+    const center = (count - 1) / 2;
+    const baseAngle = Math.atan2(
+      boss.beamDirectionY || 0,
+      Math.max(0.001, Math.abs(boss.beamDirectionX || boss.facing)),
+    );
+    ctx.globalAlpha = 0.25 + progress * 0.52;
+    ctx.strokeStyle = "#ff8bd7";
+    ctx.lineWidth = 1.5 + progress * 1.5;
+    for (let index = 0; index < count; index += 1) {
+      const spreadRatio = center > 0 ? (index - center) / center : 0;
+      const angle = Math.max(
+        -Math.PI * 0.44,
+        Math.min(
+          Math.PI * 0.44,
+          baseAngle + spreadRatio * FINAL_BOSS.fanSpread / 2,
+        ),
+      );
+      ctx.beginPath();
+      ctx.moveTo(mouth.x, mouth.y);
+      ctx.lineTo(
+        mouth.x + boss.facing * Math.cos(angle) * (140 + progress * 150),
+        mouth.y + Math.sin(angle) * (140 + progress * 150),
+      );
+      ctx.stroke();
+    }
+  } else if (pattern === "ground-wave" && charging) {
+    const surfaceY = boss.platform
+      ? platformSurfaceY(boss.platform, boss.x + boss.width / 2)
+      : boss.y + boss.height;
+    ctx.globalAlpha = 0.38 + progress * 0.5;
+    ctx.strokeStyle = "#ff547d";
+    ctx.lineWidth = 4 + progress * 4;
+    ctx.beginPath();
+    ctx.moveTo(boss.x + boss.width / 2, surfaceY - 8);
+    ctx.lineTo(
+      boss.x + boss.width / 2 + boss.facing * (250 + progress * 300),
+      surfaceY - 8,
+    );
+    ctx.stroke();
+  } else if (pattern === "dash") {
+    const centerX = boss.x + boss.width / 2;
+    const centerY = boss.y + boss.height * 0.58;
+    ctx.globalAlpha = charging ? 0.35 + progress * 0.52 : 0.68;
+    ctx.strokeStyle = "#ff3f78";
+    ctx.lineWidth = charging ? 5 + progress * 7 : 8;
+    for (let line = 0; line < 4; line += 1) {
+      const y = centerY + (line - 1.5) * 22;
+      const length = (charging ? 210 + progress * 250 : 290) - line * 25;
+      ctx.beginPath();
+      ctx.moveTo(centerX - boss.facing * boss.width * 0.25, y);
+      ctx.lineTo(centerX - boss.facing * length, y);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawFinalBossCharge(boss) {
+  if (boss.attackState !== "charge") return;
+  const mouth = finalBossVisualAttackOrigin(boss);
+  const progress = Math.max(0, Math.min(1, boss.chargeProgress ?? 0));
+  const pulse = 0.88 + Math.sin(gameTime * 26) * 0.12;
+  const radius = (9 + progress * 24) * pulse;
+  const glow = ctx.createRadialGradient(
+    mouth.x,
+    mouth.y,
+    0,
+    mouth.x,
+    mouth.y,
+    radius * 2.8,
+  );
+  glow.addColorStop(0, "rgba(255, 255, 255, 1)");
+  glow.addColorStop(0.17, "rgba(255, 171, 230, 0.98)");
+  glow.addColorStop(0.45, "rgba(255, 45, 128, 0.82)");
+  glow.addColorStop(1, "rgba(89, 0, 54, 0)");
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(mouth.x, mouth.y, radius * 2.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff4ff";
+  ctx.shadowColor = "#ff248d";
+  ctx.shadowBlur = 24 + progress * 30;
+  ctx.beginPath();
+  ctx.arc(mouth.x, mouth.y, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.shadowBlur = 18;
+  for (let ring = 0; ring < 3; ring += 1) {
+    const ringRadius = radius + 10 + ring * 11 + (1 - progress) * 9;
+    ctx.globalAlpha = 0.78 - ring * 0.18;
+    ctx.strokeStyle = ring === 2 ? "#ff4f9f" : "#ffc0e8";
+    ctx.lineWidth = 3 - ring * 0.55;
+    ctx.beginPath();
+    ctx.arc(mouth.x, mouth.y, ringRadius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.strokeStyle = "rgba(255, 101, 184, 0.95)";
+  ctx.lineWidth = 3;
+  for (let index = 0; index < 10; index += 1) {
+    const angle = gameTime * (index % 2 ? -3.4 : 3.9) + index * Math.PI * 0.2;
+    const outerRadius = 62 - progress * 26 + (index % 3) * 4;
+    const innerRadius = radius + 5;
+    ctx.beginPath();
+    ctx.moveTo(
+      mouth.x + Math.cos(angle) * outerRadius,
+      mouth.y + Math.sin(angle) * outerRadius,
+    );
+    ctx.lineTo(
+      mouth.x + Math.cos(angle + 0.12) * innerRadius,
+      mouth.y + Math.sin(angle + 0.12) * innerRadius,
+    );
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawFinalBossBeam(boss) {
+  if (
+    boss.attackState !== "fire" ||
+    (boss.attackPattern && boss.attackPattern !== "beam")
+  ) return;
+  const mouth = finalBossVisualMouthPosition(boss);
+  const directionX = boss.beamDirectionX || boss.facing;
+  const directionY = boss.beamDirectionY || 0;
+  const endX = mouth.x + directionX * FINAL_BOSS.beamRange;
+  const endY = mouth.y + directionY * FINAL_BOSS.beamRange;
+  const perpendicularX = -directionY;
+  const perpendicularY = directionX;
+  const pulse = 0.92 + Math.sin(gameTime * 34) * 0.08;
+  const beamGradient = ctx.createLinearGradient(mouth.x, mouth.y, endX, endY);
+  beamGradient.addColorStop(0, "#fff8ff");
+  beamGradient.addColorStop(0.08, "#ff9cdc");
+  beamGradient.addColorStop(0.42, "#ff2b78");
+  beamGradient.addColorStop(1, "rgba(125, 0, 57, 0.78)");
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = "#ff176f";
+  ctx.shadowBlur = 34;
+  ctx.strokeStyle = "rgba(126, 0, 64, 0.76)";
+  ctx.lineWidth = FINAL_BOSS.beamRadius * 2.45 * pulse;
+  ctx.beginPath();
+  ctx.moveTo(mouth.x, mouth.y);
+  ctx.lineTo(endX, endY);
+  ctx.stroke();
+
+  ctx.shadowBlur = 22;
+  ctx.strokeStyle = beamGradient;
+  ctx.lineWidth = FINAL_BOSS.beamRadius * 1.62 * pulse;
+  ctx.beginPath();
+  ctx.moveTo(mouth.x, mouth.y);
+  for (let step = 1; step <= 14; step += 1) {
+    const ratio = step / 14;
+    const flicker = Math.sin(gameTime * 38 + step * 2.17) * (5 + ratio * 5);
+    ctx.lineTo(
+      mouth.x + directionX * FINAL_BOSS.beamRange * ratio + perpendicularX * flicker,
+      mouth.y + directionY * FINAL_BOSS.beamRange * ratio + perpendicularY * flicker,
+    );
+  }
+  ctx.stroke();
+
+  ctx.shadowColor = "#ffd6f3";
+  ctx.shadowBlur = 15;
+  ctx.strokeStyle = "#ff79c4";
+  ctx.lineWidth = FINAL_BOSS.beamRadius * 0.82 * pulse;
+  ctx.beginPath();
+  ctx.moveTo(mouth.x, mouth.y);
+  ctx.lineTo(endX, endY);
+  ctx.stroke();
+  ctx.strokeStyle = "#fff7ff";
+  ctx.lineWidth = Math.max(6, FINAL_BOSS.beamRadius * 0.24 * pulse);
+  ctx.beginPath();
+  ctx.moveTo(mouth.x, mouth.y);
+  ctx.lineTo(endX, endY);
+  ctx.stroke();
+
+  ctx.shadowColor = "#ff5eaa";
+  ctx.shadowBlur = 12;
+  ctx.strokeStyle = "rgba(255, 177, 222, 0.78)";
+  ctx.lineWidth = 2.5;
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(
+      mouth.x + perpendicularX * side * FINAL_BOSS.beamRadius * 0.92,
+      mouth.y + perpendicularY * side * FINAL_BOSS.beamRadius * 0.92,
+    );
+    for (let step = 1; step <= 8; step += 1) {
+      const ratio = step / 8;
+      const arcOffset = side * FINAL_BOSS.beamRadius * (0.9 + Math.sin(
+        gameTime * 31 + step * 1.9,
+      ) * 0.22);
+      ctx.lineTo(
+        mouth.x + directionX * FINAL_BOSS.beamRange * ratio + perpendicularX * arcOffset,
+        mouth.y + directionY * FINAL_BOSS.beamRange * ratio + perpendicularY * arcOffset,
+      );
+    }
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "#fffaff";
+  ctx.shadowBlur = 30;
+  ctx.beginPath();
+  ctx.arc(mouth.x, mouth.y, FINAL_BOSS.beamRadius * 0.78 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFinalBossStand(boss) {
+  const centerX = boss.x + boss.width / 2;
+  const bottomY = boss.y + boss.height;
+  const canUseRunSprite = (
+    boss.moving &&
+    typeof bossRunSprite !== "undefined" &&
+    bossRunSprite.loaded &&
+    bossRunSprite.image.naturalWidth &&
+    bossRunSprite.image.naturalHeight
+  );
+  const sprite = canUseRunSprite ? bossRunSprite : (
+    typeof bossStandSprite !== "undefined" ? bossStandSprite : null
+  );
+  const frameColumns = canUseRunSprite
+    ? FINAL_BOSS.runColumns : FINAL_BOSS.standColumns;
+  const frameRows = canUseRunSprite
+    ? FINAL_BOSS.runRows : FINAL_BOSS.standRows;
+  const frameCount = canUseRunSprite
+    ? FINAL_BOSS.runFrames : FINAL_BOSS.standFrames;
+  const frameRate = canUseRunSprite
+    ? FINAL_BOSS.runFps : FINAL_BOSS.standFps;
+  const groundOffset = canUseRunSprite
+    ? FINAL_BOSS.runGroundOffset : FINAL_BOSS.standGroundOffset;
+  const animationStep = Math.floor(
+    (boss.animationTime ?? gameTime) * frameRate,
+  );
+  const animationCycle = Math.max(1, (frameCount - 1) * 2);
+  const cycleFrame = animationStep % animationCycle;
+  const animationFrame = canUseRunSprite
+    ? animationStep % frameCount
+    : cycleFrame < frameCount ? cycleFrame : animationCycle - cycleFrame;
+
+  ctx.save();
+  ctx.translate(centerX, bottomY + groundOffset);
+  // The source artwork naturally faces left.
+  ctx.scale(boss.facing < 0 ? 1 : -1, 1);
+  if (
+    sprite?.loaded &&
+    sprite.image.naturalWidth &&
+    sprite.image.naturalHeight
+  ) {
+    const frameWidth = sprite.image.naturalWidth / frameColumns;
+    const frameHeight = sprite.image.naturalHeight / frameRows;
+    const sourceX = (animationFrame % frameColumns) * frameWidth;
+    const sourceY = Math.floor(animationFrame / frameColumns) * frameHeight;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(
+      sprite.image,
+      sourceX,
+      sourceY,
+      frameWidth,
+      frameHeight,
+      -FINAL_BOSS.spriteWidth / 2,
+      -FINAL_BOSS.spriteHeight,
+      FINAL_BOSS.spriteWidth,
+      FINAL_BOSS.spriteHeight,
+    );
+  } else {
+    ctx.fillStyle = "#4d102c";
+    ctx.fillRect(
+      -boss.width / 2,
+      -boss.height,
+      boss.width,
+      boss.height,
+    );
+  }
+  ctx.restore();
+
+  drawFinalBossPatternTelegraph(boss);
+  drawFinalBossCharge(boss);
+  drawFinalBossBeam(boss);
+
+  const ratio = Math.max(0, Math.min(1, boss.hp / Math.max(1, boss.maxHp)));
+  const colorStage = ratio > 0.6 ? 2 : ratio > 0.3 ? 1 : 0;
+  drawPixelGauge(
+    centerX,
+    bottomY - FINAL_BOSS.spriteHeight - 16,
+    220,
+    ratio,
+    MONSTER_GAUGE_STYLES[colorStage],
+  );
+}
+
 function drawMidBoss(boss) {
+  if (boss.finalBoss) {
+    drawFinalBossStand(boss);
+    return;
+  }
   const centerX = boss.x + boss.width / 2;
   const centerY = boss.y + boss.height / 2;
   const charge = boss.active && boss.fireTimer < 0.45
@@ -2317,27 +2769,107 @@ function drawProjectiles() {
       ctx.restore();
       continue;
     }
-    if (bullet.kind === "boss-laser") {
+    if (bullet.kind === "final-boss-wave") {
+      const pulse = 0.88 + Math.sin(gameTime * 30) * 0.12;
+      ctx.save();
+      ctx.translate(bullet.x, bullet.y);
+      ctx.scale(Math.sign(bullet.vx) || 1, 1);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.shadowColor = "#ff285f";
+      ctx.shadowBlur = 30;
+      ctx.strokeStyle = "rgba(255, 24, 91, 0.42)";
+      ctx.lineWidth = 18;
+      ctx.beginPath();
+      ctx.moveTo(-72, 0);
+      ctx.lineTo(-5, 0);
+      ctx.stroke();
+      const waveLayers = [
+        { radius: 46, offset: -18, width: 13, color: "rgba(255, 37, 102, 0.62)" },
+        { radius: 35, offset: -10, width: 8, color: "#ff4e9d" },
+        { radius: 24, offset: -2, width: 4, color: "#ffb3e0" },
+        { radius: 14, offset: 5, width: 2, color: "#fff7ff" },
+      ];
+      for (const layer of waveLayers) {
+        ctx.shadowBlur = layer.width > 8 ? 26 : 12;
+        ctx.strokeStyle = layer.color;
+        ctx.lineWidth = layer.width;
+        ctx.beginPath();
+        ctx.arc(
+          layer.offset,
+          0,
+          layer.radius * pulse,
+          -Math.PI * 0.58,
+          Math.PI * 0.58,
+        );
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#fff8ff";
+      ctx.shadowColor = "#ff59a8";
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(10, 0, 7 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 157, 211, 0.9)";
+      ctx.lineWidth = 2;
+      for (let spark = 0; spark < 7; spark += 1) {
+        const angle = -1.2 + spark * 0.4 + Math.sin(gameTime * 21 + spark) * 0.08;
+        const startX = -6 + Math.cos(angle) * 23;
+        const startY = Math.sin(angle) * 23;
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(
+          startX - 18 - spark * 2,
+          startY + Math.sin(angle) * (10 + spark),
+        );
+        ctx.stroke();
+      }
+      ctx.restore();
+      continue;
+    }
+    if (
+      bullet.kind === "boss-laser" ||
+      bullet.kind === "final-boss-fan" ||
+      bullet.kind === "final-boss-rain"
+    ) {
+      const isRain = bullet.kind === "final-boss-rain";
+      const outerColor = isRain ? "rgba(255, 46, 118, 0.5)" : "rgba(255, 61, 215, 0.48)";
+      const middleColor = isRain ? "#ff4f9f" : "#ff69e2";
       ctx.save();
       ctx.translate(bullet.x, bullet.y);
       ctx.rotate(Math.atan2(bullet.vy, bullet.vx));
+      ctx.globalCompositeOperation = "lighter";
       ctx.lineCap = "round";
-      ctx.shadowColor = "#ff42db";
-      ctx.shadowBlur = 18;
-      ctx.strokeStyle = "rgba(255, 61, 215, 0.48)";
-      ctx.lineWidth = 15;
+      ctx.shadowColor = isRain ? "#ff285f" : "#ff42db";
+      ctx.shadowBlur = 27;
+      ctx.strokeStyle = outerColor;
+      ctx.lineWidth = isRain ? 24 : 20;
       ctx.beginPath();
-      ctx.moveTo(-42, 0);
-      ctx.lineTo(24, 0);
+      ctx.moveTo(isRain ? -82 : -62, 0);
+      ctx.lineTo(isRain ? 31 : 28, 0);
       ctx.stroke();
-      ctx.shadowBlur = 8;
-      ctx.strokeStyle = "#ff69e2";
-      ctx.lineWidth = 8;
+      ctx.shadowBlur = 13;
+      ctx.strokeStyle = middleColor;
+      ctx.lineWidth = isRain ? 12 : 10;
       ctx.stroke();
-      ctx.shadowBlur = 0;
+      ctx.shadowBlur = 5;
       ctx.strokeStyle = "#fff0ff";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4;
       ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = middleColor;
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(isRain ? 29 : 26, 0, isRain ? 6 : 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = isRain
+        ? "rgba(255, 144, 191, 0.86)" : "rgba(255, 151, 237, 0.86)";
+      ctx.lineWidth = 2;
+      for (const offset of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(isRain ? -64 : -48, offset * 7);
+        ctx.lineTo(isRain ? -24 : -14, offset * 3);
+        ctx.stroke();
+      }
       ctx.restore();
       continue;
     }
@@ -3752,7 +4284,7 @@ const HUD_TOP_FRAME_GLOW_COLOR = "rgba(154, 70, 220, 0.32)";
 const HUD_TOP_FRAME_CORE_COLOR = "rgba(122, 226, 240, 0.74)";
 const HUD_STATUS_ICON_MAX_SCALE = 2.9;
 const HUD_STATUS_ICON_GAP_UNITS = 1.4;
-const MINIMAP_HEIGHT_RATIO = 1.05;
+const MINIMAP_HEIGHT_RATIO = 1.2;
 
 function topVideoSlotReferenceHeight(mapWidth) {
   return HEIGHT > WIDTH
@@ -4936,7 +5468,7 @@ function drawHud() {
 
   if (
     !gameOver && !playerIsDown() &&
-    goalPlatform &&
+    bossDoor?.platform && goalPlatform &&
     player.platform === goalPlatform &&
     Math.abs(player.x + player.width / 2 - goalX) < BOSS_GATE_TRIGGER_DISTANCE
   ) {

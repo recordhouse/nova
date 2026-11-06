@@ -1659,6 +1659,97 @@ function generateMap() {
   if (!generateMapCandidate(true)) throw new Error("Unable to generate a clear main route");
 }
 
+function generateBossMap() {
+  platforms.length = 0;
+  invalidatePlatformSpatialIndex();
+  branches.length = 0;
+  midBosses.length = 0;
+  bossDoor = null;
+  nextPlatformId = 1;
+  mapSeed = Math.floor(Math.random() * 4294967295) >>> 0;
+  mapRandom = createSeededRandom(mapSeed);
+
+  const routePlatforms = [];
+  const startingRoad = addPlatform(-200, 700, 0, "boss-entry", 0);
+  startingRoad.startingRoad = true;
+  startingRoad.zone = "rest";
+  startingRoad.lightColor = "#e8b6ff";
+  routePlatforms.push(startingRoad);
+
+  const jumpPlan = [
+    { gap: 150, width: 170, level: -0.35 },
+    { gap: 175, width: 130, level: -0.75 },
+    { gap: 155, width: 115, level: -0.2 },
+    { gap: 270, width: 145, level: -0.65 },
+    { gap: 165, width: 105, level: -1 },
+    { gap: 180, width: 120, level: -0.45 },
+    { gap: 195, width: 95, level: 0.05 },
+    { gap: 285, width: 150, level: -0.5 },
+    { gap: 160, width: 110, level: -0.9 },
+    { gap: 185, width: 105, level: -0.3 },
+    { gap: 175, width: 90, level: -0.75 },
+    { gap: 300, width: 155, level: -0.15 },
+    { gap: 170, width: 105, level: 0.25 },
+    { gap: 190, width: 115, level: -0.25 },
+    { gap: 205, width: 95, level: -0.7 },
+    { gap: 280, width: 145, level: -0.15 },
+    { gap: 175, width: 110, level: -0.55 },
+    { gap: 190, width: 125, level: -0.95 },
+    { gap: 165, width: 105, level: -0.4 },
+    { gap: 260, width: 190, level: 0 },
+  ];
+  const bossLightColors = ["#efb4ff", "#ca7cff", "#ff789e"];
+  let cursor = startingRoad.end;
+  for (let index = 0; index < jumpPlan.length; index += 1) {
+    const step = jumpPlan[index];
+    const start = cursor + step.gap;
+    const platform = addPlatform(
+      start,
+      start + step.width,
+      step.level,
+      "boss-jump",
+      index + 1,
+    );
+    platform.routeRisk = "danger";
+    platform.zone = "connector";
+    platform.architecture = "open";
+    platform.bossJumpPlatform = true;
+    platform.lightColor = bossLightColors[index % bossLightColors.length];
+    platform.lightSpacing = Math.max(52, step.width * 0.56);
+    routePlatforms.push(platform);
+    cursor = platform.end;
+  }
+
+  const arenaStart = cursor + 180;
+  const arena = addPlatform(
+    arenaStart,
+    arenaStart + 1320,
+    0,
+    "boss-arena",
+    jumpPlan.length + 1,
+  );
+  arena.zone = "combat";
+  arena.architecture = "fortified";
+  arena.lightColor = "#f0b4ff";
+  routePlatforms.push(arena);
+  addFinalBoss(arena);
+
+  branches.push({
+    group: 0,
+    routes: [{
+      role: "main",
+      trick: "boss-jumps",
+      platforms: routePlatforms.map((platform) => platform.id),
+    }],
+  });
+  goalPlatform = arena;
+  goalX = (arena.start + arena.end) / 2;
+  minWorldX = Math.min(...platforms.map((platform) => platform.start)) - 120;
+  maxWorldX = Math.max(...platforms.map((platform) => platform.end)) + 120;
+  lowestPlatformY = Math.max(...platforms.map(platformLowestSurfaceY));
+  return arena;
+}
+
 function generateMapCandidate(safeForwardFlow = false) {
   platforms.length = 0;
   invalidatePlatformSpatialIndex();
@@ -2278,6 +2369,48 @@ function addMidBoss(turnX, surfaceLevel, incomingDirection, group) {
   });
 }
 
+function addFinalBoss(platform) {
+  if (!platform) return null;
+  const centerX = platform.start + (platform.end - platform.start) * 0.76;
+  const surfaceY = platformSurfaceY(platform, centerX);
+  const boss = {
+    x: centerX - FINAL_BOSS.width / 2,
+    y: surfaceY - FINAL_BOSS.height,
+    baseY: surfaceY - FINAL_BOSS.height,
+    targetY: surfaceY - FINAL_BOSS.height,
+    width: FINAL_BOSS.width,
+    height: FINAL_BOSS.height,
+    hp: FINAL_BOSS.hp,
+    maxHp: FINAL_BOSS.hp,
+    score: FINAL_BOSS.score,
+    platform,
+    group: platform.group,
+    facing: -1,
+    moveTimer: 0,
+    fireTimer: Infinity,
+    phase: 0,
+    animationTime: 0,
+    active: false,
+    idleOnly: false,
+    attackState: "idle",
+    attackTimer: FINAL_BOSS.idleDuration,
+    attackPattern: null,
+    nextAttackIndex: 0,
+    chargeProgress: 0,
+    fireProgress: 0,
+    beamDirectionX: -1,
+    beamDirectionY: 0,
+    patternShotsFired: 0,
+    patternShotTimer: 0,
+    rainTargets: [],
+    moving: false,
+    finalBoss: true,
+    alive: true,
+  };
+  midBosses.push(boss);
+  return boss;
+}
+
 function stageSpawnIsInStartSafeZone(platform, x, definition) {
   const centerX = x + definition.width / 2;
   const centerY = (
@@ -2627,6 +2760,127 @@ function resetPlayerPosition() {
   jumpQueued = false;
 }
 
+function rememberBossMapCheckpoint(platform = player.platform) {
+  if (currentArea !== "boss" || !platform || !platforms.includes(platform)) return false;
+  const centerX = (platform.start + platform.end) / 2;
+  bossMapCheckpoint = {
+    platform,
+    centerX,
+    facing: player.facing || platform.direction || 1,
+  };
+  return true;
+}
+
+function recoverPlayerFromBossFall() {
+  if (currentArea !== "boss") return false;
+  const fallbackPlatform = platforms.find((platform) => platform.startingRoad) ?? platforms[0];
+  const checkpoint = (
+    bossMapCheckpoint?.platform && platforms.includes(bossMapCheckpoint.platform)
+  ) ? bossMapCheckpoint : {
+      platform: fallbackPlatform,
+      centerX: (fallbackPlatform.start + fallbackPlatform.end) / 2,
+      facing: 1,
+    };
+  if (!checkpoint.platform) return false;
+
+  if (typeof resetAllInputs === "function") resetAllInputs();
+  resetPlayerDownState();
+  if (typeof stopPlayerDownVideo === "function") stopPlayerDownVideo();
+  if (typeof stopPlayerFinishingVideo === "function") stopPlayerFinishingVideo();
+  enemyBullets.length = 0;
+  const minimumCenterX = checkpoint.platform.start + player.width / 2 + 4;
+  const maximumCenterX = checkpoint.platform.end - player.width / 2 - 4;
+  const centerX = Math.max(
+    minimumCenterX,
+    Math.min(maximumCenterX, checkpoint.centerX),
+  );
+  player.x = centerX - player.width / 2;
+  player.y = platformSurfaceY(checkpoint.platform, centerX) - player.height;
+  player.vx = 0;
+  player.vy = 0;
+  player.runSpeed = player.speed;
+  player.facing = checkpoint.facing || 1;
+  player.platform = checkpoint.platform;
+  player.grounded = true;
+  player.crouching = false;
+  player.crouchInputTime = 0;
+  player.jumpLatch = false;
+  player.jumpBufferTimer = 0;
+  player.coyoteTime = PLAYER_COYOTE_TIME;
+  player.jumpCount = 0;
+  player.airJumpAvailable = true;
+  player.jumpAnimationTime = 0;
+  player.fallReferenceY = player.y + player.height;
+  player.deepFalling = false;
+  player.fallAnimationTime = 0;
+  player.ultimateActive = false;
+  player.ultimateTime = 0;
+  player.ultimateLasersFired = false;
+  player.invincible = Math.max(player.invincible, 0.9);
+  gameOver = false;
+  cameraLookDirection = player.facing;
+  cameraPendingDirection = 0;
+  cameraDirectionHoldTime = 0;
+  cameraX = Math.max(
+    minWorldX,
+    Math.min(maxWorldX - WIDTH, centerX - cameraAnchorScreenX(player.facing)),
+  );
+  cameraY = player.y + player.height - BASE_GROUND_Y;
+  shake = Math.max(shake, 5);
+  if (typeof burst === "function") {
+    burst(centerX, player.y + player.height, "#e8b6ff", 14, 135);
+  }
+  return true;
+}
+
+function enterBossMap() {
+  if (currentArea === "boss") return false;
+  if (typeof resetAllInputs === "function") resetAllInputs();
+  bullets.length = 0;
+  enemyBullets.length = 0;
+  particles.length = 0;
+  enemies.length = 0;
+  heartItems.length = 0;
+  turrets.length = 0;
+  midBosses.length = 0;
+  currentArea = "boss";
+  bossMapCheckpoint = null;
+  generateBossMap();
+  if (typeof invalidateMinimapCache === "function") invalidateMinimapCache();
+  resetPlayerPosition();
+  player.invincible = Math.max(player.invincible, 0.8);
+  rememberBossMapCheckpoint();
+  cameraLookDirection = 1;
+  cameraPendingDirection = 0;
+  cameraDirectionHoldTime = 0;
+  cameraX = Math.max(
+    minWorldX,
+    Math.min(
+      maxWorldX - WIDTH,
+      player.x + player.width / 2 - cameraAnchorScreenX(1),
+    ),
+  );
+  cameraY = player.y + player.height - BASE_GROUND_Y;
+  gameOver = false;
+  showFullMap = false;
+  updateTestMapButton();
+  testJumpRouteIndex = -1;
+  updateTestJumpPathButton();
+  return true;
+}
+
+function tryEnterBossMap() {
+  if (
+    currentArea !== "stage" || gameOver || playerIsDown() ||
+    !bossDoor?.platform || player.platform !== bossDoor.platform
+  ) return false;
+  const playerCenterX = player.x + player.width / 2;
+  if (Math.abs(playerCenterX - bossDoor.centerX) >= BOSS_GATE_TRIGGER_DISTANCE) {
+    return false;
+  }
+  return enterBossMap();
+}
+
 function findTestCombatantSpawn(definition, kind, desiredDistance) {
   const playerCenterX = player.x + player.width / 2;
   const playerFeetY = player.y + player.height;
@@ -2905,6 +3159,49 @@ function movePlayerToPortalEntrance() {
   return true;
 }
 
+function movePlayerToFinalBoss() {
+  if (!TEST_MODE) return false;
+  if (currentArea !== "boss") enterBossMap();
+  let boss = midBosses.find((candidate) => candidate.finalBoss && candidate.alive);
+  const arena = platforms.find((platform) => platform.type === "boss-arena");
+  if (!boss && arena) boss = addFinalBoss(arena);
+  if (!boss || !arena) return false;
+
+  resetAllInputs();
+  bullets.length = 0;
+  enemyBullets.length = 0;
+  particles.length = 0;
+  resetPlayerPosition();
+  const desiredDistance = Math.min(340, WIDTH * 0.32);
+  const minimumCenterX = arena.start + player.width / 2 + 6;
+  const maximumCenterX = arena.end - player.width / 2 - 6;
+  const playerCenterX = Math.max(
+    minimumCenterX,
+    Math.min(maximumCenterX, boss.x - desiredDistance),
+  );
+  player.x = playerCenterX - player.width / 2;
+  player.y = platformSurfaceY(arena, playerCenterX) - player.height;
+  player.platform = arena;
+  player.facing = 1;
+  player.grounded = true;
+  player.fallReferenceY = player.y + player.height;
+  player.invincible = Math.max(player.invincible, 1);
+  gameOver = false;
+  showFullMap = false;
+  rememberBossMapCheckpoint(arena);
+  updateTestMapButton();
+
+  cameraLookDirection = 1;
+  cameraPendingDirection = 0;
+  cameraDirectionHoldTime = 0;
+  cameraX = Math.max(
+    minWorldX,
+    Math.min(maxWorldX - WIDTH, playerCenterX - cameraAnchorScreenX(1)),
+  );
+  cameraY = player.y + player.height - BASE_GROUND_Y;
+  return true;
+}
+
 function updateTestResolutionButton() {
   if (!testResolutionButton || !TEST_MODE) return;
   const landscape = WIDTH > HEIGHT;
@@ -3073,6 +3370,8 @@ function resetGame() {
   enemies.length = 0;
   heartItems.length = 0;
   turrets.length = 0;
+  currentArea = "stage";
+  bossMapCheckpoint = null;
   generateMap();
   if (typeof invalidateMinimapCache === "function") invalidateMinimapCache();
   resetPlayerPosition();

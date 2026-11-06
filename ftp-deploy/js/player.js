@@ -683,6 +683,11 @@ function updatePlayer(dt) {
     }
   }
 
+  if (
+    player.grounded && currentArea === "boss" &&
+    typeof rememberBossMapCheckpoint === "function"
+  ) rememberBossMapCheckpoint(player.platform);
+
   updatePlayerRunAnimation(dt);
   emitPlayerReversalSparks(dt, brakingDirection);
 
@@ -724,6 +729,14 @@ function updatePlayer(dt) {
   }
 
   updatePlayerCamera(dt);
+
+  if (
+    currentArea === "boss" && !gameOver && player.hp > 0 &&
+    player.y > lowestPlatformY + BOSS_MAP_FALL_RECOVERY_DEPTH
+  ) {
+    recoverPlayerFromBossFall();
+    return;
+  }
 
   if (player.y > lowestPlatformY + 430) {
     if (!gameOver && typeof playFemaleDeathVoice === "function") {

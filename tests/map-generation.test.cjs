@@ -135,6 +135,14 @@ test("road conflict geometry preserves joins and handles crossing slopes and tri
 });
 
 const mapCount = Number(process.env.NOVA_MAP_TEST_COUNT ?? 200);
+
+test("the stage terrain runs twice the former distance before the boss gate", () => {
+  const game = createGame();
+  assert.equal(vm.runInContext("WORLD_LENGTH", game), 104000);
+  vm.runInContext("resetGame()", game);
+  validateMap(game);
+});
+
 for (const landscape of [false, true]) {
   test(`${mapCount} random ${landscape ? "landscape" : "portrait"} maps have no overlapping roads`, () => {
     const game = createGame(landscape);

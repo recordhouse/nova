@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 
 test("test controls are centered at the very bottom of the screen", () => {
   const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
@@ -40,6 +41,28 @@ test("test controls include a direct portal preview button", () => {
   assert.match(html, /aria-label="포털 입구 바로 보기"/);
   assert.match(css, /\.test-portal-button\s*\{/);
   assert.match(input, /testPortalButton\?\.addEventListener\("click"/);
+});
+
+test("test controls include a loading-screen preview button", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+  const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
+  assert.match(html, /data-test-loading/);
+  assert.match(html, /aria-label="로딩 화면 미리보기"/);
+  assert.match(css, /\.test-loading-button\s*\{/);
+  assert.match(input, /testLoadingButton\?\.addEventListener\("click"/);
+  assert.match(input, /previewTestLoadingScreen\(\)/);
+});
+
+test("test controls include a direct final-boss preview button", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+  const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
+  assert.match(html, /data-test-boss/);
+  assert.match(html, /aria-label="보스 바로 보기"/);
+  assert.match(css, /\.test-boss-button\s*\{/);
+  assert.match(input, /testBossButton\?\.addEventListener\("click"/);
+  assert.match(input, /movePlayerToFinalBoss\(\)/);
 });
 
 test("touch controls place ultimate above jump to the left of fire with uppercase labels", () => {
@@ -80,8 +103,42 @@ test("the smaller two-circle joystick uses a larger screen-relative touch zone",
   assert.doesNotMatch(css, /\.movement-joystick::(?:before|after)/);
   assert.match(css, /\.movement-joystick\s*\{[^}]*width:\s*clamp\(92px,\s*24vw,\s*118px\)/s);
   assert.match(css, /\.move-controls\s*\{[^}]*width:\s*clamp\(124px,\s*31vw,\s*154px\)/s);
-  assert.match(input, /event\.clientX\s*-\s*\(rect\.left\s*\+\s*rect\.width\s*\/\s*2\)/);
+  assert.match(input, /movementJoystickOriginX\s*=\s*event\.clientX/);
+  assert.match(input, /movementJoystickOriginY\s*=\s*event\.clientY/);
+  assert.match(input, /event\.clientX\s*-\s*movementJoystickOriginX/);
+  assert.doesNotMatch(input, /event\.clientX\s*-\s*\(rect\.left\s*\+\s*rect\.width\s*\/\s*2\)/);
   assert.match(input, /movementJoystickTouchZone\.addEventListener\("pointerdown"/);
+});
+
+test("joystick movement follows the finger gesture instead of the fixed circle center", () => {
+  const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
+  const functionStart = input.indexOf("function updateMovementJoystick");
+  const functionEnd = input.indexOf("\nfunction releaseMovementJoystick", functionStart);
+  let latestControls = null;
+  const scope = {
+    Math,
+    movementJoystickPointerId: 7,
+    movementJoystickOriginX: 110,
+    movementJoystickOriginY: 150,
+    movementJoystickElement: {
+      getBoundingClientRect: () => ({ left: 100, top: 100, width: 100, height: 100 }),
+    },
+    movementJoystickKnob: { style: { setProperty() {} } },
+    screenDeltaToGameDelta: (dx, dy) => ({ dx, dy }),
+    setJoystickControls: (controls) => { latestControls = controls; },
+  };
+  vm.createContext(scope);
+  vm.runInContext(input.slice(functionStart, functionEnd), scope);
+
+  scope.updateMovementJoystick({ pointerId: 7, clientX: 110, clientY: 150 });
+  assert.equal(latestControls.left, false, "touch-down starts neutral");
+  assert.equal(latestControls.right, false, "touch-down starts neutral");
+
+  scope.updateMovementJoystick({ pointerId: 7, clientX: 125, clientY: 150 });
+  assert.equal(latestControls.left, false,
+    "a touch still left of the fixed center must not briefly move left");
+  assert.equal(latestControls.right, true,
+    "dragging right from the touch origin immediately moves right");
 });
 
 test("mobile portrait view rotates the landscape game and declares landscape install mode", () => {

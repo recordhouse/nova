@@ -14,6 +14,10 @@ function sourceIsEnemyAttack(source) {
     "turret-laser",
     "turret",
     "boss-laser",
+    "final-boss-beam",
+    "final-boss-fan",
+    "final-boss-rain",
+    "final-boss-wave",
     "boss",
   ].includes(source?.kind);
 }
@@ -448,7 +452,7 @@ function updatePlayerUltimateLaserHits(
     }
     if (boss.hp <= 0) {
       boss.alive = false;
-      addPlayerScore(MID_BOSS.score);
+      addPlayerScore(boss.score ?? MID_BOSS.score);
       shake = Math.max(shake, 18);
       burst(
         boss.x + boss.width / 2,
@@ -985,7 +989,7 @@ function updatePlayerRevivalWave(dt) {
     );
     if (boss.hp <= 0) {
       boss.alive = false;
-      addPlayerScore(MID_BOSS.score);
+      addPlayerScore(boss.score ?? MID_BOSS.score);
       shake = Math.max(shake, 16);
     }
   }
@@ -2043,7 +2047,7 @@ function updateBullets(dt) {
         burst(bullet.x, bullet.y, "#ff8bf2", 9, 185);
         if (boss.hp <= 0) {
           boss.alive = false;
-          addPlayerScore(MID_BOSS.score);
+          addPlayerScore(boss.score ?? MID_BOSS.score);
           shake = 16;
           burst(
             boss.x + boss.width / 2,
@@ -2070,6 +2074,13 @@ function updateBullets(dt) {
 
   for (let i = enemyBullets.length - 1; i >= 0; i -= 1) {
     const bullet = enemyBullets[i];
+    if (Number.isFinite(bullet.life)) {
+      bullet.life -= dt;
+      if (bullet.life <= 0) {
+        enemyBullets.splice(i, 1);
+        continue;
+      }
+    }
     if (bullet.kind === "monster2-fireball") {
       // Range, not camera edges, controls lifetime so offscreen shots can fly into view.
       if (!moveMonster2Fireball(bullet, dt)) enemyBullets.splice(i, 1);
@@ -2078,7 +2089,14 @@ function updateBullets(dt) {
     if (bullet.kind === "monster4-crescent") {
       bullet.remainingRange -= Math.hypot(bullet.vx, bullet.vy) * dt;
     }
-    if (!moveRicochetingBullet(bullet, dt, bullet.ricochetColor ?? "#ff6b42")) {
+    if (bullet.ignoreTerrain) {
+      bullet.x += bullet.vx * dt;
+      bullet.y += bullet.vy * dt;
+    } else if (!moveRicochetingBullet(
+      bullet,
+      dt,
+      bullet.ricochetColor ?? "#ff6b42",
+    )) {
       enemyBullets.splice(i, 1);
       continue;
     }
@@ -2096,12 +2114,12 @@ function updateBullets(dt) {
       continue;
     }
 
-    if (
+    if (!bullet.keepOffscreen && (
       bullet.x < cameraX - 100 ||
       bullet.x > cameraX + WIDTH + 100 ||
       bullet.y < cameraY - 100 ||
       bullet.y > cameraY + HEIGHT + 100
-    ) {
+    )) {
       enemyBullets.splice(i, 1);
     }
   }
