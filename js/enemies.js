@@ -2,6 +2,21 @@
 
 // Regular enemy and mid-boss behavior.
 
+function faceHostileTowardX(hostile, targetCenterX, deadZone = null) {
+  const hostileCenterX = hostile.x + hostile.width / 2;
+  const distance = targetCenterX - hostileCenterX;
+  const stableZone = deadZone ?? Math.max(
+    12,
+    Math.min(24, hostile.width * 0.08),
+  );
+  if (Math.abs(distance) <= stableZone) {
+    hostile.facing ||= -1;
+    return hostile.facing;
+  }
+  hostile.facing = distance > 0 ? 1 : -1;
+  return hostile.facing;
+}
+
 function enemySpritePose(enemy, x = enemy.x, y = enemy.y) {
   const animationTime = enemy.animationTime ?? 0;
   const animationPhase = enemy.animationPhase ?? 0;
@@ -571,7 +586,7 @@ function updateMonster2(enemy, dt, playerHitbox, playerCenterX, playerFeetY) {
   if (knockedBack) return false;
 
   enemy.ambientFireTimer = Math.max(0, enemy.ambientFireTimer - dt);
-  if (Math.abs(distance) > 1) enemy.facing = Math.sign(distance);
+  faceHostileTowardX(enemy, playerCenterX);
   // Nearby targets take priority; otherwise each monster follows its own random delay.
   if (enemy.attackTimer <= 0 && (inAttackRange || enemy.ambientFireTimer <= 0)) {
     enemy.state = "inhale";
@@ -584,7 +599,8 @@ function updateMonster2(enemy, dt, playerHitbox, playerCenterX, playerFeetY) {
 
   if (
     sameChaseHeight &&
-    Math.abs(distance) < enemy.chaseRange
+    Math.abs(distance) < enemy.chaseRange &&
+    Math.abs(distance) > (enemy.width + playerHitbox.width) / 2 - 4
   ) {
     moveEnemyAlongGround(enemy, Math.sign(distance) || enemy.facing, dt);
   }
@@ -614,7 +630,7 @@ function fireMonster4Spear(enemy, playerHitbox) {
   const targetX = playerHitbox.x + playerHitbox.width / 2;
   const targetY = playerHitbox.y + playerHitbox.height / 2;
   const enemyCenterX = enemy.x + enemy.width / 2;
-  enemy.facing = Math.sign(targetX - enemyCenterX) || enemy.facing || -1;
+  faceHostileTowardX(enemy, targetX);
   enemy.attackDirection = enemy.facing;
   const origin = monster4SpearOrigin(enemy);
   const distance = Math.max(1, Math.hypot(targetX - origin.x, targetY - origin.y));
@@ -665,7 +681,7 @@ function updateMonster4SpearAttack(enemy, dt, playerHitbox, playerCenterX) {
     Math.abs(playerCenterY - origin.y) > enemy.spearAttackVerticalRange
   ) return false;
 
-  enemy.facing = Math.sign(playerCenterX - enemy.x - enemy.width / 2) || enemy.facing;
+  faceHostileTowardX(enemy, playerCenterX);
   enemy.attackDirection = enemy.facing;
   enemy.state = "spear-charge";
   enemy.stateTimer = enemy.spearChargeDuration;
@@ -742,7 +758,7 @@ function updateMonster3(enemy, dt, playerHitbox, playerCenterX) {
   const onScreen = eye.x >= cameraX - 80 && eye.x <= cameraX + WIDTH + 80 &&
     eye.y >= cameraY - 80 && eye.y <= cameraY + HEIGHT + 80;
   if (playerNearby && onScreen && enemy.attackTimer <= 0) {
-    enemy.facing = Math.sign(playerCenterX - enemy.x - enemy.width / 2) || enemy.facing;
+    faceHostileTowardX(enemy, playerCenterX);
     enemy.state = "charge";
     enemy.stateTimer = enemy.chargeDuration;
     return true;
@@ -835,7 +851,7 @@ function updateMonster5(enemy, dt, playerHitbox, playerCenterX) {
   const onScreen = origin.x >= cameraX - 90 && origin.x <= cameraX + WIDTH + 90 &&
     origin.y >= cameraY - 90 && origin.y <= cameraY + HEIGHT + 90;
   if (playerNearby && onScreen && enemy.attackTimer <= 0) {
-    enemy.facing = Math.sign(playerCenterX - enemy.x - enemy.width / 2) || enemy.facing;
+    faceHostileTowardX(enemy, playerCenterX);
     enemy.state = "charge";
     enemy.stateTimer = enemy.chargeDuration;
   }
@@ -1003,7 +1019,7 @@ function updateEnemies(dt) {
       enemy.chaseVerticalRange
     );
     const upwardRoute = enemyUpwardRoute(enemy, playerCenterX, playerFeetY);
-    if (Math.abs(distance) > 1) enemy.facing = Math.sign(distance);
+    faceHostileTowardX(enemy, playerCenterX);
 
     const contactDistance = (enemy.width + playerHitbox.width) / 2 - 4;
     if (enemy.hitTimer > 0 && enemy.state !== "jump") {
@@ -1221,9 +1237,7 @@ function updateTurrets(dt) {
       Math.abs(playerCenterX - turretCenterX) <= TURRET.activationRangeX &&
       Math.abs(playerCenterY - turretCenterY) <= TURRET.activationRangeY
     );
-    if (playerInRange && Math.abs(playerCenterX - turretCenterX) > 1) {
-      turret.facing = Math.sign(playerCenterX - turretCenterX);
-    }
+    if (playerInRange) faceHostileTowardX(turret, playerCenterX);
     turret.active = true;
 
     turret.fireTimer -= dt;
@@ -1341,8 +1355,8 @@ function finalBossMouthPosition(boss) {
 }
 
 function finalBossAimDirection(boss, targetX, targetY) {
+  faceHostileTowardX(boss, targetX);
   const mouth = finalBossMouthPosition(boss);
-  boss.facing = targetX >= mouth.x ? 1 : -1;
   const forwardDistance = Math.max(1, Math.abs(targetX - mouth.x));
   const rawAngle = Math.atan2(targetY - mouth.y, forwardDistance);
   const angle = Math.max(
@@ -1608,7 +1622,7 @@ function prepareFinalBossAttack(boss, playerCenterX, playerCenterY) {
   boss.beamTravelDistance = 0;
   boss.rainTargets = pattern === "rain"
     ? finalBossRainTargets(boss, playerCenterX) : [];
-  boss.facing = playerCenterX >= boss.x + boss.width / 2 ? 1 : -1;
+  faceHostileTowardX(boss, playerCenterX);
   boss.patternTargetX = playerCenterX;
   boss.patternTargetY = playerCenterY;
   if (pattern === "jump-slam") {
@@ -1802,7 +1816,7 @@ function beginFinalBossAttack(boss) {
 function moveFinalBossTowardPlayer(boss, dt, playerCenterX) {
   const bossCenterX = boss.x + boss.width / 2;
   const horizontalDistance = playerCenterX - bossCenterX;
-  boss.facing = horizontalDistance >= 0 ? 1 : -1;
+  faceHostileTowardX(boss, playerCenterX);
   if (Math.abs(horizontalDistance) <= FINAL_BOSS.chaseStopDistance) return false;
 
   const platform = boss.platform;
@@ -1861,9 +1875,15 @@ function beginFinalBossPlatformJump(boss, targetPlatform, targetX) {
     FINAL_BOSS.platformJumpHeight,
     Math.max(72, horizontalTravel * 0.2 + verticalTravel * 0.32),
   );
+  boss.platformJumpEffectTimer = 0;
   boss.facing = boss.platformJumpTargetX >= boss.x ? 1 : -1;
   boss.airborne = true;
   boss.moving = true;
+  const takeoffX = boss.x + boss.width / 2;
+  const takeoffY = boss.y + boss.height;
+  burst(takeoffX, takeoffY, "#7b2c22", 11, 145);
+  burst(takeoffX, takeoffY - 4, "#dc8a54", 6, 205);
+  shake = Math.max(shake, 3.5);
   return true;
 }
 
@@ -1881,6 +1901,16 @@ function updateFinalBossPlatformJump(boss, dt) {
   const groundY = boss.platformJumpStartY +
     (boss.platformJumpTargetY - boss.platformJumpStartY) * easedProgress;
   boss.y = groundY - Math.sin(progress * Math.PI) * boss.platformJumpArcHeight;
+  boss.platformJumpEffectTimer = (boss.platformJumpEffectTimer ?? 0) - dt;
+  if (
+    progress > 0.08 && progress < 0.9 &&
+    boss.platformJumpEffectTimer <= 0
+  ) {
+    const trailX = boss.x + boss.width / 2 - boss.facing * boss.width * 0.2;
+    const trailY = boss.y + boss.height * 0.72;
+    burst(trailX, trailY, "#a9583d", 2, 58);
+    boss.platformJumpEffectTimer += 0.11;
+  }
   boss.moving = true;
   boss.airborne = progress < 1;
   if (progress < 1) return true;
@@ -1903,6 +1933,13 @@ function updateFinalBossPlatformJump(boss, dt) {
     "#d7d0c7",
     12,
     155,
+  );
+  burst(
+    boss.x + boss.width / 2,
+    boss.y + boss.height - 3,
+    "#8f3528",
+    10,
+    190,
   );
   shake = Math.max(shake, 7);
   return true;
@@ -2000,7 +2037,7 @@ function updateFinalBossAttack(
     boss.fireProgress = 0;
     boss.moving = false;
     boss.airborne = false;
-    boss.facing = playerCenterX >= boss.x + boss.width / 2 ? 1 : -1;
+    faceHostileTowardX(boss, playerCenterX);
     return;
   }
 
@@ -2009,7 +2046,7 @@ function updateFinalBossAttack(
 
   if (state === "idle") {
     boss.moving = false;
-    boss.facing = playerCenterX >= boss.x + boss.width / 2 ? 1 : -1;
+    faceHostileTowardX(boss, playerCenterX);
     boss.chargeProgress = 0;
     boss.fireProgress = 0;
     if (boss.attackTimer <= 0) {
@@ -2051,7 +2088,7 @@ function updateFinalBossAttack(
     } else if (boss.attackPattern === "jump-slam") {
       boss.facing = boss.jumpTargetX >= boss.x ? 1 : -1;
     } else {
-      boss.facing = playerCenterX >= boss.x + boss.width / 2 ? 1 : -1;
+      faceHostileTowardX(boss, playerCenterX);
     }
     boss.patternTargetX = playerCenterX;
     boss.patternTargetY = playerCenterY;
@@ -2172,7 +2209,7 @@ function updateMidBosses(dt) {
       boss.active = withinActivationRange;
       boss.phase += dt;
       boss.animationTime = (boss.animationTime ?? 0) + dt;
-      boss.facing = playerCenterX >= bossCenterX ? 1 : -1;
+      faceHostileTowardX(boss, playerCenterX);
       continue;
     }
     if (!withinActivationRange) {
@@ -2182,7 +2219,7 @@ function updateMidBosses(dt) {
 
     boss.active = true;
     boss.phase += dt;
-    boss.facing = playerCenterX >= bossCenterX ? 1 : -1;
+    faceHostileTowardX(boss, playerCenterX);
     boss.moveTimer -= dt;
     if (boss.moveTimer <= 0) {
       const movementBias = Math.sin(boss.phase * 1.37) * 0.22;

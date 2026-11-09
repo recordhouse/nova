@@ -2671,6 +2671,7 @@ function addFinalBoss(platform) {
     platformJumpActive: false,
     platformJumpProgress: 0,
     platformJumpCooldown: 0,
+    platformJumpEffectTimer: 0,
     platformJumpTarget: null,
     upperRouteIntent: false,
     jumpImpactTimer: 0,

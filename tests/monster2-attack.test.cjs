@@ -129,6 +129,37 @@ test("monster2 visibly charges before launching its five-shot volley", () => {
   assert.ok(enemy.ambientFireTimer >= 2.8 && enemy.ambientFireTimer <= 6.5);
 });
 
+test("monster2 keeps its position and facing when the player overlaps its center", () => {
+  const { scope } = createGame();
+  const enemy = scope.fixtureEnemy;
+  const centerX = enemy.x + enemy.width / 2;
+  const startX = enemy.x;
+  enemy.state = "chase";
+  enemy.facing = -1;
+  enemy.attackTimer = 10;
+  enemy.ambientFireTimer = 10;
+  for (let frame = 0; frame < 80; frame += 1) {
+    const targetX = centerX + (frame % 2 === 0 ? 5 : -5);
+    scope.updateMonster2(
+      enemy,
+      1 / 60,
+      { x: targetX - 24, y: 430, width: 48, height: 70 },
+      targetX,
+      500,
+    );
+  }
+  assert.equal(enemy.x, startX);
+  assert.equal(enemy.facing, -1);
+  scope.updateMonster2(
+    enemy,
+    1 / 60,
+    { x: centerX + 36, y: 430, width: 48, height: 70 },
+    centerX + 60,
+    500,
+  );
+  assert.equal(enemy.facing, 1);
+});
+
 test("simultaneous visible attacks request one cut-in for the nearest monster2", () => {
   const { scope } = createGame();
   vm.runInContext(`
