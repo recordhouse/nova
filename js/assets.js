@@ -256,6 +256,7 @@ const enemySprites = {
   monster2: loadImageAsset("./assets/images/monsters/monster_02.png"),
   monster3: loadImageAsset("./assets/images/monsters/monster_03.png"),
   monster4: loadImageAsset("./assets/images/monsters/monster_04.png?v=20260923-1"),
+  monster5: loadImageAsset("./assets/images/monsters/monster_05.png?v=20261107-1"),
 };
 
 const turretSprite = loadImageAsset("./assets/images/monsters/turret_01.png");
@@ -300,6 +301,7 @@ const ENEMY_ATTACK_VIDEO_PLAYBACK_RATES = Object.freeze({
   monster3: 3.1,
   monster4: 3.2,
   turret: 3.4,
+  boss: 1,
 });
 const enemyAttackVideoAssets = Object.freeze({
   monster1: loadVideoAsset(
@@ -332,6 +334,14 @@ const enemyAttackVideoAssets = Object.freeze({
       loop: false,
       playbackRate: ENEMY_ATTACK_VIDEO_PLAYBACK_RATES.turret,
       onStart: () => playEnemyVideoVoice("turret"),
+    },
+  ),
+  boss: loadVideoAsset(
+    "./assets/video/monsters/boss-optimized.mp4?v=20261107-1",
+    {
+      loop: false,
+      playbackRate: ENEMY_ATTACK_VIDEO_PLAYBACK_RATES.boss,
+      onStart: () => playEnemyVideoVoice("boss"),
     },
   ),
 });
@@ -632,6 +642,7 @@ const enemyVideoVoiceData = Object.freeze({
   monster2: fetchSoundData("./assets/sound/voice_monster_02.mp3?v=20261021-1"),
   monster3: fetchSoundData("./assets/sound/voice_monster_03.mp3?v=20261021-1"),
   turret: fetchSoundData("./assets/sound/voice_turret_01.mp3?v=20261021-1"),
+  boss: fetchSoundData("./assets/sound/voice_boss.mp3?v=20261107-1"),
 });
 function createGameAudioContext() {
   if (!GameAudioContext) return null;
@@ -794,6 +805,8 @@ const enemyVideoVoiceSounds = Object.freeze({
     enemyVideoVoiceData.monster3, 0.68, 0, enemyVoiceOutput),
   turret: createPreparedGameSound(
     enemyVideoVoiceData.turret, 0.68, 0, enemyVoiceOutput),
+  boss: createPreparedGameSound(
+    enemyVideoVoiceData.boss, 0.68, 0, enemyVoiceOutput),
 });
 
 function registerPreparedAudioAsset(source, dataPromise, sound) {

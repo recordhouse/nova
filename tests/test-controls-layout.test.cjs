@@ -25,6 +25,13 @@ test("test controls include the dedicated turret spawn button", () => {
   assert.match(css, /\.test-monster-spawn-button\.turret\s*\{/);
 });
 
+test("test controls include the monster5 spawn button", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
+  assert.match(html, /data-test-spawn-monster5/);
+  assert.match(input, /spawnTestMonster\("monster5"\)/);
+});
+
 test("test controls include an immediate ultimate button", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
@@ -65,13 +72,14 @@ test("test controls include a direct final-boss preview button", () => {
   assert.match(input, /movePlayerToFinalBoss\(\)/);
 });
 
-test("test controls expose all six final-boss attacks after the boss appears", () => {
+test("test controls expose all five final-boss attacks after the boss appears", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
   const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
-  for (const pattern of ["beam", "fan", "rain", "ground-wave", "dash", "jump-slam"]) {
+  for (const pattern of ["beam", "fan", "rain", "dash", "jump-slam"]) {
     assert.match(html, new RegExp(`data-test-boss-attack="${pattern}"`));
   }
+  assert.doesNotMatch(html, /data-test-boss-attack="ground-wave"/);
   assert.match(css, /\.test-boss-attack-button\[hidden\]\s*\{[^}]*display:\s*none/s);
   assert.match(input, /for \(const button of testBossAttackButtons\)/);
   assert.match(input, /triggerTestFinalBossAttack\(button\.dataset\.testBossAttack\)/);

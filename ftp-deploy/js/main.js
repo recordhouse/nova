@@ -236,6 +236,9 @@ const PERFORMANCE_REDUCE_FRAME_SECONDS = 1 / 50;
 const PERFORMANCE_RESTORE_FRAME_SECONDS = 1 / 57;
 const PERFORMANCE_REDUCE_HOLD_SECONDS = 1.5;
 const PERFORMANCE_RESTORE_HOLD_SECONDS = 5;
+const MAX_RENDER_FPS = 60;
+const MIN_RENDER_FRAME_MILLISECONDS = 1000 / MAX_RENDER_FPS;
+const RENDER_FRAME_TOLERANCE_MILLISECONDS = 0.5;
 let adaptivePerformanceReduced = false;
 let adaptiveAverageFrameSeconds = 1 / 60;
 let adaptiveSlowFrameTime = 0;
@@ -285,7 +288,17 @@ function updateAdaptivePerformance(frameSeconds) {
 }
 
 function loop(currentTime) {
-  const frameSeconds = (currentTime - previousTime) / 1000;
+  const elapsedMilliseconds = currentTime - previousTime;
+  if (
+    Number.isFinite(elapsedMilliseconds) &&
+    elapsedMilliseconds < (
+      MIN_RENDER_FRAME_MILLISECONDS - RENDER_FRAME_TOLERANCE_MILLISECONDS
+    )
+  ) {
+    requestAnimationFrame(loop);
+    return;
+  }
+  const frameSeconds = elapsedMilliseconds / 1000;
   previousTime = currentTime;
   updateAdaptivePerformance(frameSeconds);
   const dt = Math.min(0.033, frameSeconds);

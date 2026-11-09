@@ -1728,19 +1728,19 @@ function generateBossMap() {
   // Gentle ramps keep the silhouette varied without exceeding normal movement.
   const groundPlan = [
     { kind: "flat", width: 420 },
-    { kind: "ramp", width: 260, level: -0.22 },
-    { kind: "flat", width: 440 },
-    { kind: "ramp", width: 220, level: 0.08 },
-    { kind: "flat", width: 360 },
-    { kind: "ramp", width: 240, level: -0.32 },
-    { kind: "flat", width: 500 },
-    { kind: "ramp", width: 280, level: 0.12 },
-    { kind: "flat", width: 380 },
-    { kind: "ramp", width: 220, level: -0.18 },
-    { kind: "flat", width: 470 },
     { kind: "ramp", width: 260, level: -0.42 },
+    { kind: "flat", width: 440 },
+    { kind: "ramp", width: 220, level: 0.2 },
+    { kind: "flat", width: 360 },
+    { kind: "ramp", width: 240, level: -0.55 },
+    { kind: "flat", width: 500 },
+    { kind: "ramp", width: 280, level: 0.28 },
+    { kind: "flat", width: 380 },
+    { kind: "ramp", width: 220, level: -0.35 },
+    { kind: "flat", width: 470 },
+    { kind: "ramp", width: 260, level: -0.78 },
     { kind: "flat", width: 420 },
-    { kind: "ramp", width: 260, level: 0.05 },
+    { kind: "ramp", width: 260, level: -0.05 },
     { kind: "flat", width: 520 },
     { kind: "ramp", width: 300, level: 0 },
   ];
@@ -1772,22 +1772,22 @@ function generateBossMap() {
 
   // Optional upper lines reward jumping, but every gap has the lower route below it.
   const upperPlan = [
-    { offset: 180, width: 150, lift: 0.48 },
-    { offset: 470, width: 190, lift: 0.62 },
-    { offset: 820, width: 135, lift: 0.5 },
-    { offset: 1080, width: 220, lift: 0.72 },
-    { offset: 1450, width: 160, lift: 0.55 },
-    { offset: 1760, width: 120, lift: 0.68 },
-    { offset: 2020, width: 200, lift: 0.46 },
-    { offset: 2380, width: 140, lift: 0.72 },
-    { offset: 2640, width: 180, lift: 0.55 },
-    { offset: 2980, width: 125, lift: 0.65 },
-    { offset: 3250, width: 230, lift: 0.48 },
-    { offset: 3660, width: 150, lift: 0.76 },
-    { offset: 3960, width: 180, lift: 0.58 },
-    { offset: 4300, width: 130, lift: 0.7 },
-    { offset: 4600, width: 210, lift: 0.52 },
-    { offset: 5000, width: 145, lift: 0.68 },
+    { offset: 180, width: 150, lift: 0.55 },
+    { offset: 470, width: 190, lift: 0.88, tilt: -0.16 },
+    { offset: 820, width: 135, lift: 0.42, tilt: 0.12 },
+    { offset: 1080, width: 220, lift: 0.85 },
+    { offset: 1450, width: 160, lift: 0.68, tilt: 0.18 },
+    { offset: 1760, width: 120, lift: 0.96 },
+    { offset: 2020, width: 200, lift: 0.5, tilt: -0.14 },
+    { offset: 2380, width: 140, lift: 0.96 },
+    { offset: 2640, width: 180, lift: 0.62, tilt: 0.2 },
+    { offset: 2980, width: 125, lift: 0.92 },
+    { offset: 3250, width: 230, lift: 0.46, tilt: -0.16 },
+    { offset: 3660, width: 150, lift: 1.02 },
+    { offset: 3960, width: 180, lift: 0.72, tilt: 0.14 },
+    { offset: 4300, width: 130, lift: 0.9 },
+    { offset: 4600, width: 210, lift: 0.52, tilt: -0.18 },
+    { offset: 5000, width: 145, lift: 1 },
   ];
   for (let index = 0; index < upperPlan.length; index += 1) {
     const step = upperPlan[index];
@@ -1800,13 +1800,23 @@ function generateBossMap() {
     const surfaceLevel = (
       platformSurfaceY(supportingRoad, centerX) - BASE_GROUND_Y
     ) / LEVEL_GAP;
-    const platform = addPlatform(
-      start,
-      start + step.width,
-      surfaceLevel - step.lift,
-      "boss-jump",
-      groundPlan.length + index + 1,
-    );
+    const upperLevel = surfaceLevel - step.lift;
+    const platform = step.tilt
+      ? addRamp(
+          start,
+          start + step.width,
+          upperLevel - step.tilt / 2,
+          upperLevel + step.tilt / 2,
+          "boss-jump-ramp",
+          groundPlan.length + index + 1,
+        )
+      : addPlatform(
+          start,
+          start + step.width,
+          upperLevel,
+          "boss-jump",
+          groundPlan.length + index + 1,
+        );
     platform.routeRole = "boss-upper";
     platform.bossJumpPlatform = true;
     decorateBossRoad(platform, "upper");
@@ -2256,6 +2266,84 @@ function platformsBetween(left, right) {
   return candidates;
 }
 
+const HOSTILE_SPATIAL_BUCKET_SIZE = 768;
+let hostileSpatialIndexes = new WeakMap();
+
+function invalidateHostileSpatialIndexes() {
+  hostileSpatialIndexes = new WeakMap();
+}
+
+function hostileSpatialBucket(hostile) {
+  return Math.floor(
+    (hostile.x + (hostile.width ?? 0) / 2) / HOSTILE_SPATIAL_BUCKET_SIZE,
+  );
+}
+
+function ensureHostileSpatialIndex(collection) {
+  const first = collection[0] ?? null;
+  const last = collection[collection.length - 1] ?? null;
+  const cached = hostileSpatialIndexes.get(collection);
+  if (
+    cached && cached.count === collection.length &&
+    cached.first === first && cached.last === last
+  ) return cached;
+
+  const buckets = new Map();
+  const bucketByHostile = new WeakMap();
+  const order = new Map();
+  for (let index = 0; index < collection.length; index += 1) {
+    const hostile = collection[index];
+    const bucket = hostileSpatialBucket(hostile);
+    if (!buckets.has(bucket)) buckets.set(bucket, new Set());
+    buckets.get(bucket).add(hostile);
+    bucketByHostile.set(hostile, bucket);
+    order.set(hostile, index);
+  }
+  const spatialIndex = {
+    count: collection.length,
+    first,
+    last,
+    buckets,
+    bucketByHostile,
+    order,
+  };
+  hostileSpatialIndexes.set(collection, spatialIndex);
+  return spatialIndex;
+}
+
+function hostilesBetween(collection, left, right) {
+  const index = ensureHostileSpatialIndex(collection);
+  const minimum = Math.min(left, right);
+  const maximum = Math.max(left, right);
+  const firstBucket = Math.floor(minimum / HOSTILE_SPATIAL_BUCKET_SIZE);
+  const lastBucket = Math.floor(maximum / HOSTILE_SPATIAL_BUCKET_SIZE);
+  const candidates = [];
+  for (let bucket = firstBucket; bucket <= lastBucket; bucket += 1) {
+    for (const hostile of index.buckets.get(bucket) ?? []) {
+      if (
+        hostile.x + (hostile.width ?? 0) < minimum ||
+        hostile.x > maximum
+      ) continue;
+      candidates.push(hostile);
+    }
+  }
+  candidates.sort((a, b) => index.order.get(a) - index.order.get(b));
+  return candidates;
+}
+
+function syncHostileSpatialEntry(collection, hostile) {
+  const index = hostileSpatialIndexes.get(collection);
+  if (!index || index.count !== collection.length) return false;
+  const previousBucket = index.bucketByHostile.get(hostile);
+  const nextBucket = hostileSpatialBucket(hostile);
+  if (previousBucket === nextBucket) return false;
+  index.buckets.get(previousBucket)?.delete(hostile);
+  if (!index.buckets.has(nextBucket)) index.buckets.set(nextBucket, new Set());
+  index.buckets.get(nextBucket).add(hostile);
+  index.bucketByHostile.set(hostile, nextBucket);
+  return true;
+}
+
 function buildStars() {
   let seed = 72831;
   const random = () => {
@@ -2369,15 +2457,23 @@ function addEnemy(platform, x, kind = "monster1", options = {}) {
     hoverAmplitude: definition.hoverAmplitude,
     hoverSpeed: definition.hoverSpeed,
     patrolRadius: definition.patrolRadius,
+    patrolSpeed: definition.patrolSpeed,
+    hoverMoveSpeed: definition.hoverMoveSpeed,
     chargeDuration: definition.chargeDuration,
     laserSpeed: definition.laserSpeed,
     laserRadius: definition.laserRadius,
     laserRicochets: definition.laserRicochets,
+    orbSpeed: definition.orbSpeed,
+    orbRadius: definition.orbRadius,
+    orbLifetime: definition.orbLifetime,
+    orbTurnSpeed: definition.orbTurnSpeed,
+    orbExplosionRadius: definition.orbExplosionRadius,
     attackCooldownMin: definition.attackCooldownMin,
     attackCooldownMax: definition.attackCooldownMax,
     moving: false,
+    simulationSleeping: true,
     attackCooldown: definition.attackCooldown,
-    attackTimer: kind === "monster3"
+    attackTimer: kind === "monster3" || kind === "monster5"
       ? 0.8 + mapRandom() * 2.2 : 0,
     spearAttackRange: definition.spearAttackRange,
     spearAttackVerticalRange: definition.spearAttackVerticalRange,
@@ -2449,6 +2545,7 @@ function addTurret(platform, x) {
     attackVideoPrimed: false,
     animationPhase: mapRandom() * Math.PI * 2,
     active: false,
+    simulationSleeping: true,
     deathResolved: false,
     deathExplosionTriggered: false,
     alive: true,
@@ -2517,6 +2614,7 @@ function addFinalBoss(platform) {
     moving: false,
     airborne: false,
     jumpImpactTimer: 0,
+    attackVoiceCooldown: FINAL_BOSS.attackVoiceInitialDelay,
     finalBoss: true,
     alive: true,
   };
@@ -2539,14 +2637,16 @@ function stageSpawnIsInStartSafeZone(platform, x, definition) {
   );
 }
 
-function tryAddMonster3(
+function tryAddFlyingMonster(
+  kind,
   platform,
   startX,
   endX,
   attempts = 6,
   avoidStartSafeZone = false,
 ) {
-  const flyer = MONSTER_TYPES.monster3;
+  const flyer = MONSTER_TYPES[kind];
+  if (!flyer?.hoverHeight) return null;
   if (endX - startX < flyer.width) return null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const x = startX + mapRandom() * (endX - startX - flyer.width);
@@ -2560,11 +2660,19 @@ function tryAddMonster3(
       return bounds.top < y + flyer.height + 20 && bounds.bottom > spriteTop - 12;
     });
     if (!obstructed) {
-      const enemy = addEnemy(platform, x, "monster3");
+      const enemy = addEnemy(platform, x, kind);
       if (enemy) return enemy;
     }
   }
   return null;
+}
+
+function tryAddMonster3(...args) {
+  return tryAddFlyingMonster("monster3", ...args);
+}
+
+function tryAddMonster5(...args) {
+  return tryAddFlyingMonster("monster5", ...args);
 }
 
 function tryAddHeartItem(platform, startX, endX, avoidEnemies = true) {
@@ -2574,7 +2682,8 @@ function tryAddHeartItem(platform, startX, endX, avoidEnemies = true) {
     const occupied = turrets.some((turret) =>
       turret.platform === platform && Math.abs(x - turret.x - turret.width / 2) < 95
     ) || enemies.some((enemy) =>
-      avoidEnemies && enemy.platform === platform && enemy.kind !== "monster3" &&
+      avoidEnemies && enemy.platform === platform &&
+      !["monster3", "monster5"].includes(enemy.kind) &&
       Math.abs(x - enemy.x - enemy.width / 2) < 70
     ) || heartItems.some((heart) =>
       heart.platform === platform && Math.abs(x - heart.x) < 150
@@ -2763,6 +2872,14 @@ function buildStage() {
       tryAddMonster3(platform, visibleStart, visibleEnd, 6, true);
     }
 
+    if (
+      platform.routeRole === "main" && !platform.startingRoad &&
+      platformLength >= MONSTER_TYPES.monster5.spawnMinPlatformLength &&
+      mapRandom() < MONSTER_TYPES.monster5.spawnChance
+    ) {
+      tryAddMonster5(platform, visibleStart, visibleEnd, 6, true);
+    }
+
     if (platform.routeRole === "main" && !platform.startingRoad) {
       eligibleHeartPlatforms += 1;
       if (eligibleHeartPlatforms % 2 === 0) {
@@ -2781,6 +2898,20 @@ function buildStage() {
       const platform = routeRoads[(offset + index) % routeRoads.length];
       if (platform.end - platform.start < MONSTER_TYPES.monster3.spawnMinPlatformLength) continue;
       if (tryAddMonster3(
+        platform,
+        platform.start + 24,
+        platform.end - 24,
+        12,
+        true,
+      )) break;
+    }
+  }
+  if (!enemies.some((enemy) => enemy.kind === "monster5")) {
+    const offset = Math.floor(mapRandom() * Math.max(1, routeRoads.length));
+    for (let index = 0; index < routeRoads.length; index += 1) {
+      const platform = routeRoads[(offset + index) % routeRoads.length];
+      if (platform.end - platform.start < MONSTER_TYPES.monster5.spawnMinPlatformLength) continue;
+      if (tryAddMonster5(
         platform,
         platform.start + 24,
         platform.end - 24,
@@ -2953,8 +3084,11 @@ function enterBossMap() {
   enemyBullets.length = 0;
   particles.length = 0;
   enemies.length = 0;
+  continuousSimulationEnemies.clear();
   heartItems.length = 0;
   turrets.length = 0;
+  activeSimulationTurrets.clear();
+  invalidateHostileSpatialIndexes();
   midBosses.length = 0;
   currentArea = "boss";
   bossMapCheckpoint = null;
@@ -3027,7 +3161,7 @@ function findTestCombatantSpawn(definition, kind, desiredDistance) {
         const surfaceY = platformSurfaceY(platform, centerX);
         const spawnCenterY = surfaceY - (definition.hoverHeight ?? 0) - definition.height / 2;
         const isCurrentPlatform = platform === player.platform;
-        const onScreenY = kind === "monster3" ? spawnCenterY : surfaceY;
+        const onScreenY = definition.hoverHeight ? spawnCenterY : surfaceY;
         const onScreen = (
           centerX >= cameraX &&
           centerX <= cameraX + WIDTH &&
@@ -3067,7 +3201,7 @@ function findTestCombatantSpawn(definition, kind, desiredDistance) {
             (isCurrentPlatform ? -100000 : 0) +
             (onScreen ? -10000 : 0) +
             Math.abs(centerX - desiredCenterX) +
-            (kind === "monster3"
+            (definition.hoverHeight
               ? Math.abs(spawnCenterY - (playerFeetY - player.height / 2))
               : Math.abs(surfaceY - playerFeetY)) * 1.5
           ),
@@ -3101,7 +3235,8 @@ function spawnTestMonster(kind) {
   burst(
     enemy.x + enemy.width / 2,
     enemy.y + enemy.height / 2,
-    kind === "monster3" ? "#ff9c59"
+    kind === "monster5" ? "#50d8ff"
+      : kind === "monster3" ? "#ff9c59"
       : kind === "monster2" ? "#dc55e9"
         : kind === "monster4" ? "#ff794f" : "#7cff48",
     15,
@@ -3394,7 +3529,9 @@ function resizeGameResolution(width, height) {
   player.fallReferenceY += verticalShift;
   for (const enemy of enemies) enemy.y += verticalShift;
   for (const enemy of enemies) {
-    if (enemy.kind === "monster3") enemy.hoverBaseY += verticalShift;
+    if (["monster3", "monster5"].includes(enemy.kind)) {
+      enemy.hoverBaseY += verticalShift;
+    }
   }
   for (const heart of heartItems) heart.y += verticalShift;
   for (const turret of turrets) turret.y += verticalShift;
@@ -3493,8 +3630,11 @@ function resetGame() {
   enemyBullets.length = 0;
   particles.length = 0;
   enemies.length = 0;
+  continuousSimulationEnemies.clear();
   heartItems.length = 0;
   turrets.length = 0;
+  activeSimulationTurrets.clear();
+  invalidateHostileSpatialIndexes();
   currentArea = "stage";
   bossMapCheckpoint = null;
   generateMap();

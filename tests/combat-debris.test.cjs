@@ -72,7 +72,7 @@ test("turret debris retains its enlarged metal chunks and one ground bounce", ()
   assert.equal(rectangles.length, 3, "metal rendering stays rectangular");
 });
 
-for (const kind of ["monster1", "monster2", "monster3", "monster4"]) {
+for (const kind of ["monster1", "monster2", "monster3", "monster4", "monster5"]) {
   test(`${kind} organic debris sticks, spreads, fades and expires`, () => {
     const { scope, rectangles } = createEffects();
     const debris = explode(scope, kind);

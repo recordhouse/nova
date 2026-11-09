@@ -8,16 +8,17 @@ function sourceIsEnemyAttack(source) {
     "monster2",
     "monster3",
     "monster4",
+    "monster5",
     "monster4-crescent",
     "monster2-fireball",
     "monster3-laser",
+    "monster5-orb",
     "turret-laser",
     "turret",
     "boss-laser",
     "final-boss-beam",
     "final-boss-fan",
     "final-boss-rain",
-    "final-boss-wave",
     "final-boss-jump",
     "boss",
   ].includes(source?.kind);
@@ -32,6 +33,7 @@ function playerImpactAccent(sourceKind) {
     : sourceKind === "monster2" ? "#ffae68"
     : sourceKind === "monster3" ? "#ffd58d"
     : sourceKind === "monster4" ? "#ff9f68"
+    : sourceKind === "monster5" || sourceKind === "monster5-orb" ? "#55dcff"
     : sourceKind === "monster4-crescent" ? "#ff4168"
     : sourceKind === "monster2-fireball" ? "#ffae68"
       : sourceKind === "monster3-laser" ? "#ffd58d"
@@ -480,7 +482,7 @@ function resolveEnemyDeath(enemy, playDeathSound = false, effectDensity = 1) {
   } else if (
     playDeathSound &&
     (enemy.kind === "monster1" || enemy.kind === "monster2" ||
-      enemy.kind === "monster4") &&
+      enemy.kind === "monster4" || enemy.kind === "monster5") &&
     typeof playMonsterDie01Sound === "function"
   ) {
     playMonsterDie01Sound();
@@ -549,7 +551,8 @@ function damageEnemyWithPlayerShieldRam(enemy, direction) {
     enemy.jumpVx = direction * PLAYER_SHIELD_RAM_KNOCKBACK_SPEED;
     enemy.jumpHit = true;
   } else {
-    enemy.state = enemy.kind === "monster3" ? "hover" : "chase";
+    enemy.state = ["monster3", "monster5"].includes(enemy.kind)
+      ? "hover" : "chase";
     enemy.stateTimer = 0;
   }
   enemy.attackTimer = Math.max(enemy.attackTimer, 0.55);
@@ -783,7 +786,7 @@ function emitPlayerHitImpact(source) {
 
 function combatantHitSoundGroup(kind) {
   if (kind === "monster3" || kind === "turret") return "metal";
-  if (kind === "monster1" || kind === "monster2" || kind === "monster4") {
+  if (["monster1", "monster2", "monster4", "monster5"].includes(kind)) {
     return "organic";
   }
   return null;
@@ -935,7 +938,8 @@ function updatePlayerRevivalWave(dt) {
       enemy.jumpVx = direction * PLAYER_REVIVAL_KNOCKBACK_SPEED;
       enemy.jumpHit = true;
     } else {
-      enemy.state = enemy.kind === "monster3" ? "hover" : "chase";
+      enemy.state = ["monster3", "monster5"].includes(enemy.kind)
+        ? "hover" : "chase";
       enemy.stateTimer = 0;
     }
     enemy.attackTimer = Math.max(enemy.attackTimer, 0.6);
@@ -1064,6 +1068,8 @@ function burstMonsterFragments(bullet, enemy, lethal = false, effectDensity = 1)
     ? ["#f094ed", "#cd4dc7", "#823980", "#5d2466", "#33223e"]
     : enemy.kind === "monster4"
     ? ["#ff9d65", "#dc593d", "#92372e", "#2ce4d7", "#34202d"]
+    : enemy.kind === "monster5"
+    ? ["#8deeff", "#34b9ff", "#345cff", "#8a45da", "#172a68"]
     : ["#70ff37", "#c9ff55", "#34ba32", "#713aa0", "#2b1647"];
   const count = scaledEffectCount(lethal ? 30 : 16, effectDensity);
   const spread = lethal ? Math.PI * 0.9 : Math.PI * 0.58;
@@ -1143,12 +1149,13 @@ function burstCombatantExplosion(target, kind, effectDensity = 1) {
   const isTurret = kind === "turret";
   const isCrimson = kind === "monster1" && target.crimsonVariant;
   const isLarge = isCrimson || isTurret || kind === "monster2" ||
-    kind === "monster3" || kind === "monster4";
+    kind === "monster3" || kind === "monster4" || kind === "monster5";
   const centerX = target.x + target.width / 2;
   const centerY = target.y + target.height * 0.52;
   const color = isCrimson ? "#ff3048"
     : kind === "monster1" ? "#99ff52"
     : kind === "monster4" ? "#ff764c"
+    : kind === "monster5" ? "#4bcfff"
     : kind === "monster3" ? "#ffaf62" : "#ed81fa";
   const debrisColors = isCrimson
     ? ["#ff3348", "#c71935", "#74182c", "#391827"]
@@ -1158,6 +1165,8 @@ function burstCombatantExplosion(target, kind, effectDensity = 1) {
       ? ["#b74431", "#df6848", "#753126", "#174e50", "#34232b"]
     : kind === "monster3"
       ? ["#ffb665", "#e97449", "#70435c", "#314458"]
+    : kind === "monster5"
+      ? ["#8deeff", "#329ee8", "#455bd0", "#612d99", "#172653"]
       : isTurret
       ? ["#687388", "#8f9bae", "#673677", "#3c2947", "#35414d"]
       : ["#af4aaa", "#77327a", "#58305e", "#3c2646"];
@@ -1374,7 +1383,8 @@ function damageNearbyMonstersFromExplosion({
       enemy.jumpVx = direction * knockbackSpeed;
       enemy.jumpHit = true;
     } else {
-      enemy.state = enemy.kind === "monster3" ? "hover" : "chase";
+      enemy.state = ["monster3", "monster5"].includes(enemy.kind)
+        ? "hover" : "chase";
       enemy.stateTimer = 0;
     }
     enemy.attackTimer = Math.max(enemy.attackTimer, 0.65);
@@ -1978,6 +1988,62 @@ function moveMonster2Fireball(bullet, dt) {
   return bullet.remainingRange > 1e-9;
 }
 
+function burstMonster5OrbExplosion(bullet) {
+  const radius = bullet.explosionRadius ?? 118;
+  particles.push({
+    x: bullet.x,
+    y: bullet.y,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life: 0.58,
+    maxLife: 0.58,
+    color: "#4fdcff",
+    coreColor: "#efffff",
+    size: radius,
+    monster5OrbBlast: true,
+  });
+  burst(bullet.x, bullet.y, "#42cfff", 28, 360);
+  burst(bullet.x, bullet.y, "#e9feff", 12, 220);
+  shake = Math.max(shake, 13);
+  if (overlapsCircleRect({ x: bullet.x, y: bullet.y, radius }, getPlayerHitbox())) {
+    takePlayerDamage(bullet.damage ?? 1, bullet);
+  }
+}
+
+function steerMonster5Orb(bullet, dt) {
+  const hitbox = getPlayerHitbox();
+  const targetX = hitbox.x + hitbox.width / 2;
+  const targetY = hitbox.y + hitbox.height / 2;
+  const currentAngle = Math.atan2(bullet.vy, bullet.vx);
+  const targetAngle = Math.atan2(targetY - bullet.y, targetX - bullet.x);
+  const angleDifference = Math.atan2(
+    Math.sin(targetAngle - currentAngle),
+    Math.cos(targetAngle - currentAngle),
+  );
+  const maxTurn = (bullet.turnSpeed ?? 1.15) * dt;
+  const nextAngle = currentAngle + Math.max(-maxTurn, Math.min(maxTurn, angleDifference));
+  const speed = bullet.speed ?? Math.max(1, Math.hypot(bullet.vx, bullet.vy));
+  bullet.vx = Math.cos(nextAngle) * speed;
+  bullet.vy = Math.sin(nextAngle) * speed;
+}
+
+function moveMonster5Orb(bullet, dt) {
+  steerMonster5Orb(bullet, dt);
+  if (!moveRicochetingBullet(bullet, dt, bullet.ricochetColor ?? "#51dfff")) {
+    return false;
+  }
+  bullet.contactDamageTimer = Math.max(0, (bullet.contactDamageTimer ?? 0) - dt);
+  if (
+    bullet.contactDamageTimer <= 0 &&
+    overlapsCircleRect(bullet, getPlayerHitbox()) &&
+    takePlayerDamage(bullet.damage ?? 1, bullet)
+  ) {
+    bullet.contactDamageTimer = 0.8;
+  }
+  return true;
+}
+
 function updateBullets(dt) {
   let ultimateLaserTargets = null;
   for (let i = bullets.length - 1; i >= 0; i -= 1) {
@@ -2075,6 +2141,19 @@ function updateBullets(dt) {
 
   for (let i = enemyBullets.length - 1; i >= 0; i -= 1) {
     const bullet = enemyBullets[i];
+    if (bullet.kind === "monster5-orb") {
+      bullet.life -= dt;
+      if (bullet.life <= 0) {
+        burstMonster5OrbExplosion(bullet);
+        enemyBullets.splice(i, 1);
+        continue;
+      }
+      if (!moveMonster5Orb(bullet, dt)) {
+        burstMonster5OrbExplosion(bullet);
+        enemyBullets.splice(i, 1);
+      }
+      continue;
+    }
     if (Number.isFinite(bullet.life)) {
       bullet.life -= dt;
       if (bullet.life <= 0) {
@@ -2104,7 +2183,7 @@ function updateBullets(dt) {
 
     if (
       player.invincible <= 0 && overlapsCircleRect(bullet, getPlayerHitbox()) &&
-      takePlayerDamage(1, bullet)
+      takePlayerDamage(bullet.damage ?? 1, bullet)
     ) {
       enemyBullets.splice(i, 1);
       continue;

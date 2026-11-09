@@ -142,11 +142,34 @@ test("road conflict geometry preserves joins and handles crossing slopes and tri
 
 const mapCount = Number(process.env.NOVA_MAP_TEST_COUNT ?? 200);
 
-test("the stage terrain runs three times the previous distance before the boss gate", () => {
+test("the stage terrain runs one and a half times the original distance before the boss gate", () => {
   const game = createGame();
-  assert.equal(vm.runInContext("WORLD_LENGTH", game), 312000);
+  assert.equal(vm.runInContext("WORLD_LENGTH", game), 156000);
   vm.runInContext("resetGame()", game);
   validateMap(game);
+});
+
+test("hostile spatial queries only return nearby entries and follow moving enemies", () => {
+  const game = createGame();
+  const result = vm.runInContext(`(() => {
+    const fixture = [
+      {x:0,y:0,width:60,height:100},
+      {x:5000,y:0,width:60,height:100},
+    ];
+    const initial = hostilesBetween(fixture,-100,200).length;
+    fixture[0].x = 2100;
+    const moved = syncHostileSpatialEntry(fixture,fixture[0]);
+    return {
+      initial,
+      moved,
+      oldArea:hostilesBetween(fixture,-100,200).length,
+      newArea:hostilesBetween(fixture,2000,2300).length,
+    };
+  })()`, game);
+  assert.equal(result.initial, 1);
+  assert.equal(result.moved, true);
+  assert.equal(result.oldArea, 0);
+  assert.equal(result.newArea, 1);
 });
 
 for (const landscape of [false, true]) {
@@ -168,7 +191,11 @@ test("bounded fallback also produces clear roads and valid boss placement", () =
   const game = createGame();
   let successfulCandidates = 0;
   for (let map = 0; map < 20; map += 1) {
-    if (!vm.runInContext("generateMapCandidate('conservative')", game)) continue;
+    const accepted = vm.runInContext(
+      "generateMapCandidate('conservative') && generatedMapHasOrganicFlow()",
+      game,
+    );
+    if (!accepted) continue;
     const data = validateMap(game);
     successfulCandidates += 1;
     assert.ok(data.reversals >= 3);

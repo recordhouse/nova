@@ -455,7 +455,6 @@ for (const kind of [
   "monster2-fireball",
   "final-boss-fan",
   "final-boss-rain",
-  "final-boss-wave",
   "final-boss-jump",
 ]) {
   test(`${kind} starts the same down sequence on contact`, () => {
@@ -487,7 +486,7 @@ test("monster1 jump contact and boss contact use the common damage sequence", ()
 });
 
 test("every monster body and turret contact removes exactly one heart", () => {
-  for (const kind of ["monster1", "monster2", "monster3", "monster4"]) {
+  for (const kind of ["monster1", "monster2", "monster3", "monster4", "monster5"]) {
     const { scope } = createGame();
     read(scope, `
       globalThis.contactEnemy=addEnemy(fixtureRoad,player.x,'${kind}');
@@ -514,7 +513,7 @@ test("every monster body and turret contact removes exactly one heart", () => {
 });
 
 test("a shielded ground rush damages each monster type once and knocks it backward", () => {
-  for (const kind of ["monster1", "monster2", "monster3", "monster4"]) {
+  for (const kind of ["monster1", "monster2", "monster3", "monster4", "monster5"]) {
     const { scope, calls } = createGame();
     read(scope, `
       player.vx=PLAYER_RUN_MAX_SPEED;
@@ -528,7 +527,7 @@ test("a shielded ground rush damages each monster type once and knocks it backwa
         '${kind}'
       );
       rammedEnemy.x=player.x+player.width-12;
-      if (rammedEnemy.kind==='monster3') {
+      if (rammedEnemy.kind==='monster3'||rammedEnemy.kind==='monster5') {
         rammedEnemy.y=player.y;
         rammedEnemy.hoverBaseY=player.y;
         rammedEnemy.hoverAnchorX=rammedEnemy.x;

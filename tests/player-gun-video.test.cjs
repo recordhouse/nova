@@ -72,6 +72,7 @@ test("optimized action videos randomize and keep their playback lifecycles", asy
     monster3Video,
     monster4Video,
     turretVideo,
+    bossVideo,
     spaceVideo,
   ] = videos;
   assert.equal(gunVideo1.src, "./assets/video/main/gun-optimized.mp4?v=20261015-1");
@@ -95,6 +96,8 @@ test("optimized action videos randomize and keep their playback lifecycles", asy
     "./assets/video/monsters/monster4-attack-optimized.mp4?v=20261015-1");
   assert.equal(turretVideo.src,
     "./assets/video/monsters/turret-attack-optimized.mp4?v=20261015-1");
+  assert.equal(bossVideo.src,
+    "./assets/video/monsters/boss-optimized.mp4?v=20261107-1");
   assert.equal(spaceVideo.src,
     "./assets/video/bg/space_new-optimized.mp4?v=20261107-2");
   assert.equal(spaceVideo.muted, true);
@@ -134,9 +137,12 @@ test("optimized action videos randomize and keep their playback lifecycles", asy
   assert.equal(monster3Video.playbackRate, 3.1);
   assert.equal(monster4Video.playbackRate, 3.2);
   assert.equal(turretVideo.playbackRate, 3.4);
+  assert.equal(bossVideo.playbackRate, 1);
   assert.ok([monster1Video, monster3Video, monster4Video, turretVideo].every(
     (enemyVideo) => enemyVideo.muted && !enemyVideo.loop,
   ));
+  assert.equal(bossVideo.muted, true);
+  assert.equal(bossVideo.loop, false);
   assert.equal(scope.playPlayerGunVideo(), false, "an early shot waits for video data");
   assert.equal(scope.playPlayerGunVideo(), false, "pending playback is not reloaded each frame");
   assert.equal(gunVideo1.loadCalls, 2);
@@ -236,6 +242,18 @@ test("optimized action videos randomize and keep their playback lifecycles", asy
   assert.equal(turretVideo.pauseCalls, 1);
 
   scope.resetEnemyAttackVideo();
+  assert.equal(scope.playEnemyAttackVideo("boss", 25), true);
+  bossVideo.readyState = 4;
+  bossVideo.listeners.loadeddata();
+  await Promise.resolve();
+  assert.equal(bossVideo.playCalls, 1);
+  assert.deepEqual(
+    Array.from(scope.enemyVideoVoiceCalls),
+    ["monster2", "monster2", "turret", "boss"],
+  );
+  assert.equal(scope.stopEnemyAttackVideo(), true);
+
+  scope.resetEnemyAttackVideo();
   assert.equal(scope.queueEnemyIntroductionVideo("monster1", 300), true);
   assert.equal(scope.queueEnemyIntroductionVideo("monster3", 100), true);
   assert.equal(scope.queueEnemyIntroductionVideo("monster1", 50), false,
@@ -261,7 +279,7 @@ test("optimized action videos randomize and keep their playback lifecycles", asy
   assert.equal(monster3Video.playCalls, 1);
   assert.deepEqual(
     Array.from(scope.enemyVideoVoiceCalls),
-    ["monster2", "monster2", "turret", "monster3"],
+    ["monster2", "monster2", "turret", "boss", "monster3"],
   );
   scope.resetEnemyAttackVideo();
   assert.equal(scope.queueEnemyIntroductionVideo("monster1", 10), true,

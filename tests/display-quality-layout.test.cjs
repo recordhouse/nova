@@ -247,7 +247,7 @@ test("rust, blood, scratches and rivets render on both flat and sloped boss road
   assert.ok(calls.filter((call) => call.operation === "fillRect").length >= 20);
 });
 
-test("the final boss gathers energy at its mouth and renders one powerful angled beam", () => {
+test("the final boss gathers energy and renders a shorter thinner moving beam", () => {
   const { scope, calls, gradients } = createDisplay();
   const image = { naturalWidth: 4400, naturalHeight: 800 };
   scope.bossStandSprite = { loaded: true, image };
@@ -263,54 +263,27 @@ test("the final boss gathers energy at its mouth and renders one powerful angled
 
   calls.length = 0;
   gradients.length = 0;
-  read(scope, `drawFinalBossStand({
-    x:300,y:240,width:250,height:250,hp:120,maxHp:120,
-    facing:-1,animationTime:0,finalBoss:true,
-    attackState:'fire',chargeProgress:1,fireProgress:0.3,
-    beamDirectionX:-0.9,beamDirectionY:0.435,
-    beamTravelDistance:180
-  })`);
+  read(scope, `enemyBullets.push({
+    kind:'final-boss-beam',x:360,y:300,vx:-1800,vy:240,
+    radius:FINAL_BOSS.beamRadius,beamLength:FINAL_BOSS.beamRange,
+    life:FINAL_BOSS.beamProjectileLife
+  }); gameTime=1;`);
+  scope.drawProjectiles();
   assert.ok(gradients.some((gradient) =>
     gradient.operation === "createLinearGradient"));
-  const shortBeamPoints = calls.filter((call) => call.operation === "lineTo");
-  const shortBeamMinimumX = Math.min(...shortBeamPoints.map((call) => call.args[0]));
-  assert.ok(shortBeamPoints.length >= 17);
-  assert.ok(shortBeamMinimumX > 130);
-  assert.ok(calls.filter((call) => call.operation === "stroke").length >= 4);
-
-  calls.length = 0;
-  gradients.length = 0;
-  read(scope, `drawFinalBossStand({
-    x:300,y:240,width:250,height:250,hp:120,maxHp:120,
-    facing:-1,animationTime:0,finalBoss:true,
-    attackState:'fire',chargeProgress:1,fireProgress:0.3,
-    beamDirectionX:-0.9,beamDirectionY:0.435,
-    beamTravelDistance:900
-  })`);
-  const longBeamPoints = calls.filter((call) => call.operation === "lineTo");
-  const longBeamMinimumX = Math.min(...longBeamPoints.map((call) => call.args[0]));
-  assert.ok(longBeamMinimumX < shortBeamMinimumX - 500);
-  assert.equal(read(scope, "FINAL_BOSS.beamSpeed"), 3000);
-  assert.equal(read(scope, "FINAL_BOSS.beamRadius"), 20);
+  assert.ok(calls.some((call) => call.operation === "moveTo" &&
+    call.args[0] === -280 / 3));
+  assert.ok(calls.filter((call) => call.operation === "stroke").length >= 3);
+  assert.equal(read(scope, "FINAL_BOSS.beamRange"), 280 / 3);
+  assert.equal(read(scope, "FINAL_BOSS.beamSpeed"), 1800);
+  assert.equal(read(scope, "FINAL_BOSS.beamRadius"), 11);
+  assert.equal(read(scope, "FINAL_BOSS.beamMaxRicochets"), 10);
 });
 
-test("the longer final-boss ground wave uses layered neon shells and sparks", () => {
-  const { scope, calls } = createDisplay();
-  read(scope, `enemyBullets.push({
-    kind:'final-boss-wave',x:360,y:520,vx:-780,vy:0,radius:23,life:2.4
-  })`);
-  calls.length = 0;
-  scope.drawProjectiles();
-  assert.ok(calls.filter((call) => call.operation === "arc").length >= 5);
-  assert.ok(calls.filter((call) => call.operation === "stroke").length >= 12);
-  assert.ok(calls.some((call) => call.shadowColor === "#ff285f"));
-  assert.ok(calls.some((call) => call.strokeColor === "#fff7ff"));
-});
-
-test("the final-boss three-way projectile is rendered as a round purple laser orb", () => {
+test("the final-boss fan projectile is rendered as a round purple laser orb", () => {
   const { scope, calls, gradients } = createDisplay();
   read(scope, `enemyBullets.push({
-    kind:'final-boss-fan',x:360,y:300,vx:-730,vy:0,radius:13,life:5.5
+    kind:'final-boss-fan',x:360,y:300,vx:-920,vy:0,radius:13,life:5.5
   }); gameTime=1;`);
   calls.length = 0;
   gradients.length = 0;
@@ -399,14 +372,23 @@ test("reduced performance mode lowers backing resolution and effect density", ()
 test("touch devices start with a landscape game even in a portrait viewport", () => {
   const { scope, canvas, shellClasses, shellStyles } = createDisplay(390, 3, true);
   assert.equal(read(scope, "MOBILE_LANDSCAPE_MODE"), true);
+  assert.equal(read(scope, "MOBILE_MAX_RENDER_SCALE"), 1.25);
+  assert.equal(read(scope, "adaptiveRenderScaleCap"), 1.25);
+  assert.equal(read(scope, "MINIMAP_RENDER_INTERVAL"), 1 / 15);
   assert.equal(read(scope, "WIDTH"), 1280);
   assert.equal(read(scope, "HEIGHT"), 720);
   assert.equal(shellClasses.has("mobile-landscape"), true);
   assert.equal(shellClasses.has("mobile-landscape-portrait"), true);
   assert.equal(shellStyles.get("--mobile-game-width"), "693px");
   assert.equal(shellStyles.get("--mobile-game-height"), "389.81px");
-  assert.equal(canvas.width, 2080);
-  assert.equal(canvas.height, 1170);
+  assert.equal(canvas.width, 1600);
+  assert.equal(canvas.height, 900);
+  assert.equal(scope.setAdaptivePerformanceMode(true), true);
+  assert.equal(canvas.width, 1280);
+  assert.equal(canvas.height, 720);
+  assert.equal(scope.setAdaptivePerformanceMode(false), true);
+  assert.equal(canvas.width, 1600);
+  assert.equal(canvas.height, 900);
   const transformedDelta = scope.screenDeltaToGameDelta(40, 0);
   assert.equal(transformedDelta.dx, 0);
   assert.equal(transformedDelta.dy, -40);

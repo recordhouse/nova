@@ -335,6 +335,11 @@ testSpawnMonster4Button?.addEventListener("click", (event) => {
   spawnTestMonster("monster4");
 });
 
+testSpawnMonster5Button?.addEventListener("click", (event) => {
+  event.preventDefault();
+  spawnTestMonster("monster5");
+});
+
 testSpawnTurretButton?.addEventListener("click", (event) => {
   event.preventDefault();
   spawnTestTurret();

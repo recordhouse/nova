@@ -140,6 +140,7 @@ test("combat sounds preload and use their intended audio segments", async () => 
   scope.playEnemyVideoVoice("monster2");
   scope.playEnemyVideoVoice("monster3");
   scope.playEnemyVideoVoice("turret");
+  scope.playEnemyVideoVoice("boss");
   const impactOffset = vm.runInContext("PLAYER_GUN_IMPACT_SOUND_OFFSET", scope);
 
   assert.equal(contexts.length, 1);
@@ -190,6 +191,9 @@ test("combat sounds preload and use their intended audio segments", async () => 
   assert.ok(fetchedSources.includes(
     "./assets/sound/voice_turret_01.mp3?v=20261021-1",
   ));
+  assert.ok(fetchedSources.includes(
+    "./assets/sound/voice_boss.mp3?v=20261107-1",
+  ));
   assert.ok(fetchedSources.includes("./assets/sound/monster_die_03.mp3"));
   assert.ok(fetchedSources.includes("./assets/sound/monster_die_01_01.mp3"));
   assert.ok(fetchedSources.includes("./assets/sound/turret_die_01.mp3"));
@@ -217,6 +221,7 @@ test("combat sounds preload and use their intended audio segments", async () => 
       "./assets/sound/voice_monster_02.mp3?v=20261021-1",
       "./assets/sound/voice_monster_03.mp3?v=20261021-1",
       "./assets/sound/voice_turret_01.mp3?v=20261021-1",
+      "./assets/sound/voice_boss.mp3?v=20261107-1",
     ],
   );
   assert.deepEqual(
@@ -230,7 +235,7 @@ test("combat sounds preload and use their intended audio segments", async () => 
     Array.from(vm.runInContext(
       "Object.values(enemyVideoVoiceSounds).map((sound)=>sound.output.gain.value)", scope,
     )),
-    [0.68, 0.68, 0.68],
+    [0.68, 0.68, 0.68, 0.68],
   );
   assert.equal(vm.runInContext("playerUltimateRicochetChannel.output.gain.value", scope), 0.52);
   assert.equal(vm.runInContext("playerUltimateOrganicHitChannel.output.gain.value", scope), 0.5);

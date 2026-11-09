@@ -750,6 +750,97 @@ function updateMonster3(enemy, dt, playerHitbox, playerCenterX) {
   return false;
 }
 
+function monster5OrbOrigin(enemy) {
+  return {
+    x: enemy.x + enemy.width / 2 + (enemy.facing || -1) * enemy.width * 0.16,
+    y: enemy.y + enemy.height * 0.27,
+  };
+}
+
+function fireMonster5Orb(enemy, playerHitbox) {
+  const origin = monster5OrbOrigin(enemy);
+  const targetX = playerHitbox.x + playerHitbox.width / 2;
+  const targetY = playerHitbox.y + playerHitbox.height / 2;
+  const distance = Math.max(1, Math.hypot(targetX - origin.x, targetY - origin.y));
+  const directionX = (targetX - origin.x) / distance;
+  const directionY = (targetY - origin.y) / distance;
+  enemyBullets.push({
+    kind: "monster5-orb",
+    x: origin.x + directionX * (enemy.orbRadius + 3),
+    y: origin.y + directionY * (enemy.orbRadius + 3),
+    vx: directionX * enemy.orbSpeed,
+    vy: directionY * enemy.orbSpeed,
+    speed: enemy.orbSpeed,
+    radius: enemy.orbRadius,
+    life: enemy.orbLifetime,
+    maxLife: enemy.orbLifetime,
+    turnSpeed: enemy.orbTurnSpeed,
+    explosionRadius: enemy.orbExplosionRadius,
+    contactDamageTimer: 0,
+    ricochets: 0,
+    maxRicochets: 999,
+    ricochetScreenEdges: true,
+    keepOffscreen: true,
+    ricochetColor: "#51dfff",
+    phase: Math.random() * Math.PI * 2,
+  });
+  burst(origin.x, origin.y, "#6ee8ff", 13, 145);
+  burst(origin.x, origin.y, "#eefcff", 5, 85);
+  shake = Math.max(shake, 4.5);
+}
+
+function updateMonster5(enemy, dt, playerHitbox, playerCenterX) {
+  enemy.y = enemy.hoverBaseY + Math.sin(
+    enemy.animationTime * enemy.hoverSpeed + enemy.animationPhase,
+  ) * enemy.hoverAmplitude;
+  const patrolX = enemy.hoverAnchorX + Math.sin(
+    enemy.animationTime * enemy.patrolSpeed + enemy.animationPhase,
+  ) * enemy.patrolRadius;
+  const minX = enemy.platform.start + 24;
+  const maxX = enemy.platform.end - enemy.width - 24;
+  const targetX = Math.max(minX, Math.min(maxX, patrolX));
+  const knockback = enemy.hitKnockbackVelocity;
+  const moveLimit = enemy.hoverMoveSpeed * dt;
+  const nextX = Math.max(minX, Math.min(maxX,
+    enemy.x + Math.max(-moveLimit, Math.min(moveLimit, targetX - enemy.x)) +
+      knockback * dt,
+  ));
+  if (!enemyRectOverlapsEnemy(nextX, enemy.y, enemy.width, enemy.height, enemy)) {
+    enemy.moving = Math.abs(nextX - enemy.x) > 0.5;
+    if (enemy.moving) enemy.facing = Math.sign(nextX - enemy.x) || enemy.facing;
+    enemy.x = nextX;
+  }
+  if (Math.abs(knockback) > 1) {
+    enemy.hitKnockbackVelocity *= Math.exp(-enemy.hitKnockbackDamping * dt);
+    enemy.hoverAnchorX = Math.max(minX, Math.min(maxX,
+      enemy.hoverAnchorX + knockback * dt,
+    ));
+  }
+
+  if (enemy.state === "charge") {
+    enemy.stateTimer -= dt;
+    if (enemy.stateTimer > 0) return;
+    fireMonster5Orb(enemy, playerHitbox);
+    enemy.state = "hover";
+    enemy.stateTimer = 0;
+    enemy.attackTimer = enemy.attackCooldownMin +
+      Math.random() * (enemy.attackCooldownMax - enemy.attackCooldownMin);
+    return;
+  }
+
+  const origin = monster5OrbOrigin(enemy);
+  const playerCenterY = playerHitbox.y + playerHitbox.height / 2;
+  const playerNearby = Math.abs(playerCenterX - origin.x) <= enemy.attackRange &&
+    Math.abs(playerCenterY - origin.y) <= 680;
+  const onScreen = origin.x >= cameraX - 90 && origin.x <= cameraX + WIDTH + 90 &&
+    origin.y >= cameraY - 90 && origin.y <= cameraY + HEIGHT + 90;
+  if (playerNearby && onScreen && enemy.attackTimer <= 0) {
+    enemy.facing = Math.sign(playerCenterX - enemy.x - enemy.width / 2) || enemy.facing;
+    enemy.state = "charge";
+    enemy.stateTimer = enemy.chargeDuration;
+  }
+}
+
 function hostileAttackVideoIsVisible(hostile) {
   const margin = 100;
   const centerX = hostile.x + hostile.width / 2;
@@ -823,7 +914,22 @@ function updateEnemies(dt) {
     attackVideoDistance = distance;
   };
 
-  for (const enemy of enemies) {
+  const nearbyEnemies = typeof hostilesBetween === "function"
+    ? hostilesBetween(
+      enemies,
+      cameraX - HOSTILE_SIMULATION_MARGIN_X,
+      cameraX + WIDTH + HOSTILE_SIMULATION_MARGIN_X,
+    )
+    : enemies;
+  const simulationEnemies = new Set(nearbyEnemies);
+  if (typeof continuousSimulationEnemies !== "undefined") {
+    for (const enemy of continuousSimulationEnemies) {
+      if (enemy.alive) simulationEnemies.add(enemy);
+      else continuousSimulationEnemies.delete(enemy);
+    }
+  }
+
+  for (const enemy of simulationEnemies) {
     if (!enemy.alive) continue;
     if (
       !hostileIsWithinSimulationRange(enemy) &&
@@ -852,6 +958,12 @@ function updateEnemies(dt) {
         enemy.kind,
         hostileAttackVideoDistance(enemy, playerCenterX, playerCenterY),
       );
+    }
+
+    if (enemy.kind === "monster5") {
+      updateMonster5(enemy, dt, playerHitbox, playerCenterX);
+      damagePlayerOnHostileContact(enemy, playerHitbox, getEnemyHitbox(enemy));
+      continue;
     }
 
     if (enemy.kind === "monster3") {
@@ -983,6 +1095,20 @@ function updateEnemies(dt) {
 
     damagePlayerOnHostileContact(enemy, playerHitbox, getEnemyHitbox(enemy));
   }
+  for (const enemy of simulationEnemies) {
+    if (typeof syncHostileSpatialEntry === "function") {
+      syncHostileSpatialEntry(enemies, enemy);
+    }
+    if (typeof continuousSimulationEnemies === "undefined") continue;
+    if (
+      enemy.alive &&
+      (hostileIsWithinSimulationRange(enemy) || enemyNeedsContinuousSimulation(enemy))
+    ) {
+      continuousSimulationEnemies.add(enemy);
+    } else {
+      continuousSimulationEnemies.delete(enemy);
+    }
+  }
   if (
     attackVideoCandidate &&
     typeof playEnemyAttackVideo === "function"
@@ -1047,8 +1173,22 @@ function updateTurrets(dt) {
   const playerCenterY = playerHitbox.y + playerHitbox.height / 2;
   let attackVideoCandidate = null;
   let attackVideoDistance = Infinity;
+  const nearbyTurrets = typeof hostilesBetween === "function"
+    ? hostilesBetween(
+      turrets,
+      cameraX - HOSTILE_SIMULATION_MARGIN_X,
+      cameraX + WIDTH + HOSTILE_SIMULATION_MARGIN_X,
+    )
+    : turrets;
+  const simulationTurrets = new Set(nearbyTurrets);
+  if (typeof activeSimulationTurrets !== "undefined") {
+    for (const turret of activeSimulationTurrets) {
+      if (turret.alive) simulationTurrets.add(turret);
+      else activeSimulationTurrets.delete(turret);
+    }
+  }
 
-  for (const turret of turrets) {
+  for (const turret of simulationTurrets) {
     if (!turret.alive) continue;
     if (!hostileIsWithinSimulationRange(turret)) {
       turret.active = false;
@@ -1140,6 +1280,20 @@ function updateTurrets(dt) {
     if (turret.burstShotsRemaining === 0) turret.attackVideoPrimed = false;
     turret.chargeParticleTimer = 0;
   }
+  if (typeof syncHostileSpatialEntry === "function") {
+    for (const turret of simulationTurrets) {
+      syncHostileSpatialEntry(turrets, turret);
+    }
+  }
+  if (typeof activeSimulationTurrets !== "undefined") {
+    for (const turret of simulationTurrets) {
+      if (turret.alive && hostileIsWithinSimulationRange(turret)) {
+        activeSimulationTurrets.add(turret);
+      } else {
+        activeSimulationTurrets.delete(turret);
+      }
+    }
+  }
   if (
     attackVideoCandidate &&
     typeof playEnemyAttackVideo === "function"
@@ -1214,12 +1368,6 @@ function finalBossPatternDurations(pattern) {
       fire: FINAL_BOSS.rainFireDuration,
     };
   }
-  if (pattern === "ground-wave") {
-    return {
-      charge: FINAL_BOSS.groundWaveChargeDuration,
-      fire: FINAL_BOSS.groundWaveFireDuration,
-    };
-  }
   if (pattern === "dash") {
     return {
       charge: FINAL_BOSS.dashChargeDuration,
@@ -1277,6 +1425,17 @@ function setFinalBossJumpTarget(boss, targetX) {
   boss.jumpTargetY = surfaceY - boss.height;
 }
 
+function tryPlayFinalBossAttackVoice(boss) {
+  if (
+    (boss.attackVoiceCooldown ?? 0) > 0 ||
+    typeof playEnemyVideoVoice !== "function" ||
+    Math.random() >= FINAL_BOSS.attackVoiceChance
+  ) return false;
+  playEnemyVideoVoice("boss");
+  boss.attackVoiceCooldown = FINAL_BOSS.attackVoiceCooldown;
+  return true;
+}
+
 function prepareFinalBossAttack(boss, playerCenterX, playerCenterY) {
   const patterns = FINAL_BOSS.attackPatterns;
   const patternIndex = (boss.nextAttackIndex ?? 0) % patterns.length;
@@ -1306,42 +1465,29 @@ function prepareFinalBossAttack(boss, playerCenterX, playerCenterY) {
     boss.beamDirectionX = direction.x;
     boss.beamDirectionY = direction.y;
   }
+  tryPlayFinalBossAttackVoice(boss);
 }
 
-function finalBossBeamIntersectsRect(boss, rect) {
+function spawnFinalBossBeamProjectile(boss) {
   const mouth = finalBossMouthPosition(boss);
-  const beamLength = Math.max(0, Math.min(
-    FINAL_BOSS.beamRange,
-    boss.beamTravelDistance ?? 0,
-  ));
-  if (beamLength <= 0) return false;
-  const endX = mouth.x + boss.beamDirectionX * beamLength;
-  const endY = mouth.y + boss.beamDirectionY * beamLength;
-  const radius = FINAL_BOSS.beamRadius;
-  const minimumX = rect.x - radius;
-  const maximumX = rect.x + rect.width + radius;
-  const minimumY = rect.y - radius;
-  const maximumY = rect.y + rect.height + radius;
-  const deltaX = endX - mouth.x;
-  const deltaY = endY - mouth.y;
-  let minimumTime = 0;
-  let maximumTime = 1;
-
-  for (const [start, delta, minimum, maximum] of [
-    [mouth.x, deltaX, minimumX, maximumX],
-    [mouth.y, deltaY, minimumY, maximumY],
-  ]) {
-    if (Math.abs(delta) < 0.000001) {
-      if (start < minimum || start > maximum) return false;
-      continue;
-    }
-    const first = (minimum - start) / delta;
-    const second = (maximum - start) / delta;
-    minimumTime = Math.max(minimumTime, Math.min(first, second));
-    maximumTime = Math.min(maximumTime, Math.max(first, second));
-    if (minimumTime > maximumTime) return false;
-  }
-  return true;
+  const directionX = boss.beamDirectionX || boss.facing || 1;
+  const directionY = boss.beamDirectionY || 0;
+  enemyBullets.push({
+    kind: "final-boss-beam",
+    x: mouth.x,
+    y: mouth.y,
+    vx: directionX * FINAL_BOSS.beamSpeed,
+    vy: directionY * FINAL_BOSS.beamSpeed,
+    radius: FINAL_BOSS.beamRadius,
+    beamLength: FINAL_BOSS.beamRange,
+    damage: FINAL_BOSS.beamDamage,
+    ricochets: 0,
+    maxRicochets: FINAL_BOSS.beamMaxRicochets,
+    ricochetScreenEdges: true,
+    keepOffscreen: true,
+    life: FINAL_BOSS.beamProjectileLife,
+    ricochetColor: "#ff5ba8",
+  });
 }
 
 function spawnFinalBossFanProjectile(boss, projectileIndex) {
@@ -1368,6 +1514,7 @@ function spawnFinalBossFanProjectile(boss, projectileIndex) {
     ricochets: 0,
     maxRicochets: FINAL_BOSS.fanMaxRicochets,
     ricochetScreenEdges: true,
+    keepOffscreen: true,
     life: FINAL_BOSS.fanProjectileLife,
     ricochetColor: "#d9a8ff",
   });
@@ -1434,40 +1581,6 @@ function spawnFinalBossRainLaser(boss) {
   shake = Math.max(shake, 6);
 }
 
-function spawnFinalBossGroundWave(boss) {
-  const direction = boss.facing || 1;
-  const centerX = boss.x + boss.width / 2;
-  const surfaceY = boss.platform
-    ? platformSurfaceY(boss.platform, centerX)
-    : boss.y + boss.height;
-  enemyBullets.push({
-    kind: "final-boss-wave",
-    x: centerX + direction * boss.width * 0.42,
-    y: surfaceY - FINAL_BOSS.groundWaveRadius - 2,
-    vx: direction * FINAL_BOSS.groundWaveSpeed,
-    vy: 0,
-    radius: FINAL_BOSS.groundWaveRadius,
-    ignoreTerrain: true,
-    keepOffscreen: true,
-    life: FINAL_BOSS.groundWaveLife,
-  });
-  burst(
-    centerX + direction * boss.width * 0.38,
-    surfaceY - 8,
-    "#ff396e",
-    18,
-    260,
-  );
-  burst(
-    centerX + direction * boss.width * 0.38,
-    surfaceY - 8,
-    "#fff2fa",
-    7,
-    170,
-  );
-  shake = Math.max(shake, 12);
-}
-
 function beginFinalBossAttack(boss) {
   boss.moving = false;
   boss.attackState = "fire";
@@ -1517,6 +1630,9 @@ function beginFinalBossAttack(boss) {
     );
     shake = Math.max(shake, 10);
     return;
+  }
+  if (boss.attackPattern === "beam") {
+    spawnFinalBossBeamProjectile(boss);
   }
   burst(mouth.x, mouth.y, "#ff4f9f", 28, 290);
   burst(mouth.x, mouth.y, "#ffe6ff", 14, 185);
@@ -1619,6 +1735,10 @@ function updateFinalBossAttack(
 ) {
   boss.phase += dt;
   boss.animationTime = (boss.animationTime ?? 0) + dt;
+  boss.attackVoiceCooldown = Math.max(
+    0,
+    (boss.attackVoiceCooldown ?? FINAL_BOSS.attackVoiceInitialDelay) - dt,
+  );
   boss.jumpImpactTimer = Math.max(0, (boss.jumpImpactTimer ?? 0) - dt);
   const state = boss.attackState ?? "idle";
 
@@ -1684,24 +1804,7 @@ function updateFinalBossAttack(
     boss.chargeProgress = 1;
     boss.fireProgress = 1 - boss.attackTimer / fireDuration;
     if (boss.attackPattern === "beam") {
-      boss.beamTravelDistance = Math.min(
-        FINAL_BOSS.beamRange,
-        (boss.beamTravelDistance ?? 0) + FINAL_BOSS.beamSpeed * dt,
-      );
-    }
-    if (
-      boss.attackPattern === "beam" &&
-      finalBossBeamIntersectsRect(boss, playerHitbox)
-    ) {
       boss.moving = false;
-      const mouth = finalBossMouthPosition(boss);
-      takePlayerDamage(FINAL_BOSS.beamDamage, {
-        kind: "final-boss-beam",
-        x: mouth.x,
-        y: mouth.y,
-        vx: boss.beamDirectionX,
-      });
-      shake = Math.max(shake, 5.5);
     } else if (boss.attackPattern === "fan") {
       boss.moving = false;
       boss.patternShotTimer -= dt;
@@ -1723,17 +1826,6 @@ function updateFinalBossAttack(
         spawnFinalBossRainLaser(boss);
         boss.patternShotsFired += 1;
         boss.patternShotTimer += FINAL_BOSS.rainProjectileInterval;
-      }
-    } else if (boss.attackPattern === "ground-wave") {
-      boss.moving = false;
-      boss.patternShotTimer -= dt;
-      while (
-        boss.patternShotsFired < FINAL_BOSS.groundWaveCount &&
-        boss.patternShotTimer <= 0
-      ) {
-        spawnFinalBossGroundWave(boss);
-        boss.patternShotsFired += 1;
-        boss.patternShotTimer += FINAL_BOSS.groundWaveInterval;
       }
     } else if (boss.attackPattern === "dash") {
       boss.moving = moveFinalBossDash(boss, dt);
@@ -1781,13 +1873,28 @@ function updateMidBosses(dt) {
       Math.abs(playerCenterY - bossCenterY) <= activationRangeY
     );
     if (boss.finalBoss) {
+      if (
+        withinActivationRange && hostileAttackVideoIsVisible(boss) &&
+        typeof queueEnemyIntroductionVideo === "function"
+      ) {
+        const introductionQueued = queueEnemyIntroductionVideo(
+          "boss",
+          hostileAttackVideoDistance(boss, playerCenterX, playerCenterY),
+        );
+        if (introductionQueued) {
+          boss.attackVoiceCooldown = Math.max(
+            boss.attackVoiceCooldown ?? 0,
+            FINAL_BOSS.attackVoiceCooldown,
+          );
+        }
+      }
       updateFinalBossAttack(
         boss,
         dt,
         playerHitbox,
         playerCenterX,
         playerCenterY,
-        withinActivationRange,
+        currentArea === "boss" || withinActivationRange,
       );
       if (player.invincible <= 0 && overlapsRects(boss, playerHitbox)) {
         takePlayerDamage(1, {

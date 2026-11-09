@@ -25,6 +25,7 @@ const testSpawnMonster1Button = document.querySelector("[data-test-spawn-monster
 const testSpawnMonster2Button = document.querySelector("[data-test-spawn-monster2]");
 const testSpawnMonster3Button = document.querySelector("[data-test-spawn-monster3]");
 const testSpawnMonster4Button = document.querySelector("[data-test-spawn-monster4]");
+const testSpawnMonster5Button = document.querySelector("[data-test-spawn-monster5]");
 const testSpawnTurretButton = document.querySelector("[data-test-spawn-turret]");
 const testUltimateButton = document.querySelector("[data-test-ultimate]");
 const ultimateControlButton = document.querySelector("[data-ultimate-control]");
@@ -124,8 +125,11 @@ let WIDTH = initialCanvasResolution.width;
 let HEIGHT = initialCanvasResolution.height;
 const MAX_RENDER_SCALE = 2;
 const REDUCED_RENDER_SCALE = 1.4;
+const MOBILE_MAX_RENDER_SCALE = 1.25;
+const MOBILE_REDUCED_RENDER_SCALE = 1;
 const REDUCED_EFFECT_DENSITY = 0.7;
-let adaptiveRenderScaleCap = MAX_RENDER_SCALE;
+let adaptiveRenderScaleCap = MOBILE_LANDSCAPE_MODE
+  ? MOBILE_MAX_RENDER_SCALE : MAX_RENDER_SCALE;
 let adaptiveEffectDensity = 1;
 let BASE_GROUND_Y = HEIGHT * BASE_GROUND_SCREEN_RATIO;
 const GRAVITY = 2100;
@@ -153,7 +157,7 @@ const PLAYER_MAX_FALL_SPEED = 760;
 const JUMP_ANIMATION_DURATION = (JUMP_SPEED * 2) / GRAVITY;
 const FIRE_AIM_ANGLE_DIAGONAL = Math.PI / 6;
 const CURRENT_STAGE = 1;
-const WORLD_LENGTH = 312000;
+const WORLD_LENGTH = 156000;
 const LEVEL_GAP = 180;
 const PLATFORM_DECK_THICKNESS = 16;
 const RAMP_ANGLE_DEGREES = [20];
@@ -194,7 +198,7 @@ const ELECTRIC_WIRE_DAMAGE = 0.5;
 const MAP_FLOW_DISTANCE_MIN = 1200;
 const MAP_FLOW_DISTANCE_MAX = 3000;
 const MAP_FLOW_REVERSE_CHANCE = 0.34;
-const MINIMAP_LOCAL_WORLD_RATIO = 0.25;
+const MINIMAP_LOCAL_SCREEN_WIDTHS = 4;
 const MAP_FLOW_VERTICAL_STREAK_CHANCE = 0.56;
 const MAP_FLOW_VERTICAL_STREAK_MAX = 3;
 const MAP_FLOW_VERTICAL_SOFT_LIMIT = 10;
@@ -435,18 +439,20 @@ const FINAL_BOSS = {
   recoveryDuration: 0.95,
   mouthForwardOffset: 84,
   mouthBottomOffset: 238,
-  beamRange: 1250,
-  beamSpeed: 3000,
-  beamRadius: 20,
+  beamRange: 280 / 3,
+  beamSpeed: 1800,
+  beamRadius: 11,
+  beamMaxRicochets: 10,
+  beamProjectileLife: 8,
   beamMaxAngle: Math.PI / 3,
   beamDamage: 1,
-  attackPatterns: ["beam", "fan", "rain", "ground-wave", "dash", "jump-slam"],
+  attackPatterns: ["beam", "fan", "rain", "dash", "jump-slam"],
   fanChargeDuration: 0.6,
-  fanFireDuration: 0.68,
-  fanProjectileCount: 3,
-  fanProjectileInterval: 0.2,
+  fanFireDuration: 0.7,
+  fanProjectileCount: 6,
+  fanProjectileInterval: 0.12,
   fanSpread: Math.PI * 0.42,
-  fanProjectileSpeed: 730,
+  fanProjectileSpeed: 920,
   fanProjectileRadius: 13,
   fanMaxRicochets: 5,
   fanProjectileLife: 5.5,
@@ -456,13 +462,6 @@ const FINAL_BOSS = {
   rainProjectileInterval: 0.12,
   rainSpacing: 92,
   rainProjectileSpeed: 930,
-  groundWaveChargeDuration: 0.52,
-  groundWaveFireDuration: 0.5,
-  groundWaveCount: 2,
-  groundWaveInterval: 0.2,
-  groundWaveSpeed: 780,
-  groundWaveRadius: 23,
-  groundWaveLife: 2.4,
   dashChargeDuration: 0.48,
   dashFireDuration: 0.6,
   dashSpeed: 980,
@@ -472,6 +471,9 @@ const FINAL_BOSS = {
   jumpHeight: 270,
   jumpImpactRadius: 165,
   jumpImpactDuration: 0.42,
+  attackVoiceChance: 0.3,
+  attackVoiceCooldown: 8,
+  attackVoiceInitialDelay: 3,
 };
 const MONSTER_TYPES = {
   monster1: {
@@ -608,7 +610,7 @@ const MONSTER_TYPES = {
     hitKnockbackMaxSpeed: 360,
     hitKnockbackDamping: 11,
     hitAirImpulse: 0,
-    spawnChance: 0.45,
+    spawnChance: 0.52,
     spawnMinPlatformLength: 420,
     score: 300,
   },
@@ -637,9 +639,42 @@ const MONSTER_TYPES = {
     hitKnockbackSpeed: 200,
     hitKnockbackMaxSpeed: 340,
     hitKnockbackDamping: 8,
-    spawnChance: 0.28,
+    spawnChance: 0.34,
     spawnMinPlatformLength: 300,
     score: 200,
+  },
+  monster5: {
+    displayName: "몹5",
+    width: 86,
+    height: 112,
+    spriteWidth: 106,
+    spriteHeight: 150,
+    spriteBottomOffset: 4,
+    spriteTopInset: 12 / 1491,
+    hp: 6,
+    hoverHeight: 238,
+    hoverAmplitude: 18,
+    hoverSpeed: 1.45,
+    patrolRadius: 165,
+    patrolSpeed: 0.58,
+    hoverMoveSpeed: 92,
+    chargeDuration: 0.72,
+    orbSpeed: 275,
+    orbRadius: 18,
+    orbLifetime: 5,
+    orbTurnSpeed: 1.15,
+    orbExplosionRadius: 118,
+    attackRange: 980,
+    attackCooldownMin: 3.8,
+    attackCooldownMax: 5.2,
+    hitDuration: 0.22,
+    hitKnockbackSpeed: 190,
+    hitKnockbackMaxSpeed: 320,
+    hitKnockbackDamping: 8,
+    hitAirImpulse: 0,
+    spawnChance: 0.17,
+    spawnMinPlatformLength: 340,
+    score: 260,
   },
 };
 const RUN_FRAME_WIDTH = 400;
@@ -731,7 +766,9 @@ function syncCanvasBackingScale() {
 }
 
 function setAdaptivePerformanceMode(reduced) {
-  const nextScaleCap = reduced ? REDUCED_RENDER_SCALE : MAX_RENDER_SCALE;
+  const nextScaleCap = MOBILE_LANDSCAPE_MODE
+    ? reduced ? MOBILE_REDUCED_RENDER_SCALE : MOBILE_MAX_RENDER_SCALE
+    : reduced ? REDUCED_RENDER_SCALE : MAX_RENDER_SCALE;
   const nextEffectDensity = reduced ? REDUCED_EFFECT_DENSITY : 1;
   if (
     adaptiveRenderScaleCap === nextScaleCap &&
