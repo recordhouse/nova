@@ -2056,7 +2056,10 @@ function drawMonster4SpearCharge(enemy) {
 }
 
 function drawEnemy(enemy) {
-  const sprite = enemySprites[enemy.kind];
+  const eliteSprite = enemy.eliteVariant
+    ? enemyEliteSprites[enemy.kind]
+    : null;
+  const sprite = eliteSprite?.loaded ? eliteSprite : enemySprites[enemy.kind];
   const isMonster2 = enemy.kind === "monster2";
   const isMonster3 = enemy.kind === "monster3";
   const isMonster4 = enemy.kind === "monster4";
@@ -2070,7 +2073,9 @@ function drawEnemy(enemy) {
   );
   ctx.translate(pose.hitOffsetX, 0);
   if (!isMonster3 && !isMonster4 && !isMonster5) {
-    const groundGlow = enemy.crimsonVariant ? "255, 42, 65" : "72, 255, 48";
+    const groundGlow = enemy.eliteVariant
+      ? enemy.kind === "monster2" ? "255, 91, 25" : "118, 255, 37"
+      : enemy.crimsonVariant ? "255, 42, 65" : "72, 255, 48";
     ctx.fillStyle = `rgba(${groundGlow}, 0.08)`;
     ctx.fillRect(-pixelSnap(enemy.width * 0.55), -6, pixelSnap(enemy.width * 1.1), 6);
     ctx.fillStyle = `rgba(${groundGlow}, 0.18)`;

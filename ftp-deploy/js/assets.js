@@ -259,6 +259,14 @@ const enemySprites = {
   monster5: loadImageAsset("./assets/images/monsters/monster_05.png?v=20261107-1"),
 };
 
+const enemyEliteSprites = {
+  monster1: loadImageAsset("./assets/images/monsters/monster_01_elite.png?v=20261109-1"),
+  monster2: loadImageAsset("./assets/images/monsters/monster_02_elite.png?v=20261109-1"),
+  monster3: loadImageAsset("./assets/images/monsters/monster_03_elite.png?v=20261109-1"),
+  monster4: loadImageAsset("./assets/images/monsters/monster_04_elite.png?v=20261109-1"),
+  monster5: loadImageAsset("./assets/images/monsters/monster_05_elite.png?v=20261109-1"),
+};
+
 const turretSprite = loadImageAsset("./assets/images/monsters/turret_01.png");
 const bossStandSprite = loadImageAssetWithFallback([
   "./assets/images/boss/stand.png?v=20261105-1",

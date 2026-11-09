@@ -2386,10 +2386,23 @@ function enemyRectOverlapsEnemy(
 
 function addEnemy(platform, x, kind = "monster1", options = {}) {
   const definition = MONSTER_TYPES[kind] ?? MONSTER_TYPES.monster1;
-  const crimsonVariant = kind === "monster1" && (
+  const eliteChance = Math.max(0, Math.min(
+    1,
+    platform?.enemyEliteChance ?? 0,
+  ));
+  const eliteVariant = options.eliteVariant === true || (
+    options.eliteVariant !== false && eliteChance > 0 && mapRandom() < eliteChance
+  );
+  const crimsonVariant = !eliteVariant && kind === "monster1" && (
     options.crimsonVariant === true ||
     (options.rollCrimson === true && mapRandom() < MONSTER1_CRIMSON_CHANCE)
   );
+  const eliteScale = (value, multiplier) => (
+    eliteVariant && Number.isFinite(value) ? value * multiplier : value
+  );
+  const maximumHp = eliteVariant
+    ? Math.ceil(definition.hp * ENEMY_ELITE_HP_MULTIPLIER)
+    : definition.hp;
   const y = (
     platformSurfaceY(platform, x + definition.width / 2) - definition.height -
     (definition.hoverHeight ?? 0)
@@ -2405,14 +2418,16 @@ function addEnemy(platform, x, kind = "monster1", options = {}) {
     spriteTopInset: definition.spriteTopInset,
     spriteFacing: definition.spriteFacing ?? 1,
     kind,
+    eliteVariant,
+    eliteTier: eliteVariant ? 1 : 0,
     crimsonVariant,
     crimsonExplosionTriggered: false,
     deathResolved: false,
     contactDamageTimer: 0,
     platform,
-    hp: definition.hp,
-    maxHp: definition.hp,
-    speed: definition.speed,
+    hp: maximumHp,
+    maxHp: maximumHp,
+    speed: eliteScale(definition.speed, ENEMY_ELITE_SPEED_MULTIPLIER),
     chaseRange: definition.chaseRange,
     chaseVerticalRange: definition.chaseVerticalRange,
     climbSearchRange: definition.climbSearchRange,
@@ -2439,7 +2454,10 @@ function addEnemy(platform, x, kind = "monster1", options = {}) {
     jumpMaxHorizontalSpeed: definition.jumpMaxHorizontalSpeed,
     jumpWindupDuration: definition.jumpWindupDuration,
     jumpRecoveryDuration: definition.jumpRecoveryDuration,
-    jumpCooldownDuration: definition.jumpCooldown,
+    jumpCooldownDuration: eliteScale(
+      definition.jumpCooldown,
+      ENEMY_ELITE_ATTACK_INTERVAL_MULTIPLIER,
+    ),
     jumpCooldown: 0.05 + mapRandom() * 0.2,
     jumpVx: 0,
     jumpVy: 0,
@@ -2455,48 +2473,85 @@ function addEnemy(platform, x, kind = "monster1", options = {}) {
     hoverBaseY: y,
     hoverAnchorX: x,
     hoverAmplitude: definition.hoverAmplitude,
-    hoverSpeed: definition.hoverSpeed,
+    hoverSpeed: eliteScale(definition.hoverSpeed, 1.08),
     patrolRadius: definition.patrolRadius,
-    patrolSpeed: definition.patrolSpeed,
-    hoverMoveSpeed: definition.hoverMoveSpeed,
-    chargeDuration: definition.chargeDuration,
-    laserSpeed: definition.laserSpeed,
+    patrolSpeed: eliteScale(definition.patrolSpeed, ENEMY_ELITE_SPEED_MULTIPLIER),
+    hoverMoveSpeed: eliteScale(
+      definition.hoverMoveSpeed,
+      ENEMY_ELITE_SPEED_MULTIPLIER,
+    ),
+    chargeDuration: eliteScale(definition.chargeDuration, 0.88),
+    laserSpeed: eliteScale(
+      definition.laserSpeed,
+      ENEMY_ELITE_PROJECTILE_SPEED_MULTIPLIER,
+    ),
     laserRadius: definition.laserRadius,
     laserRicochets: definition.laserRicochets,
-    orbSpeed: definition.orbSpeed,
+    orbSpeed: eliteScale(
+      definition.orbSpeed,
+      ENEMY_ELITE_PROJECTILE_SPEED_MULTIPLIER,
+    ),
     orbRadius: definition.orbRadius,
     orbLifetime: definition.orbLifetime,
     orbTurnSpeed: definition.orbTurnSpeed,
     orbExplosionRadius: definition.orbExplosionRadius,
-    attackCooldownMin: definition.attackCooldownMin,
-    attackCooldownMax: definition.attackCooldownMax,
+    attackCooldownMin: eliteScale(
+      definition.attackCooldownMin,
+      ENEMY_ELITE_ATTACK_INTERVAL_MULTIPLIER,
+    ),
+    attackCooldownMax: eliteScale(
+      definition.attackCooldownMax,
+      ENEMY_ELITE_ATTACK_INTERVAL_MULTIPLIER,
+    ),
     moving: false,
     simulationSleeping: true,
-    attackCooldown: definition.attackCooldown,
+    attackCooldown: eliteScale(
+      definition.attackCooldown,
+      ENEMY_ELITE_ATTACK_INTERVAL_MULTIPLIER,
+    ),
     attackTimer: kind === "monster3" || kind === "monster5"
       ? 0.8 + mapRandom() * 2.2 : 0,
     spearAttackRange: definition.spearAttackRange,
     spearAttackVerticalRange: definition.spearAttackVerticalRange,
-    spearChargeDuration: definition.spearChargeDuration,
+    spearChargeDuration: eliteScale(definition.spearChargeDuration, 0.88),
     spearRecoveryDuration: definition.spearRecoveryDuration,
-    spearAttackCooldown: definition.spearAttackCooldown,
-    spearSpeed: definition.spearSpeed,
+    spearAttackCooldown: eliteScale(
+      definition.spearAttackCooldown,
+      ENEMY_ELITE_ATTACK_INTERVAL_MULTIPLIER,
+    ),
+    spearSpeed: eliteScale(
+      definition.spearSpeed,
+      ENEMY_ELITE_PROJECTILE_SPEED_MULTIPLIER,
+    ),
     spearRadius: definition.spearRadius,
     spearTravelRange: definition.spearTravelRange,
     spearForwardOffset: definition.spearForwardOffset,
     spearHeight: definition.spearHeight,
-    ambientFireDelayMin: definition.ambientFireDelayMin,
-    ambientFireDelayMax: definition.ambientFireDelayMax,
+    ambientFireDelayMin: eliteScale(
+      definition.ambientFireDelayMin,
+      ENEMY_ELITE_ATTACK_INTERVAL_MULTIPLIER,
+    ),
+    ambientFireDelayMax: eliteScale(
+      definition.ambientFireDelayMax,
+      ENEMY_ELITE_ATTACK_INTERVAL_MULTIPLIER,
+    ),
     ambientFireTimer: kind === "monster2"
       ? definition.ambientFireDelayMin + mapRandom() * (definition.ambientFireDelayMax - definition.ambientFireDelayMin)
       : 0,
     attackRange: definition.attackRange,
     attackVerticalRange: definition.attackVerticalRange,
-    inhaleDuration: definition.inhaleDuration,
-    fireballCount: definition.fireballCount,
-    fireballInterval: definition.fireballInterval,
+    inhaleDuration: eliteScale(definition.inhaleDuration, 0.88),
+    fireballCount: eliteVariant && Number.isFinite(definition.fireballCount)
+      ? definition.fireballCount + 1 : definition.fireballCount,
+    fireballInterval: eliteScale(
+      definition.fireballInterval,
+      ENEMY_ELITE_ATTACK_INTERVAL_MULTIPLIER,
+    ),
     fireballRecovery: definition.fireballRecovery,
-    fireballSpeed: definition.fireballSpeed,
+    fireballSpeed: eliteScale(
+      definition.fireballSpeed,
+      ENEMY_ELITE_PROJECTILE_SPEED_MULTIPLIER,
+    ),
     fireballRadius: definition.fireballRadius,
     fireballRange: definition.fireballRange,
     fireballRiseAcceleration: definition.fireballRiseAcceleration,
@@ -2515,7 +2570,9 @@ function addEnemy(platform, x, kind = "monster1", options = {}) {
     hitKnockbackVelocity: 0,
     revivalKnockback: false,
     hitAirImpulse: definition.hitAirImpulse,
-    score: definition.score,
+    score: eliteVariant
+      ? Math.round(definition.score * ENEMY_ELITE_SCORE_MULTIPLIER)
+      : definition.score,
     alive: true,
     facing: -1,
   };
@@ -2704,6 +2761,25 @@ function tryAddHeartItem(platform, startX, endX, avoidEnemies = true) {
 }
 
 function buildStage() {
+  const lastMainGroup = platforms.reduce((maximum, platform) => (
+    platform.routeRole === "sub"
+      ? maximum : Math.max(maximum, platform.group ?? 0)
+  ), 0);
+  const bossApproachGroup = Math.max(
+    1,
+    bossDoor?.platform?.group ?? lastMainGroup,
+  );
+  for (const platform of platforms) {
+    const progress = Math.max(
+      0,
+      Math.min(1, (platform.group ?? 0) / bossApproachGroup),
+    );
+    platform.enemyEliteChance = progress <= ENEMY_ELITE_START_PROGRESS
+      ? 0
+      : (progress - ENEMY_ELITE_START_PROGRESS) /
+        (1 - ENEMY_ELITE_START_PROGRESS);
+    if (bossDoor?.platform === platform) platform.enemyEliteChance = 1;
+  }
   let eligibleHeartPlatforms = 0;
   for (const platform of platforms) {
     if (platform.kind !== "flat") continue;
