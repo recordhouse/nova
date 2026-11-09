@@ -96,11 +96,12 @@ function drawStationPanels(platform, thickness = PLATFORM_DECK_THICKNESS - 4) {
     ["#142a31", "#19343c"],
   ];
   const bossPanelPalettes = [
-    ["#32121e", "#461422"],
-    ["#3b1720", "#501823"],
-    ["#28101d", "#411225"],
+    ["#2c1b18", "#38201a"],
+    ["#34201a", "#41251b"],
+    ["#271916", "#352019"],
   ];
-  const panelPalettes = currentArea === "boss"
+  const bossPanels = currentArea === "boss";
+  const panelPalettes = bossPanels
     ? bossPanelPalettes : standardPanelPalettes;
   const panelWidth = panelWidths[platform.style];
   const palette = panelPalettes[platform.style];
@@ -121,7 +122,9 @@ function drawStationPanels(platform, thickness = PLATFORM_DECK_THICKNESS - 4) {
     ctx.fillStyle = "rgba(5, 12, 17, 0.7)";
     ctx.fillRect(x, y + 2, 1, thickness - 2);
     ctx.fillRect(x + width - 1, y + 2, 1, thickness - 2);
-    ctx.fillStyle = "rgba(112, 143, 160, 0.58)";
+    ctx.fillStyle = bossPanels
+      ? "rgba(166, 98, 64, 0.52)"
+      : "rgba(112, 143, 160, 0.58)";
     ctx.fillRect(x + 7, y + 2, 8, 1);
     ctx.fillRect(x + width - 15, y + 2, 8, 1);
     ctx.fillStyle = "rgba(5, 10, 15, 0.72)";
@@ -129,17 +132,23 @@ function drawStationPanels(platform, thickness = PLATFORM_DECK_THICKNESS - 4) {
     ctx.fillRect(x + width - 14, y + 7, 3, 1);
 
     if (platform.style === 0) {
-      ctx.fillStyle = "rgba(67, 96, 112, 0.62)";
+      ctx.fillStyle = bossPanels
+        ? "rgba(119, 64, 47, 0.62)"
+        : "rgba(67, 96, 112, 0.62)";
       if (width >= 64) ctx.fillRect(x + 24, y + 5, width - 48, 1);
       ctx.fillStyle = "rgba(12, 23, 31, 0.72)";
       ctx.fillRect(x + Math.floor(width / 2) - 1, y + 3, 2, 7);
     } else if (platform.style === 1) {
-      ctx.fillStyle = "rgba(91, 104, 116, 0.55)";
+      ctx.fillStyle = bossPanels
+        ? "rgba(137, 78, 54, 0.55)"
+        : "rgba(91, 104, 116, 0.55)";
       for (let mark = 20; mark < width - 16; mark += 24) {
         ctx.fillRect(x + mark, y + (mark % 48 === 0 ? 6 : 4), 6, 1);
       }
     } else {
-      ctx.fillStyle = "rgba(60, 105, 118, 0.58)";
+      ctx.fillStyle = bossPanels
+        ? "rgba(112, 64, 48, 0.58)"
+        : "rgba(60, 105, 118, 0.58)";
       if (width >= 56) {
         ctx.fillRect(x + 24, y + 4, 2, 6);
         ctx.fillRect(x + width - 26, y + 4, 2, 6);
@@ -798,6 +807,7 @@ function drawRamp(platform, palette, railColor) {
   }
 
   drawBossRustBloodSurface(platform);
+  drawBossWebRoadSurface(platform);
   drawPixelRoadRail(platform, railColor, platform.routeRole === "sub");
 
   ctx.strokeStyle = "#0a1017";
@@ -960,7 +970,7 @@ function drawBossRustBloodSurface(platform) {
   const visibleStart = Math.max(platform.start, cameraX - 60);
   const visibleEnd = Math.min(platform.end, cameraX + WIDTH + 60);
   if (visibleEnd <= visibleStart) return;
-  const tileSize = 58;
+  const tileSize = 72;
   const firstTile = Math.floor(visibleStart / tileSize) * tileSize;
   const slopeAngle = platform.kind === "ramp"
     ? Math.atan2(
@@ -982,73 +992,157 @@ function drawBossRustBloodSurface(platform) {
     const rust = platformFeatureNoise(platform, seed + 11);
     const blood = platformFeatureNoise(platform, seed + 29);
     const scratch = platformFeatureNoise(platform, seed + 47);
-    const patchWidth = 18 + rust * 27;
+    const erosion = platformFeatureNoise(platform, seed + 61);
+    const patchWidth = 24 + rust * 34;
 
     ctx.save();
     ctx.translate(centerX, surfaceY);
     ctx.rotate(slopeAngle);
 
-    ctx.fillStyle = rust > 0.62 ? "#8b351d" : rust > 0.3 ? "#6d281b" : "#4c1915";
+    // Plate seams stay visible through the grime and make the road read as
+    // layered, battered metal rather than a single painted rectangle.
+    ctx.strokeStyle = "rgba(22, 7, 8, 0.9)";
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(-patchWidth / 2, 5 + rust * 3);
-    ctx.lineTo(-patchWidth * 0.18, 3);
-    ctx.lineTo(patchWidth * 0.12, 6 + rust * 2);
-    ctx.lineTo(patchWidth / 2, 4);
-    ctx.lineTo(patchWidth * 0.34, 11 + rust * 3);
-    ctx.lineTo(-patchWidth * 0.4, 13);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = rust > 0.48 ? "#bc5b2a" : "#873920";
-    ctx.fillRect(
-      pixelSnap(-patchWidth * 0.22, 1),
-      pixelSnap(6 + rust * 2, 1),
-      Math.max(3, Math.round(patchWidth * 0.31)),
-      2,
-    );
-
-    ctx.strokeStyle = scratch > 0.5 ? "#cf7440" : "#351014";
+    ctx.moveTo(-tileSize / 2 + 1, 2);
+    ctx.lineTo(-tileSize / 2 + 1, PLATFORM_DECK_THICKNESS - 1);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(183, 91, 52, 0.32)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(-19 + scratch * 7, 4);
-    ctx.lineTo(-5 + scratch * 8, 11);
-    ctx.moveTo(8 - scratch * 5, 3);
-    ctx.lineTo(20 - scratch * 4, 8);
+    ctx.moveTo(-tileSize / 2 + 3, 3);
+    ctx.lineTo(-tileSize / 2 + 3, PLATFORM_DECK_THICKNESS - 3);
     ctx.stroke();
 
-    ctx.fillStyle = "#17070a";
-    ctx.fillRect(-25, PLATFORM_DECK_THICKNESS - 4, 2, 2);
-    ctx.fillRect(23, PLATFORM_DECK_THICKNESS - 4, 2, 2);
-    ctx.fillStyle = "#c1683c";
-    ctx.fillRect(-25, PLATFORM_DECK_THICKNESS - 5, 1, 1);
-    ctx.fillRect(23, PLATFORM_DECK_THICKNESS - 5, 1, 1);
+    // Dark corrosion underpaint, oxidized body, and bright loose flakes.
+    ctx.fillStyle = "#32100d";
+    ctx.beginPath();
+    ctx.moveTo(-patchWidth * 0.56, 7 + erosion * 2);
+    ctx.lineTo(-patchWidth * 0.38, 3 + rust * 2);
+    ctx.lineTo(-patchWidth * 0.12, 5 - erosion * 2);
+    ctx.lineTo(patchWidth * 0.08, 3 + rust);
+    ctx.lineTo(patchWidth * 0.36, 5 - rust * 2);
+    ctx.lineTo(patchWidth * 0.55, 9 + erosion * 2);
+    ctx.lineTo(patchWidth * 0.31, 14);
+    ctx.lineTo(-patchWidth * 0.42, 15 - rust);
+    ctx.closePath();
+    ctx.fill();
 
-    if (blood > 0.48) {
-      const poolWidth = 16 + blood * 25;
-      ctx.fillStyle = blood > 0.78 ? "#700713" : "#4d0811";
+    ctx.fillStyle = rust > 0.62 ? "#8b351d" : rust > 0.3 ? "#6d281b" : "#4c1915";
+    ctx.beginPath();
+    ctx.moveTo(-patchWidth * 0.43, 8);
+    ctx.lineTo(-patchWidth * 0.18, 4 + erosion * 3);
+    ctx.lineTo(patchWidth * 0.07, 7 - rust * 2);
+    ctx.lineTo(patchWidth * 0.4, 6 + erosion * 3);
+    ctx.lineTo(patchWidth * 0.25, 12 + rust * 2);
+    ctx.lineTo(-patchWidth * 0.31, 13);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = rust > 0.48 ? "#bc5b2a" : "#873920";
+    ctx.fillRect(pixelSnap(-patchWidth * 0.25, 1), 7, Math.max(5, patchWidth * 0.34), 2);
+    ctx.fillStyle = "#df7a32";
+    ctx.fillRect(pixelSnap(patchWidth * 0.12, 1), 5, 3 + Math.floor(rust * 4), 1);
+    ctx.fillRect(pixelSnap(-patchWidth * 0.38, 1), 11, 2 + Math.floor(erosion * 3), 1);
+
+    // Small pits sell the eaten-away metal without allocating particles.
+    ctx.fillStyle = "#16090a";
+    ctx.beginPath();
+    ctx.arc(-12 + erosion * 7, 9, 1.6 + rust, 0, Math.PI * 2);
+    ctx.arc(13 - rust * 6, 12, 1.2 + erosion * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = "#21080a";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-23 + scratch * 8, 4);
+    ctx.lineTo(-5 + scratch * 7, 12);
+    ctx.moveTo(7 - scratch * 5, 3);
+    ctx.lineTo(25 - scratch * 5, 9);
+    ctx.stroke();
+    ctx.strokeStyle = scratch > 0.5 ? "#cf7440" : "#5b2419";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-22 + scratch * 8, 3);
+    ctx.lineTo(-5 + scratch * 7, 11);
+    ctx.moveTo(8 - scratch * 5, 2);
+    ctx.lineTo(25 - scratch * 5, 8);
+    ctx.stroke();
+
+    // Corroded rivets get a dark halo, metal core, and a tiny wet highlight.
+    ctx.fillStyle = "#17070a";
+    ctx.beginPath();
+    ctx.arc(-27, PLATFORM_DECK_THICKNESS - 4, 3.3, 0, Math.PI * 2);
+    ctx.arc(27, PLATFORM_DECK_THICKNESS - 4, 3.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#c1683c";
+    ctx.beginPath();
+    ctx.arc(-27, PLATFORM_DECK_THICKNESS - 4, 1.5, 0, Math.PI * 2);
+    ctx.arc(27, PLATFORM_DECK_THICKNESS - 4, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#ef9a59";
+    ctx.fillRect(-28, PLATFORM_DECK_THICKNESS - 6, 1, 1);
+    ctx.fillRect(26, PLATFORM_DECK_THICKNESS - 6, 1, 1);
+
+    if (blood > 0.38) {
+      const poolWidth = 22 + blood * 34;
+      const poolX = (erosion - 0.5) * 14;
+      ctx.fillStyle = "#260208";
       ctx.beginPath();
-      ctx.moveTo(-poolWidth / 2, 2);
-      ctx.lineTo(-poolWidth * 0.25, -2);
-      ctx.lineTo(poolWidth * 0.08, 0);
-      ctx.lineTo(poolWidth / 2, -1);
-      ctx.lineTo(poolWidth * 0.3, 4);
-      ctx.lineTo(-poolWidth * 0.36, 5);
+      ctx.moveTo(poolX - poolWidth * 0.55, 3);
+      ctx.quadraticCurveTo(poolX - poolWidth * 0.3, -5, poolX, -2);
+      ctx.quadraticCurveTo(poolX + poolWidth * 0.28, -6, poolX + poolWidth * 0.55, 1);
+      ctx.lineTo(poolX + poolWidth * 0.36, 6);
+      ctx.quadraticCurveTo(poolX, 3, poolX - poolWidth * 0.42, 7);
       ctx.closePath();
       ctx.fill();
+
+      ctx.fillStyle = blood > 0.72 ? "#700713" : "#4d0811";
+      ctx.beginPath();
+      ctx.ellipse(poolX, 1, poolWidth * 0.43, 4 + blood * 2, -0.04, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = "#941426";
-      ctx.fillRect(-poolWidth * 0.2, 1, Math.max(3, poolWidth * 0.28), 1);
-      ctx.fillStyle = "#3a060d";
-      ctx.fillRect(pixelSnap(poolWidth * 0.18, 1), 4, 3, 5 + Math.floor(blood * 6));
-      if (blood > 0.72) {
-        ctx.fillRect(pixelSnap(-poolWidth * 0.31, 1), 4, 2, 4 + Math.floor(blood * 4));
+      ctx.fillRect(poolX - poolWidth * 0.23, -1, Math.max(4, poolWidth * 0.24), 1);
+
+      if (blood > 0.56) {
+        const dripX = poolX + poolWidth * (0.12 + (erosion - 0.5) * 0.18);
+        const dripLength = 8 + Math.floor(blood * 12);
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "#260208";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(dripX, 4);
+        ctx.quadraticCurveTo(dripX + 2, 10, dripX - 1, dripLength);
+        ctx.stroke();
+        ctx.strokeStyle = "#700713";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(dripX, 4);
+        ctx.quadraticCurveTo(dripX + 2, 10, dripX - 1, dripLength);
+        ctx.stroke();
+        ctx.fillStyle = "#4d0811";
+        ctx.beginPath();
+        ctx.arc(dripX - 1, dripLength + 1, 2.5 + blood, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (blood > 0.78) {
+        ctx.strokeStyle = "rgba(151, 13, 31, 0.82)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(poolX - poolWidth * 0.48, 1);
+        ctx.quadraticCurveTo(poolX - poolWidth * 0.75, 3, poolX - poolWidth, 0);
+        ctx.stroke();
       }
     }
     ctx.restore();
   }
 
+  // A dried edge stain ties the individual pools together without making the
+  // entire road uniformly red.
   ctx.strokeStyle = "rgba(49, 5, 11, 0.9)";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  const streakStep = 46;
+  const streakStep = 54;
   for (let x = visibleStart; x <= visibleEnd; x += streakStep) {
     const y = platformSurfaceY(platform, x) + 1 +
       platformFeatureNoise(platform, platform.id * 83 + Math.floor(x / streakStep)) * 2;
@@ -1056,6 +1150,169 @@ function drawBossRustBloodSurface(platform) {
     else ctx.lineTo(x, y);
   }
   ctx.stroke();
+  ctx.strokeStyle = "rgba(139, 15, 31, 0.7)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBossWebStrand(startX, startY, endX, endY, sag = 18, alpha = 1) {
+  if (
+    Math.max(startX, endX) < cameraX - 100 ||
+    Math.min(startX, endX) > cameraX + WIDTH + 100
+  ) return;
+  const middleX = (startX + endX) / 2;
+  const middleY = (startY + endY) / 2 + sag;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = "rgba(20, 4, 8, 0.92)";
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(startX, startY);
+  ctx.quadraticCurveTo(middleX, middleY, endX, endY);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(184, 164, 151, 0.72)";
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(startX, startY);
+  ctx.quadraticCurveTo(middleX, middleY, endX, endY);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(116, 29, 34, 0.88)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(startX, startY + 2);
+  ctx.quadraticCurveTo(middleX, middleY + 4, endX, endY + 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBossWebConnections() {
+  if (currentArea !== "boss") return;
+  const webRoads = platforms.filter((platform) => platform.bossWebRoad);
+  if (webRoads.length === 0) return;
+  const lowerTier = webRoads.filter((platform) => platform.bossVerticalTier === 1);
+  const upperTier = webRoads.filter((platform) => platform.bossVerticalTier === 2);
+  const centerX = (platform) => (platform.start + platform.end) / 2;
+  const centerY = (platform) => platformSurfaceY(platform, centerX(platform)) + 12;
+  const nearest = (candidates, x, count = 2) => candidates
+    .slice()
+    .sort((first, second) => (
+      Math.abs(centerX(first) - x) - Math.abs(centerX(second) - x)
+    ))
+    .slice(0, count);
+
+  for (const platform of upperTier) {
+    const x = centerX(platform);
+    const y = centerY(platform);
+    for (const support of nearest(lowerTier, x, 2)) {
+      const supportX = Math.max(
+        support.start + 22,
+        Math.min(support.end - 22, x),
+      );
+      drawBossWebStrand(
+        x,
+        y,
+        supportX,
+        platformSurfaceY(support, supportX) + 10,
+        12,
+        0.86,
+      );
+    }
+  }
+
+  const safetyRoads = platforms.filter((platform) => platform.bossSafetyFloor);
+  for (const platform of lowerTier) {
+    const x = centerX(platform);
+    const support = safetyRoads.find((road) => x >= road.start && x <= road.end);
+    if (!support) continue;
+    drawBossWebStrand(
+      platform.start + 26,
+      platformSurfaceY(platform, platform.start + 26) + 12,
+      x - 48,
+      platformSurfaceY(support, x - 48) + 3,
+      20,
+      0.56,
+    );
+    drawBossWebStrand(
+      platform.end - 26,
+      platformSurfaceY(platform, platform.end - 26) + 12,
+      x + 48,
+      platformSurfaceY(support, x + 48) + 3,
+      20,
+      0.56,
+    );
+  }
+}
+
+function drawBossWebRoadFoundation(platform, visibleStart, visibleEnd) {
+  ctx.save();
+  ctx.lineCap = "round";
+  const segmentWidth = 78;
+  for (let x = visibleStart; x < visibleEnd; x += segmentWidth) {
+    const endX = Math.min(visibleEnd, x + segmentWidth);
+    const middleX = (x + endX) / 2;
+    const leftY = platformSurfaceY(platform, x) + PLATFORM_DECK_THICKNESS;
+    const rightY = platformSurfaceY(platform, endX) + PLATFORM_DECK_THICKNESS;
+    const bottomY = platformSurfaceY(platform, middleX) + 42;
+    ctx.strokeStyle = "rgba(30, 6, 9, 0.96)";
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(x, leftY);
+    ctx.lineTo(middleX, bottomY);
+    ctx.lineTo(endX, rightY);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(163, 143, 132, 0.62)";
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(116, 26, 32, 0.8)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 7, leftY + 8);
+    ctx.quadraticCurveTo(middleX, bottomY - 12, endX - 7, rightY + 8);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawBossWebRoadSurface(platform) {
+  if (currentArea !== "boss" || !platform.bossWebRoad) return;
+  const visibleStart = Math.max(platform.start, cameraX - 60);
+  const visibleEnd = Math.min(platform.end, cameraX + WIDTH + 60);
+  if (visibleEnd <= visibleStart) return;
+  ctx.save();
+  ctx.lineCap = "round";
+  for (let strand = 0; strand < 3; strand += 1) {
+    ctx.strokeStyle = strand === 1
+      ? "rgba(211, 195, 178, 0.9)"
+      : "rgba(126, 42, 46, 0.9)";
+    ctx.lineWidth = strand === 1 ? 3 : 2;
+    ctx.beginPath();
+    let started = false;
+    for (let x = visibleStart; x <= visibleEnd; x += 24) {
+      const y = platformSurfaceY(platform, x) + 3 + strand * 5;
+      if (!started) {
+        ctx.moveTo(x, y);
+        started = true;
+      } else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  for (let x = visibleStart + 30; x < visibleEnd; x += 54) {
+    const surfaceY = platformSurfaceY(platform, x);
+    ctx.strokeStyle = "rgba(222, 204, 187, 0.78)";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(x - 8, surfaceY + 2);
+    ctx.lineTo(x + 8, surfaceY + 14);
+    ctx.moveTo(x + 8, surfaceY + 2);
+    ctx.lineTo(x - 8, surfaceY + 14);
+    ctx.stroke();
+    ctx.fillStyle = "#771923";
+    ctx.beginPath();
+    ctx.arc(x, surfaceY + 8, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -1064,6 +1321,10 @@ function drawBossRoadFoundation(platform) {
   const visibleStart = Math.max(platform.start, cameraX - 80);
   const visibleEnd = Math.min(platform.end, cameraX + WIDTH + 80);
   if (visibleEnd <= visibleStart) return;
+  if (platform.bossWebRoad) {
+    drawBossWebRoadFoundation(platform, visibleStart, visibleEnd);
+    return;
+  }
   const isArena = platform.type === "boss-arena";
   const foundationDepth = isArena ? 92 : platform.bossSafetyFloor ? 68 : 34;
   const leftSurfaceY = platformSurfaceY(platform, platform.start);
@@ -1079,6 +1340,66 @@ function drawBossRoadFoundation(platform) {
   ctx.lineTo(platform.start + 18, leftFoundationTop + foundationDepth);
   ctx.closePath();
   ctx.fill();
+
+  // Break the foundation into corroded steel plates. Only visible plates are
+  // visited, keeping the larger boss map inexpensive on mobile devices.
+  const plateSpacing = isArena ? 112 : 96;
+  const firstPlate = Math.max(
+    platform.start + plateSpacing / 2,
+    Math.floor((visibleStart - platform.start) / plateSpacing) * plateSpacing +
+      platform.start + plateSpacing / 2,
+  );
+  for (
+    let plateX = firstPlate;
+    plateX < visibleEnd && plateX < platform.end - 10;
+    plateX += plateSpacing
+  ) {
+    const plateTop = platformSurfaceY(platform, plateX) + PLATFORM_DECK_THICKNESS;
+    const corrosion = platformFeatureNoise(platform, 1700 + Math.floor(plateX / plateSpacing));
+    const stainLength = Math.min(
+      foundationDepth - 8,
+      15 + corrosion * foundationDepth * 0.62,
+    );
+
+    ctx.strokeStyle = "rgba(8, 3, 4, 0.9)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(plateX, plateTop + 3);
+    ctx.lineTo(plateX, plateTop + foundationDepth - 5);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(124, 64, 42, 0.58)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(plateX + 2, plateTop + 5);
+    ctx.lineTo(plateX + 2, plateTop + foundationDepth - 7);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(42, 8, 8, 0.88)";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(plateX - 22, plateTop + 2);
+    ctx.quadraticCurveTo(
+      plateX - 18 + corrosion * 7,
+      plateTop + stainLength * 0.55,
+      plateX - 20,
+      plateTop + stainLength,
+    );
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(128, 51, 27, 0.72)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = "#120607";
+    ctx.beginPath();
+    ctx.arc(plateX - 7, plateTop + 10, 3, 0, Math.PI * 2);
+    ctx.arc(plateX + 9, plateTop + foundationDepth - 11, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#8e4930";
+    ctx.beginPath();
+    ctx.arc(plateX - 7, plateTop + 10, 1.2, 0, Math.PI * 2);
+    ctx.arc(plateX + 9, plateTop + foundationDepth - 11, 1, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   const visibleLeftY = platformSurfaceY(platform, visibleStart) + PLATFORM_DECK_THICKNESS;
   const visibleRightY = platformSurfaceY(platform, visibleEnd) + PLATFORM_DECK_THICKNESS;
@@ -1171,6 +1492,7 @@ function drawTerrainPlatform(platform, palette, railColor, isSubPath) {
   ctx.restore();
 
   drawBossRustBloodSurface(platform);
+  drawBossWebRoadSurface(platform);
   if (currentArea !== "boss") drawPlatformLights(platform);
   drawPixelRoadRail(platform, isSubPath ? "#8873ad" : railColor, isSubPath);
   drawPlatformFeature(platform);
@@ -1203,14 +1525,15 @@ function drawTerrain() {
   ];
   const railColors = ["#718391", "#8b8378", "#668f96"];
   const bossDeckPalettes = [
-    ["#71301f", "#3b1716", "#1c090b"],
-    ["#7f3921", "#471b17", "#210b0b"],
-    ["#61251d", "#351313", "#190809"],
+    ["#563126", "#2d1a18", "#140a0b"],
+    ["#633b2b", "#352019", "#180d0c"],
+    ["#492b23", "#281817", "#12090a"],
   ];
-  const bossRailColors = ["#b64d36", "#cf623d", "#9f342f"];
+  const bossRailColors = ["#8f513c", "#a35d42", "#7d4336"];
   const visiblePlatforms = typeof platformsBetween === "function"
     ? platformsBetween(cameraX - 120, cameraX + WIDTH + 120)
     : platforms;
+  drawBossWebConnections();
   for (const platform of visiblePlatforms) {
     if (platform.end < cameraX - 120 || platform.start > cameraX + WIDTH + 120) {
       continue;

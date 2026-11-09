@@ -158,6 +158,8 @@ test("entering the vortex creates a continuous boss floor with reachable jump ro
     const ground=platforms.filter(platform=>platform.bossSafetyFloor)
       .sort((a,b)=>a.start-b.start);
     const jumpPlatforms=platforms.filter(platform=>platform.bossJumpPlatform);
+    const tier1Platforms=jumpPlatforms.filter(platform=>platform.bossVerticalTier===1);
+    const tier2Platforms=jumpPlatforms.filter(platform=>platform.bossVerticalTier===2);
     const gaps=ground.slice(1).map((platform,index)=>platform.start-ground[index].end);
     const joinHeightDifferences=ground.slice(1).map((platform,index)=>Math.abs(
       platformSurfaceY(ground[index],ground[index].end)-
@@ -177,6 +179,38 @@ test("entering the vortex creates a continuous boss floor with reachable jump ro
       platformSurfaceY(platform,platform.start),
       platformSurfaceY(platform,platform.end),
     ]);
+    const allSurfaceHeights=platforms.flatMap(platform=>[
+      platformSurfaceY(platform,platform.start),
+      platformSurfaceY(platform,platform.end),
+    ]);
+    const horizontalGap=(first,second)=>Math.max(
+      0,Math.max(first.start,second.start)-Math.min(first.end,second.end),
+    );
+    const tier2Steps=tier2Platforms.map(platform=>Math.min(
+      ...tier1Platforms
+        .filter(candidate=>horizontalGap(platform,candidate)===0)
+        .map(candidate=>{
+          const overlapCenter=(
+            Math.max(platform.start,candidate.start)+
+            Math.min(platform.end,candidate.end)
+          )/2;
+          return Math.abs(
+            platformSurfaceY(platform,overlapCenter)-
+            platformSurfaceY(candidate,overlapCenter)
+          );
+        }),
+    ));
+    const tierGaps=(tier)=>tier.slice(1).map((platform,index)=>(
+      platform.start-tier[index].end
+    ));
+    const upperFlatCount=jumpPlatforms.filter(platform=>platform.kind==='flat').length;
+    const longCombatDeckCount=jumpPlatforms.filter(platform=>(
+      platform.end-platform.start>=850
+    )).length;
+    const doubleJumpGapCount=[
+      ...tierGaps(tier1Platforms.slice().sort((a,b)=>a.start-b.start)),
+      ...tierGaps(tier2Platforms.slice().sort((a,b)=>a.start-b.start)),
+    ].filter(gap=>gap>=HORIZONTAL_JUMP_DOUBLE_GAP_MIN).length;
     return {
       currentArea,
       hasGate:Boolean(bossDoor),
@@ -184,12 +218,27 @@ test("entering the vortex creates a continuous boss floor with reachable jump ro
       groundCount:ground.length,
       rampCount:ground.filter(platform=>platform.kind==='ramp').length,
       jumpPads:jumpPlatforms.length,
+      tier1Count:tier1Platforms.length,
+      tier2Count:tier2Platforms.length,
       upperRampCount:jumpPlatforms.filter(platform=>platform.kind==='ramp').length,
+      upperFlatCount,
+      longCombatDeckCount,
+      doubleJumpGapCount,
+      worldWidth:maxWorldX-minWorldX,
       groundHeightRange:Math.max(...groundSurfaceHeights)-Math.min(...groundSurfaceHeights),
+      verticalSurfaceRange:Math.max(...allSurfaceHeights)-Math.min(...allSurfaceHeights),
       upperLiftRange:Math.max(...jumpLifts)-Math.min(...jumpLifts),
       maximumGap:Math.max(...gaps),
       maximumJoinHeightDifference:Math.max(...joinHeightDifferences),
       maximumJumpLift:Math.max(...jumpLifts),
+      maximumTier2Step:Math.max(...tier2Steps),
+      bossMaximumPlatformStep:FINAL_BOSS.platformJumpMaxHeightDifference,
+      everyTier2PlatformHasAJumpLink:tier2Steps.every(Number.isFinite),
+      webRoadCount:jumpPlatforms.filter(platform=>platform.bossWebRoad).length,
+      bossCombatCount:platforms.filter(platform=>platform.bossCombatPlatform).length,
+      minimumBossCombatWidth:Math.min(...platforms
+        .filter(platform=>platform.bossCombatPlatform)
+        .map(platform=>platform.end-platform.start)),
       allJumpPlatformsHaveFloor:jumpLifts.every(Number.isFinite),
       allRoadsUseRustBloodStyle:platforms.every(platform=>platform.bossRustBloodRoad),
       startsSafely:Boolean(player.platform?.startingRoad && player.grounded),
@@ -201,21 +250,39 @@ test("entering the vortex creates a continuous boss floor with reachable jump ro
   })()`, scope);
   assert.equal(result.currentArea, "boss");
   assert.equal(result.hasGate, false);
-  assert.equal(result.platformCount, 34);
-  assert.equal(result.groundCount, 18);
-  assert.equal(result.rampCount, 8);
-  assert.equal(result.jumpPads, 16);
-  assert.ok(result.upperRampCount >= 7, "the upper route should mix flats and slopes");
-  assert.ok(result.groundHeightRange >= 170,
-    "the safe lower route should have visibly varied elevations");
-  assert.ok(result.upperLiftRange >= 100,
-    "upper platforms should alternate between low and high tiers");
+  assert.equal(result.platformCount, 17);
+  assert.equal(result.groundCount, 11);
+  assert.equal(result.rampCount, 4);
+  assert.equal(result.jumpPads, 6);
+  assert.equal(result.tier1Count, 3);
+  assert.equal(result.tier2Count, 3);
+  assert.equal(result.upperRampCount, 3);
+  assert.equal(result.upperFlatCount, 3);
+  assert.ok(result.longCombatDeckCount >= 3,
+    "the upper tier should include long horizontal boss combat decks");
+  assert.ok(result.doubleJumpGapCount >= 2,
+    "the lower upper-tier route should include deliberate double-jump gaps");
+  assert.equal(result.webRoadCount, 6);
+  assert.equal(result.bossCombatCount, 7);
+  assert.ok(result.minimumBossCombatWidth >= 640,
+    "every combat web must be wide enough for the boss");
+  assert.ok(result.worldWidth <= 4500,
+    "the boss map should stay compact instead of becoming a long corridor");
+  assert.ok(result.groundHeightRange >= 100,
+    "the safety floor should retain gentle elevation changes");
+  assert.ok(result.verticalSurfaceRange >= 320,
+    "the stacked boss routes should provide substantial vertical movement");
+  assert.ok(result.upperLiftRange >= 180,
+    "the two upper tiers should be visually and mechanically distinct");
   assert.ok(result.maximumGap <= 0, "the lower boss floor must never open into a pit");
   assert.ok(result.maximumJoinHeightDifference < 0.01, "ground surfaces join cleanly");
-  assert.ok(
-    result.maximumJumpLift <= 950 ** 2 / (2 * 2100),
-    "every upper route remains inside the normal jump height",
-  );
+  assert.equal(result.everyTier2PlatformHasAJumpLink, true);
+  assert.ok(result.maximumTier2Step > 950 ** 2 / (2 * 2100),
+    "at least one high-deck climb should require the player's double jump");
+  assert.ok(result.maximumTier2Step <= result.bossMaximumPlatformStep,
+    "the boss should also be able to climb every high combat deck");
+  assert.ok(result.maximumJumpLift <= 2 * 950 ** 2 / (2 * 2100),
+    "every high deck should remain inside the player's double-jump height");
   assert.equal(result.allJumpPlatformsHaveFloor, true);
   assert.equal(result.allRoadsUseRustBloodStyle, true);
   assert.equal(result.startsSafely, true);
@@ -223,6 +290,159 @@ test("entering the vortex creates a continuous boss floor with reachable jump ro
   assert.equal(result.hp, 2);
   assert.equal(result.score, 345);
   assert.equal(result.ultimateCharges, 1);
+});
+
+test("the final boss approaches upper roads in bounded jumps without landing on the player", () => {
+  const { scope } = createGame();
+  const result = vm.runInContext(`(() => {
+    enterBossMap();
+    const boss=midBosses.find(candidate=>candidate.finalBoss);
+    const upper=platforms.find(platform=>platform.bossVerticalTier===2);
+    const playerCenterX=(upper.start+upper.end)/2;
+    player.platform=upper;
+    player.x=playerCenterX-player.width/2;
+    player.y=platformSurfaceY(upper,playerCenterX)-player.height;
+    player.grounded=true;
+    boss.attackState='move';
+    boss.attackTimer=2;
+    boss.platformJumpCooldown=0;
+    const startPlatform=boss.platform;
+    const startCenterX=boss.x+boss.width/2;
+    const startY=boss.y;
+    let sawAirborne=false;
+    let completedJump=false;
+    let minimumY=boss.y;
+    for(let frame=0;frame<120&&!completedJump;frame+=1){
+      const hit=getPlayerHitbox();
+      updateFinalBossAttack(
+        boss,1/60,hit,
+        hit.x+hit.width/2,
+        hit.y+hit.height/2,
+        true
+      );
+      sawAirborne ||= boss.airborne;
+      minimumY=Math.min(minimumY,boss.y);
+      completedJump=sawAirborne&&!boss.platformJumpActive&&!boss.airborne;
+    }
+    const endCenterX=boss.x+boss.width/2;
+    const firstEndY=boss.y;
+    const traversalDistances=[Math.abs(endCenterX-startCenterX)];
+    const visitedRoads=[{
+      tier:boss.platform?.bossVerticalTier??0,
+      start:boss.platform?.start,
+      end:boss.platform?.end,
+      centerX:endCenterX,
+    }];
+    let reachedHighDeck=boss.platform?.bossVerticalTier===2;
+    let everyJumpMovedTowardPlayer=endCenterX<startCenterX;
+    let landedOnPlayerRoadDuringTraversal=boss.platform===upper;
+    for(let hop=0;hop<8&&!reachedHighDeck;hop+=1){
+      boss.attackState='move';
+      boss.attackTimer=2;
+      boss.platformJumpCooldown=0;
+      const hopStartX=boss.x+boss.width/2;
+      let hopStarted=false;
+      let hopCompleted=false;
+      for(let frame=0;frame<120&&!hopCompleted;frame+=1){
+        const hit=getPlayerHitbox();
+        updateFinalBossAttack(
+          boss,1/60,hit,
+          hit.x+hit.width/2,
+          hit.y+hit.height/2,
+          true
+        );
+        hopStarted ||= boss.platformJumpActive||boss.airborne;
+        hopCompleted=hopStarted&&!boss.platformJumpActive&&!boss.airborne;
+      }
+      if(!hopCompleted) break;
+      const hopEndX=boss.x+boss.width/2;
+      traversalDistances.push(Math.abs(hopEndX-hopStartX));
+      visitedRoads.push({
+        tier:boss.platform?.bossVerticalTier??0,
+        start:boss.platform?.start,
+        end:boss.platform?.end,
+        centerX:hopEndX,
+      });
+      everyJumpMovedTowardPlayer &&= hopEndX<hopStartX;
+      landedOnPlayerRoadDuringTraversal ||= boss.platform===upper;
+      reachedHighDeck=boss.platform?.bossVerticalTier===2;
+    }
+    return {
+      sawAirborne,completedJump,startY,endY:firstEndY,minimumY,
+      movedTowardPlayer:endCenterX<startCenterX,
+      startDistance:Math.abs(playerCenterX-startCenterX),
+      endDistance:Math.abs(playerCenterX-endCenterX),
+      horizontalTravel:Math.abs(endCenterX-startCenterX),
+      landedOnDifferentRoad:boss.platform!==startPlatform,
+      landedOnPlayerRoad:boss.platform===upper,
+      landingGap:Math.abs(playerCenterX-endCenterX),
+      landingRoadWidth:boss.platform.end-boss.platform.start,
+      reachedHighDeck,
+      everyJumpMovedTowardPlayer,
+      landedOnPlayerRoadDuringTraversal,
+      maximumTraversalDistance:Math.max(...traversalDistances),
+      visitedRoads,
+      maximumJumpDistance:FINAL_BOSS.platformJumpMaxDistance,
+      minimumPlayerGap:FINAL_BOSS.platformJumpMinimumPlayerGap,
+    };
+  })()`, scope);
+  assert.equal(result.sawAirborne, true);
+  assert.equal(result.completedJump, true);
+  assert.equal(result.movedTowardPlayer, true);
+  assert.equal(result.landedOnDifferentRoad, true);
+  assert.equal(result.landedOnPlayerRoad, false);
+  assert.ok(result.endDistance < result.startDistance);
+  assert.ok(result.horizontalTravel <= result.maximumJumpDistance + 0.01);
+  assert.ok(result.landingGap >= result.minimumPlayerGap);
+  assert.ok(result.minimumY < Math.min(result.startY,result.endY)-30);
+  assert.ok(result.landingRoadWidth >= 420);
+  assert.equal(result.reachedHighDeck, true);
+  assert.equal(result.everyJumpMovedTowardPlayer, true);
+  assert.equal(result.landedOnPlayerRoadDuringTraversal, false);
+  assert.ok(result.maximumTraversalDistance <= result.maximumJumpDistance + 0.01);
+});
+
+test("the final boss frequently climbs both upper tiers while the player stays below", () => {
+  const { scope } = createGame();
+  const result = vm.runInContext(`(() => {
+    const arena=enterBossMap();
+    const boss=midBosses.find(candidate=>candidate.finalBoss);
+    const playerCenterX=arena.start+380;
+    player.platform=arena;
+    player.x=playerCenterX-player.width/2;
+    player.y=platformSurfaceY(arena,playerCenterX)-player.height;
+    player.grounded=true;
+    boss.attackState='move';
+    boss.attackTimer=3;
+    boss.platformJumpCooldown=0;
+    const visitedTiers=[];
+    let wasJumping=false;
+    for(let frame=0;frame<240&&visitedTiers.length<2;frame+=1){
+      const hit=getPlayerHitbox();
+      updateFinalBossAttack(
+        boss,1/60,hit,
+        hit.x+hit.width/2,
+        hit.y+hit.height/2,
+        true
+      );
+      if(wasJumping&&!boss.platformJumpActive){
+        visitedTiers.push(boss.platform?.bossVerticalTier??0);
+      }
+      wasJumping=boss.platformJumpActive;
+    }
+    return {
+      visitedTiers,
+      playerStayedBelow:player.platform===arena,
+      landedOnPlayerRoad:boss.platform===player.platform,
+      jumpCooldown:FINAL_BOSS.platformJumpCooldown,
+      moveDuration:FINAL_BOSS.moveDuration,
+    };
+  })()`, scope);
+  assert.deepEqual(Array.from(result.visitedTiers), [1, 2]);
+  assert.equal(result.playerStayedBelow, true);
+  assert.equal(result.landedOnPlayerRoad, false);
+  assert.ok(result.jumpCooldown <= 0.35);
+  assert.ok(result.moveDuration >= 1.8);
 });
 
 test("falling in the boss map returns to the last platform without death or health loss", () => {
@@ -291,7 +511,7 @@ test("the final boss waits, runs toward the player, then fires a ricocheting ang
     const immediateHp=player.hp;
     const firstFrameDistance=beam?Math.hypot(beam.x-launchX,beam.y-launchY):0;
     let beamTravelFrames=1;
-    while(player.hp===beforeFireHp&&beamTravelFrames<90) {
+    while(player.hp===beforeFireHp&&beamTravelFrames<420) {
       updateMidBosses(1/60);
       updateBullets(1/60);
       beamTravelFrames+=1;
@@ -322,6 +542,7 @@ test("the final boss waits, runs toward the player, then fires a ricocheting ang
       width:WIDTH,
       height:HEIGHT,
       stayedOnRoad:boss.y===before.y,
+      bossTier:boss.platform?.bossVerticalTier??0,
       didFire:Boolean(beam),
     };
   })()`, scope);
@@ -332,7 +553,7 @@ test("the final boss waits, runs toward the player, then fires a ricocheting ang
   assert.equal(result.movedTowardPlayer, true);
   assert.equal(result.charged, true);
   assert.equal(result.fired, true);
-  assert.ok(result.direction.x < -0.65);
+  assert.ok(Math.abs(result.direction.x) >= 0.49, JSON.stringify(result));
   assert.ok(result.direction.y > 0.1);
   assert.equal(result.didFire, true);
   assert.equal(result.immediateHp, result.beforeFireHp);
@@ -344,11 +565,11 @@ test("the final boss waits, runs toward the player, then fires a ricocheting ang
   assert.ok(result.beamTravelFrames > 1);
   assert.equal(result.playerHp, result.beforeFireHp - 1);
   assert.equal(result.playerDownPhase, "fall");
-  assert.equal(result.samePlatform, true);
-  assert.equal(result.playerFacesBoss, true);
+  assert.equal(result.samePlatform, false);
+  assert.ok(result.bossTier >= 1);
   assert.ok(result.bossScreenX >= 0 && result.bossScreenX <= result.width);
   assert.ok(result.bossScreenY >= 0 && result.bossScreenY <= result.height);
-  assert.equal(result.stayedOnRoad, true);
+  assert.equal(result.stayedOnRoad, false);
 });
 
 test("a visible final boss queues its video and voice cut-in", () => {
@@ -562,14 +783,14 @@ test("the shorter first boss beam survives ten wall bounces and ends on the next
     for(let bounce=0;bounce<10;bounce+=1) {
       const movingRight=bounce%2===0;
       beam.x=cameraX+(movingRight?WIDTH-beam.radius-0.01:beam.radius+0.01);
-      beam.y=cameraY+HEIGHT/2;
+      beam.y=cameraY+72;
       beam.vx=(movingRight?1:-1)*FINAL_BOSS.beamSpeed;
       beam.vy=0;
       bounceResults.push(moveRicochetingBullet(beam,1/60,beam.ricochetColor));
     }
     const ricochetsAfterTen=beam.ricochets;
     beam.x=cameraX+WIDTH-beam.radius-0.01;
-    beam.y=cameraY+HEIGHT/2;
+    beam.y=cameraY+72;
     beam.vx=FINAL_BOSS.beamSpeed;
     beam.vy=0;
     const survivesEleventh=moveRicochetingBullet(beam,1/60,beam.ricochetColor);
@@ -623,14 +844,14 @@ test("the final boss fires six faster round fan lasers in sequence and each boun
     for(let bounce=0;bounce<5;bounce+=1) {
       const movingRight=bounce%2===0;
       bullet.x=cameraX+(movingRight?WIDTH-bullet.radius-0.01:bullet.radius+0.01);
-      bullet.y=cameraY+HEIGHT/2;
+      bullet.y=cameraY+72;
       bullet.vx=(movingRight?1:-1)*FINAL_BOSS.fanProjectileSpeed;
       bullet.vy=0;
       bounceResults.push(moveRicochetingBullet(bullet,1/60,bullet.ricochetColor));
     }
     const ricochetsAfterFive=bullet.ricochets;
     bullet.x=cameraX+WIDTH-bullet.radius-0.01;
-    bullet.y=cameraY+HEIGHT/2;
+    bullet.y=cameraY+72;
     bullet.vx=FINAL_BOSS.fanProjectileSpeed;
     bullet.vy=0;
     const survivesSixth=moveRicochetingBullet(bullet,1/60,bullet.ricochetColor);

@@ -217,7 +217,7 @@ test("the boss map leaves the background untouched and renders a detailed rust-b
   assert.match(source, /#8b351d/);
   assert.match(source, /#700713/);
   assert.match(source, /const bossDeckPalettes = \[/);
-  assert.match(source, /const bossRailColors = \["#b64d36", "#cf623d", "#9f342f"\]/);
+  assert.match(source, /const bossRailColors = \["#8f513c", "#a35d42", "#7d4336"\]/);
   assert.match(source, /if \(currentArea !== "boss"\) drawPlatformLights\(platform\)/);
 });
 
@@ -242,7 +242,13 @@ test("rust, blood, scratches and rivets render on both flat and sloped boss road
   });
   assert.ok(calls.some((call) => call.operation === "fill" && call.color === "#8b351d"));
   assert.ok(calls.some((call) => call.operation === "fill" && call.color === "#700713"));
+  assert.ok(calls.some((call) => call.operation === "fill" && call.color === "#32100d"));
+  assert.ok(calls.some((call) => call.operation === "fill" && call.color === "#260208"));
+  assert.ok(calls.some((call) => call.operation === "fillRect" && call.color === "#df7a32"));
   assert.ok(calls.some((call) => call.operation === "fillRect" && call.color === "#941426"));
+  assert.ok(calls.some((call) => call.operation === "ellipse"));
+  assert.ok(calls.some((call) => call.operation === "quadraticCurveTo"));
+  assert.ok(calls.filter((call) => call.operation === "arc").length >= 20);
   assert.ok(calls.some((call) => call.operation === "rotate" && call.args[0] < 0));
   assert.ok(calls.filter((call) => call.operation === "fillRect").length >= 20);
 });

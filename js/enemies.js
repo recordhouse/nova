@@ -1406,8 +1406,161 @@ function finalBossRainTargets(boss, targetX) {
   }));
 }
 
-function setFinalBossJumpTarget(boss, targetX) {
-  const platform = boss.platform;
+function finalBossCanStandOnPlatform(platform, boss) {
+  return Boolean(
+    platform?.bossCombatPlatform &&
+    platform.end - platform.start >= boss.width + 48
+  );
+}
+
+function finalBossIntendedPlatform(boss) {
+  if (finalBossCanStandOnPlatform(player.platform, boss)) return player.platform;
+  if (player.platform?.bossSafetyFloor) {
+    const arena = platforms.find((platform) => platform.type === "boss-arena");
+    if (finalBossCanStandOnPlatform(arena, boss)) return arena;
+  }
+  return boss.platform;
+}
+
+function finalBossPlatformLandingCenter(boss, platform, targetX) {
+  const minimumCenterX = Math.min(platform.start, platform.end) +
+    boss.width / 2 + 24;
+  const maximumCenterX = Math.max(platform.start, platform.end) -
+    boss.width / 2 - 24;
+  const bossCenterX = boss.x + boss.width / 2;
+  const direction = Math.sign(targetX - bossCenterX) || boss.facing || 1;
+  const approachX = targetX -
+    direction * FINAL_BOSS.platformJumpMinimumPlayerGap;
+  const limitedX = bossCenterX + Math.max(
+    -FINAL_BOSS.platformJumpMaxDistance,
+    Math.min(
+      FINAL_BOSS.platformJumpMaxDistance,
+      approachX - bossCenterX,
+    ),
+  );
+  return Math.max(minimumCenterX, Math.min(maximumCenterX, limitedX));
+}
+
+function finalBossPlatformTier(platform) {
+  if (!platform || platform.type === "boss-arena") return 0;
+  return platform.bossVerticalTier ?? 0;
+}
+
+function finalBossPreferredUpperPlatform(boss, playerCenterX) {
+  const currentTier = finalBossPlatformTier(boss.platform);
+  if (currentTier >= 2) return null;
+  const desiredTier = currentTier + 1;
+  const bossCenterX = boss.x + boss.width / 2;
+  const bossFootY = boss.y + boss.height;
+  let best = null;
+
+  for (const platform of platforms) {
+    if (
+      platform === boss.platform ||
+      finalBossPlatformTier(platform) !== desiredTier ||
+      !finalBossCanStandOnPlatform(platform, boss)
+    ) continue;
+    const landingCenterX = finalBossPlatformLandingCenter(
+      boss,
+      platform,
+      playerCenterX,
+    );
+    const horizontalTravel = Math.abs(landingCenterX - bossCenterX);
+    const landingSurfaceY = platformSurfaceY(platform, landingCenterX);
+    const verticalTravel = Math.abs(landingSurfaceY - bossFootY);
+    if (
+      horizontalTravel > FINAL_BOSS.platformJumpMaxDistance + 0.01 ||
+      verticalTravel > FINAL_BOSS.platformJumpMaxHeightDifference
+    ) continue;
+    if (
+      platform === player.platform &&
+      Math.abs(landingCenterX - playerCenterX) <
+        FINAL_BOSS.platformJumpMinimumPlayerGap
+    ) continue;
+
+    // Prefer a nearby upper deck, then the landing point that keeps pressure
+    // on the player. This lets the boss climb without making an oversized leap.
+    const score = horizontalTravel +
+      Math.abs(playerCenterX - landingCenterX) * 0.18;
+    if (!best || score < best.score) best = { platform, score };
+  }
+  return best?.platform ?? null;
+}
+
+function finalBossPlayerTargetPlatform(boss, playerCenterX) {
+  const intendedPlatform = finalBossIntendedPlatform(boss);
+  const currentTier = finalBossPlatformTier(boss.platform);
+  const intendedTier = finalBossPlatformTier(intendedPlatform);
+  if (
+    currentTier < 2 && intendedTier <= currentTier &&
+    (boss.upperRouteIntent || intendedPlatform === boss.platform)
+  ) {
+    const upperPlatform = finalBossPreferredUpperPlatform(boss, playerCenterX);
+    if (upperPlatform) {
+      boss.upperRouteIntent = finalBossPlatformTier(upperPlatform) < 2;
+      return upperPlatform;
+    }
+    boss.upperRouteIntent = false;
+  }
+  if (intendedPlatform === boss.platform) return boss.platform;
+  const bossCenterX = boss.x + boss.width / 2;
+  const bossFootY = boss.y + boss.height;
+  const targetCenterX = Math.max(
+    Math.min(intendedPlatform.start, intendedPlatform.end),
+    Math.min(Math.max(intendedPlatform.start, intendedPlatform.end), playerCenterX),
+  );
+  const targetSurfaceY = platformSurfaceY(intendedPlatform, targetCenterX);
+  const currentDistance = Math.hypot(
+    playerCenterX - bossCenterX,
+    (targetSurfaceY - bossFootY) * 1.25,
+  );
+  const direction = Math.sign(playerCenterX - bossCenterX) || boss.facing || 1;
+  const currentTierDistance = Math.abs(
+    intendedTier - finalBossPlatformTier(boss.platform),
+  );
+  let best = null;
+
+  for (const platform of platforms) {
+    if (platform === boss.platform || !finalBossCanStandOnPlatform(platform, boss)) {
+      continue;
+    }
+    if (
+      Math.abs(intendedTier - finalBossPlatformTier(platform)) >
+      currentTierDistance
+    ) continue;
+    const landingCenterX = finalBossPlatformLandingCenter(
+      boss,
+      platform,
+      playerCenterX,
+    );
+    const horizontalTravel = landingCenterX - bossCenterX;
+    if (
+      Math.abs(horizontalTravel) > FINAL_BOSS.platformJumpMaxDistance + 0.01 ||
+      horizontalTravel * direction < -0.01
+    ) continue;
+    const landingSurfaceY = platformSurfaceY(platform, landingCenterX);
+    const verticalTravel = Math.abs(landingSurfaceY - bossFootY);
+    if (verticalTravel > FINAL_BOSS.platformJumpMaxHeightDifference) continue;
+    if (
+      platform === intendedPlatform &&
+      Math.abs(landingCenterX - playerCenterX) <
+        FINAL_BOSS.platformJumpMinimumPlayerGap
+    ) continue;
+    const remainingDistance = Math.hypot(
+      playerCenterX - landingCenterX,
+      (targetSurfaceY - landingSurfaceY) * 1.25,
+    );
+    if (remainingDistance >= currentDistance - 4) continue;
+    if (!best || remainingDistance < best.remainingDistance) {
+      best = { platform, remainingDistance };
+    }
+  }
+  return best?.platform ?? boss.platform;
+}
+
+function setFinalBossJumpTarget(boss, targetX, targetPlatform = boss.platform) {
+  const platform = finalBossCanStandOnPlatform(targetPlatform, boss)
+    ? targetPlatform : boss.platform;
   const minimumCenterX = platform
     ? Math.min(platform.start, platform.end) + boss.width / 2 + 24
     : targetX;
@@ -1423,6 +1576,7 @@ function setFinalBossJumpTarget(boss, targetX) {
     : boss.y + boss.height;
   boss.jumpTargetX = targetCenterX - boss.width / 2;
   boss.jumpTargetY = surfaceY - boss.height;
+  boss.jumpTargetPlatform = platform;
 }
 
 function tryPlayFinalBossAttackVoice(boss) {
@@ -1458,7 +1612,11 @@ function prepareFinalBossAttack(boss, playerCenterX, playerCenterY) {
   boss.patternTargetX = playerCenterX;
   boss.patternTargetY = playerCenterY;
   if (pattern === "jump-slam") {
-    setFinalBossJumpTarget(boss, playerCenterX);
+    setFinalBossJumpTarget(
+      boss,
+      playerCenterX,
+      finalBossIntendedPlatform(boss),
+    );
   }
   if (pattern === "beam" || pattern === "fan") {
     const direction = finalBossAimDirection(boss, playerCenterX, playerCenterY);
@@ -1543,6 +1701,8 @@ function triggerTestFinalBossAttack(pattern) {
     boss.targetY = boss.y;
   }
   boss.airborne = false;
+  boss.platformJumpActive = false;
+  boss.platformJumpTarget = null;
   boss.jumpLanded = false;
   boss.jumpImpactTimer = 0;
   boss.moving = false;
@@ -1666,6 +1826,88 @@ function moveFinalBossTowardPlayer(boss, dt, playerCenterX) {
   return moved;
 }
 
+function beginFinalBossPlatformJump(boss, targetPlatform, targetX) {
+  if (
+    boss.platformJumpActive || targetPlatform === boss.platform ||
+    !finalBossCanStandOnPlatform(targetPlatform, boss)
+  ) return false;
+  const bossCenterX = boss.x + boss.width / 2;
+  const startSurfaceY = boss.y + boss.height;
+  const targetCenterX = finalBossPlatformLandingCenter(
+    boss,
+    targetPlatform,
+    targetX,
+  );
+  const targetSurfaceY = platformSurfaceY(targetPlatform, targetCenterX);
+  const horizontalTravel = Math.abs(targetCenterX - bossCenterX);
+  const verticalTravel = Math.abs(targetSurfaceY - startSurfaceY);
+  if (
+    horizontalTravel > FINAL_BOSS.platformJumpMaxDistance + 0.01 ||
+    verticalTravel > FINAL_BOSS.platformJumpMaxHeightDifference ||
+    (
+      targetPlatform === player.platform &&
+      Math.abs(targetCenterX - targetX) <
+        FINAL_BOSS.platformJumpMinimumPlayerGap
+    )
+  ) return false;
+  boss.platformJumpActive = true;
+  boss.platformJumpProgress = 0;
+  boss.platformJumpTarget = targetPlatform;
+  boss.platformJumpStartX = boss.x;
+  boss.platformJumpStartY = boss.y;
+  boss.platformJumpTargetX = targetCenterX - boss.width / 2;
+  boss.platformJumpTargetY = targetSurfaceY - boss.height;
+  boss.platformJumpArcHeight = Math.min(
+    FINAL_BOSS.platformJumpHeight,
+    Math.max(72, horizontalTravel * 0.2 + verticalTravel * 0.32),
+  );
+  boss.facing = boss.platformJumpTargetX >= boss.x ? 1 : -1;
+  boss.airborne = true;
+  boss.moving = true;
+  return true;
+}
+
+function updateFinalBossPlatformJump(boss, dt) {
+  if (!boss.platformJumpActive) return false;
+  const duration = Math.max(0.01, FINAL_BOSS.platformJumpDuration);
+  boss.platformJumpProgress = Math.min(
+    1,
+    (boss.platformJumpProgress ?? 0) + dt / duration,
+  );
+  const progress = boss.platformJumpProgress;
+  const easedProgress = progress * progress * (3 - 2 * progress);
+  boss.x = boss.platformJumpStartX +
+    (boss.platformJumpTargetX - boss.platformJumpStartX) * easedProgress;
+  const groundY = boss.platformJumpStartY +
+    (boss.platformJumpTargetY - boss.platformJumpStartY) * easedProgress;
+  boss.y = groundY - Math.sin(progress * Math.PI) * boss.platformJumpArcHeight;
+  boss.moving = true;
+  boss.airborne = progress < 1;
+  if (progress < 1) return true;
+
+  boss.x = boss.platformJumpTargetX;
+  boss.y = boss.platformJumpTargetY;
+  boss.baseY = boss.y;
+  boss.targetY = boss.y;
+  boss.platform = boss.platformJumpTarget;
+  boss.group = boss.platform?.group ?? boss.group;
+  boss.platformJumpActive = false;
+  boss.platformJumpTarget = null;
+  boss.platformJumpCooldown = FINAL_BOSS.platformJumpCooldown;
+  boss.airborne = false;
+  boss.moving = false;
+  if (typeof playMetalHitSound === "function") playMetalHitSound();
+  burst(
+    boss.x + boss.width / 2,
+    boss.y + boss.height,
+    "#d7d0c7",
+    12,
+    155,
+  );
+  shake = Math.max(shake, 7);
+  return true;
+}
+
 function moveFinalBossDash(boss, dt) {
   const direction = boss.dashDirection || boss.facing || 1;
   const targetX = boss.dashTargetX ?? boss.x;
@@ -1692,6 +1934,11 @@ function resolveFinalBossJumpImpact(boss, playerHitbox) {
   boss.airborne = false;
   boss.x = boss.jumpTargetX;
   boss.y = boss.jumpTargetY;
+  if (boss.jumpTargetPlatform) {
+    boss.platform = boss.jumpTargetPlatform;
+    boss.group = boss.platform.group ?? boss.group;
+  }
+  boss.jumpTargetPlatform = null;
   boss.baseY = boss.y;
   boss.targetY = boss.y;
   boss.jumpImpactTimer = FINAL_BOSS.jumpImpactDuration;
@@ -1740,6 +1987,10 @@ function updateFinalBossAttack(
     (boss.attackVoiceCooldown ?? FINAL_BOSS.attackVoiceInitialDelay) - dt,
   );
   boss.jumpImpactTimer = Math.max(0, (boss.jumpImpactTimer ?? 0) - dt);
+  boss.platformJumpCooldown = Math.max(
+    0,
+    (boss.platformJumpCooldown ?? 0) - dt,
+  );
   const state = boss.attackState ?? "idle";
 
   if (state === "idle" && !withinActivationRange) {
@@ -1771,6 +2022,18 @@ function updateFinalBossAttack(
   if (state === "move") {
     boss.chargeProgress = 0;
     boss.fireProgress = 0;
+    if (boss.platformJumpActive) {
+      updateFinalBossPlatformJump(boss, dt);
+      return;
+    }
+    const targetPlatform = finalBossPlayerTargetPlatform(boss, playerCenterX);
+    if (
+      boss.platformJumpCooldown <= 0 && targetPlatform !== boss.platform &&
+      beginFinalBossPlatformJump(boss, targetPlatform, playerCenterX)
+    ) {
+      updateFinalBossPlatformJump(boss, dt);
+      return;
+    }
     boss.moving = moveFinalBossTowardPlayer(boss, dt, playerCenterX);
     if (boss.attackTimer <= 0) {
       boss.moving = false;

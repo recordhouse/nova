@@ -142,3 +142,26 @@ test("shallow floating-path triangles keep their existing filled body", () => {
   assert.equal(calls.some((call) => call.operation === "stroke" &&
     ["#c7fbff", "#dfc6ff"].includes(call.strokeColor)), false);
 });
+
+test("boss upper roads form layered spider webs without changing collision geometry", () => {
+  const { scope, calls } = createGame();
+  read(scope, `
+    currentArea='boss';
+    generateBossMap();
+    cameraX=0;
+    cameraY=BASE_GROUND_Y-700;
+  `);
+  const before = read(scope, "JSON.stringify(platforms)");
+  scope.drawTerrain();
+  const webRoads = read(scope, "platforms.filter(platform=>platform.bossWebRoad).length");
+  assert.equal(webRoads, 6);
+  assert.ok(calls.some((call) => call.operation === "quadraticCurveTo"),
+    "diagonal support strands should sag like a web");
+  assert.ok(calls.some((call) => call.operation === "stroke" &&
+    call.strokeColor === "rgba(211, 195, 178, 0.9)"),
+  "wide upper roads should be layered from bright web strands");
+  assert.ok(calls.some((call) => call.operation === "stroke" &&
+    call.strokeColor === "rgba(163, 143, 132, 0.62)"),
+  "web roads should retain a visible triangular understructure");
+  assert.equal(read(scope, "JSON.stringify(platforms)"), before);
+});

@@ -82,7 +82,7 @@ test("generated stages place flying monsters and collectible hearts along the ro
 
 test("monster3 has a modestly higher spawn chance", () => {
   const { scope } = createGame();
-  assert.equal(read(scope, "MONSTER_TYPES.monster3.spawnChance"), 0.28);
+  assert.equal(read(scope, "MONSTER_TYPES.monster3.spawnChance"), 0.34);
 });
 
 test("monster3 floats above the road, uses its sprite and has five HP", () => {

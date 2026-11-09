@@ -1719,30 +1719,23 @@ function generateBossMap() {
     return platform;
   };
 
-  const startingRoad = addPlatform(-200, 700, 0, "boss-entry", 0);
+  const startingRoad = addPlatform(-200, 520, 0, "boss-entry", 0);
   startingRoad.startingRoad = true;
   startingRoad.zone = "rest";
   decorateBossRoad(startingRoad);
 
-  // The lower route is unbroken: missed jumps always land on solid ground.
-  // Gentle ramps keep the silhouette varied without exceeding normal movement.
+  // Keep the boss map compact horizontally. The unbroken lower route catches
+  // missed jumps, while the two stacked routes provide the main traversal.
   const groundPlan = [
-    { kind: "flat", width: 420 },
-    { kind: "ramp", width: 260, level: -0.42 },
-    { kind: "flat", width: 440 },
-    { kind: "ramp", width: 220, level: 0.2 },
-    { kind: "flat", width: 360 },
-    { kind: "ramp", width: 240, level: -0.55 },
-    { kind: "flat", width: 500 },
-    { kind: "ramp", width: 280, level: 0.28 },
-    { kind: "flat", width: 380 },
+    { kind: "flat", width: 260 },
     { kind: "ramp", width: 220, level: -0.35 },
-    { kind: "flat", width: 470 },
-    { kind: "ramp", width: 260, level: -0.78 },
-    { kind: "flat", width: 420 },
-    { kind: "ramp", width: 260, level: -0.05 },
-    { kind: "flat", width: 520 },
-    { kind: "ramp", width: 300, level: 0 },
+    { kind: "flat", width: 260 },
+    { kind: "ramp", width: 200, level: 0.12 },
+    { kind: "flat", width: 280 },
+    { kind: "ramp", width: 220, level: -0.5 },
+    { kind: "flat", width: 280 },
+    { kind: "ramp", width: 220, level: 0 },
+    { kind: "flat", width: 230 },
   ];
   let cursor = startingRoad.end;
   let groundLevel = 0;
@@ -1770,24 +1763,26 @@ function generateBossMap() {
     groundLevel = nextLevel;
   }
 
-  // Optional upper lines reward jumping, but every gap has the lower route below it.
+  const arenaStart = cursor;
+  const arena = addPlatform(
+    arenaStart,
+    arenaStart + 1260,
+    0,
+    "boss-arena",
+    groundPlan.length + 1,
+  );
+  decorateBossRoad(arena, "arena");
+  arena.bossCombatPlatform = true;
+
+  // Tier 1 leaves deliberate double-jump gaps. Tier 2 uses long combat decks
+  // that bridge those gaps so the boss can climb and keep fighting vertically.
   const upperPlan = [
-    { offset: 180, width: 150, lift: 0.55 },
-    { offset: 470, width: 190, lift: 0.88, tilt: -0.16 },
-    { offset: 820, width: 135, lift: 0.42, tilt: 0.12 },
-    { offset: 1080, width: 220, lift: 0.85 },
-    { offset: 1450, width: 160, lift: 0.68, tilt: 0.18 },
-    { offset: 1760, width: 120, lift: 0.96 },
-    { offset: 2020, width: 200, lift: 0.5, tilt: -0.14 },
-    { offset: 2380, width: 140, lift: 0.96 },
-    { offset: 2640, width: 180, lift: 0.62, tilt: 0.2 },
-    { offset: 2980, width: 125, lift: 0.92 },
-    { offset: 3250, width: 230, lift: 0.46, tilt: -0.16 },
-    { offset: 3660, width: 150, lift: 1.02 },
-    { offset: 3960, width: 180, lift: 0.72, tilt: 0.14 },
-    { offset: 4300, width: 130, lift: 0.9 },
-    { offset: 4600, width: 210, lift: 0.52, tilt: -0.18 },
-    { offset: 5000, width: 145, lift: 1 },
+    { tier: 1, offset: 80, width: 640, lift: 0.78 },
+    { tier: 1, offset: 1060, width: 700, lift: 0.92, tilt: -0.06 },
+    { tier: 1, offset: 2100, width: 700, lift: 0.82 },
+    { tier: 2, offset: 380, width: 900, lift: 2.12, tilt: 0.04 },
+    { tier: 2, offset: 1380, width: 960, lift: 2.18 },
+    { tier: 2, offset: 2360, width: 980, lift: 2.12, tilt: -0.04 },
   ];
   for (let index = 0; index < upperPlan.length; index += 1) {
     const step = upperPlan[index];
@@ -1808,30 +1803,24 @@ function generateBossMap() {
           upperLevel - step.tilt / 2,
           upperLevel + step.tilt / 2,
           "boss-jump-ramp",
-          groundPlan.length + index + 1,
+          groundPlan.length + index + 2,
         )
       : addPlatform(
           start,
           start + step.width,
           upperLevel,
           "boss-jump",
-          groundPlan.length + index + 1,
+          groundPlan.length + index + 2,
         );
     platform.routeRole = "boss-upper";
     platform.bossJumpPlatform = true;
+    platform.bossVerticalTier = step.tier;
+    platform.bossCombatPlatform = true;
+    platform.bossWebRoad = true;
     decorateBossRoad(platform, "upper");
     jumpPlatforms.push(platform);
   }
 
-  const arenaStart = cursor;
-  const arena = addPlatform(
-    arenaStart,
-    arenaStart + 1500,
-    0,
-    "boss-arena",
-    groundPlan.length + upperPlan.length + 1,
-  );
-  decorateBossRoad(arena, "arena");
   addFinalBoss(arena);
 
   branches.push({
@@ -1844,8 +1833,17 @@ function generateBossMap() {
       },
       {
         role: "sub",
-        trick: "boss-jumps",
-        platforms: jumpPlatforms.map((platform) => platform.id),
+        trick: "boss-jumps-low",
+        platforms: jumpPlatforms
+          .filter((platform) => platform.bossVerticalTier === 1)
+          .map((platform) => platform.id),
+      },
+      {
+        role: "sub",
+        trick: "boss-jumps-high",
+        platforms: jumpPlatforms
+          .filter((platform) => platform.bossVerticalTier === 2)
+          .map((platform) => platform.id),
       },
     ],
   });
@@ -2670,6 +2668,11 @@ function addFinalBoss(platform) {
     rainTargets: [],
     moving: false,
     airborne: false,
+    platformJumpActive: false,
+    platformJumpProgress: 0,
+    platformJumpCooldown: 0,
+    platformJumpTarget: null,
+    upperRouteIntent: false,
     jumpImpactTimer: 0,
     attackVoiceCooldown: FINAL_BOSS.attackVoiceInitialDelay,
     finalBoss: true,
