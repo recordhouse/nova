@@ -253,6 +253,7 @@ button {
 .test-portal-button,
 .test-boss-button,
 .test-boss-attack-button,
+.test-boss-death-button,
 .test-loading-button,
 .test-music-button,
 .test-invincibility-button,
@@ -298,6 +299,7 @@ button {
 .test-portal-button:active,
 .test-boss-button:active,
 .test-boss-attack-button:active,
+.test-boss-death-button:active,
 .test-loading-button:active,
 .test-music-button:active,
 .test-invincibility-button:active,
@@ -349,7 +351,15 @@ button {
   background: rgb(115 40 170 / 18%);
 }
 
-.test-boss-attack-button[hidden] {
+.test-boss-death-button {
+  min-width: 66px;
+  color: #ffd8d8;
+  border-color: rgb(255 76 92 / 92%);
+  background: rgb(173 24 49 / 22%);
+}
+
+.test-boss-attack-button[hidden],
+.test-boss-death-button[hidden] {
   display: none;
 }
 

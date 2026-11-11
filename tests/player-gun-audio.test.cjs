@@ -145,35 +145,53 @@ test("combat sounds preload and use their intended audio segments", async () => 
 
   assert.equal(contexts.length, 1);
   assert.equal(contexts[0].latencyHint, 0.01);
-  assert.equal(musicInstances.length, 1);
-  assert.equal(musicInstances[0].source, "./assets/music/stage_01.mp3?v=20260924-1");
-  assert.equal(musicInstances[0].loop, true);
-  assert.equal(musicInstances[0].volume, 1,
+  assert.equal(musicInstances.length, 2);
+  assert.deepEqual(musicInstances.map((music) => music.source), [
+    "./assets/music/stage.mp3?v=20261109-1",
+    "./assets/music/boss.mp3?v=20261109-1",
+  ]);
+  assert.ok(musicInstances.every((music) => music.loop === true));
+  assert.ok(musicInstances.every((music) => music.volume === 1),
     "the media element stays at full volume so mobile cannot bypass attenuation");
-  assert.deepEqual(mediaSourceElements, [musicInstances[0]]);
+  assert.deepEqual(mediaSourceElements, musicInstances);
   assert.equal(vm.runInContext("stageMusicOutput.gain.value", scope), 1.2,
     "background music uses the same Web Audio gain path on every device");
   assert.equal(vm.runInContext("gameSfxOutput.gain.value", scope), 5);
   assert.equal(vm.runInContext("femaleVoiceOutput.gain.value", scope), 7);
   assert.equal(vm.runInContext("enemyVoiceOutput.gain.value", scope), 2);
-  assert.equal(musicInstances[0].preload, "auto");
-  assert.equal(musicInstances[0].playsInline, true);
+  assert.ok(musicInstances.every((music) => music.preload === "auto"));
+  assert.ok(musicInstances.every((music) => music.playsInline === true));
   assert.equal(vm.runInContext("stageMusicPaused", scope), false);
   assert.equal(musicInstances[0].playCalls, 1,
     "normal mode starts background music without the test-mode pause");
+  assert.equal(musicInstances[1].playCalls, 0);
   scope.playCurrentStageMusic();
   assert.equal(musicInstances[0].playCalls, 1);
-  scope.setCurrentStageMusicPaused(false);
-  assert.equal(musicInstances[0].paused, false);
-  assert.equal(musicInstances[0].playCalls, 1);
-  scope.setCurrentStageMusicPaused(true);
+  vm.runInContext("globalThis.currentArea='boss'", scope);
+  scope.playCurrentStageMusic();
   assert.equal(musicInstances[0].paused, true);
-  assert.equal(musicInstances[0].pauseCalls, 1);
+  assert.equal(musicInstances[1].paused, false);
+  assert.equal(musicInstances[1].playCalls, 1,
+    "entering the boss area switches immediately to boss.mp3");
   scope.playCurrentStageMusic();
-  assert.equal(musicInstances[0].playCalls, 1, "manual pause blocks automatic restarts");
+  assert.equal(musicInstances[1].playCalls, 1);
   scope.setCurrentStageMusicPaused(false);
+  assert.equal(musicInstances[1].paused, false);
+  scope.setCurrentStageMusicPaused(true);
+  assert.equal(musicInstances[1].paused, true);
+  scope.playCurrentStageMusic();
+  assert.equal(musicInstances[1].playCalls, 1, "manual pause blocks automatic restarts");
+  scope.setCurrentStageMusicPaused(false);
+  assert.equal(musicInstances[1].paused, false);
+  assert.equal(musicInstances[1].playCalls, 2);
+  vm.runInContext("currentArea='stage'", scope);
+  scope.playCurrentStageMusic();
   assert.equal(musicInstances[0].paused, false);
-  assert.equal(musicInstances[0].playCalls, 2);
+  assert.equal(musicInstances[0].playCalls, 2,
+    "returning to the stage restores stage.mp3");
+  assert.equal(musicInstances[1].paused, true);
+  assert.ok(fetchedSources.includes("./assets/music/stage.mp3?v=20261109-1"));
+  assert.ok(fetchedSources.includes("./assets/music/boss.mp3?v=20261109-1"));
   assert.ok(fetchedSources.includes("./assets/sound/gun_impact.mp3?v=20261019-1"));
   assert.ok(fetchedSources.includes("./assets/sound/gun_hit.mp3?v=20261019-1"));
   assert.ok(fetchedSources.includes("./assets/sound/heart.mp3"));
@@ -294,6 +312,8 @@ test("only test mode starts with stage music paused", () => {
       );
     }
     assert.equal(vm.runInContext("stageMusicPaused", scope), expectedPaused);
+    assert.equal(musicInstances.length, 2);
     assert.equal(musicInstances[0].playCalls, expectedPlayCalls);
+    assert.equal(musicInstances[1].playCalls, 0);
   }
 });

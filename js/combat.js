@@ -384,6 +384,114 @@ function shouldEmitPlayerUltimateHitFeedback(group, target) {
   return true;
 }
 
+function emitFinalBossDeathExplosion(boss, effectDensity = 1) {
+  if (boss.deathExplosionTriggered) return false;
+  boss.deathExplosionTriggered = true;
+  const centerX = boss.x + boss.width / 2;
+  const centerY = boss.y + boss.height * 0.48;
+  const life = 1.05;
+  particles.push({
+    x: centerX,
+    y: centerY,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life,
+    maxLife: life,
+    size: 270,
+    phase: boss.animationTime ?? gameTime,
+    color: "#ff3f91",
+    finalBossDeathBlast: true,
+  });
+  burstCombatantExplosion(boss, "boss", effectDensity);
+  burst(centerX, centerY, "#fff2df", scaledEffectCount(22, effectDensity), 330);
+  burst(centerX, centerY, "#ff4d86", scaledEffectCount(34, effectDensity), 440);
+  burst(centerX, centerY, "#7d174f", scaledEffectCount(26, effectDensity), 360);
+  for (let index = enemyBullets.length - 1; index >= 0; index -= 1) {
+    if (enemyBullets[index].kind?.startsWith("final-boss-")) {
+      enemyBullets.splice(index, 1);
+    }
+  }
+  shake = Math.max(shake, 26);
+  return true;
+}
+
+function resolveBossDeath(boss, effectDensity = 1) {
+  if (!boss?.alive || boss.deathResolved) return false;
+  boss.deathResolved = true;
+  boss.hp = 0;
+  boss.alive = false;
+  addPlayerScore(boss.score ?? MID_BOSS.score);
+  if (boss.finalBoss) {
+    emitFinalBossDeathExplosion(boss, effectDensity);
+  } else {
+    burstCombatantExplosion(boss, "boss", effectDensity);
+    shake = Math.max(shake, 18);
+  }
+  if (typeof updateTestBossAttackButtons === "function") {
+    updateTestBossAttackButtons();
+  }
+  return true;
+}
+
+function damageBoss(boss, damage, effectDensity = 1, playHitSound = true) {
+  if (!boss?.alive || damage <= 0) return false;
+  if (playHitSound) playCombatantHitSound("boss");
+  const phaseHp = Math.max(1, boss.healthPhaseHp ?? boss.maxHp ?? boss.hp);
+  const phaseCount = Math.max(1, boss.healthPhaseCount ?? 1);
+  const previousRemainingPhases = Math.max(
+    1,
+    Math.ceil(Math.max(0, boss.hp) / phaseHp),
+  );
+  const nextPhaseBoundary = Math.max(
+    0,
+    (Math.ceil(boss.hp / phaseHp) - 1) * phaseHp,
+  );
+  boss.hp = Math.max(nextPhaseBoundary, boss.hp - damage);
+  if (boss.finalBoss && boss.hp > 0) {
+    const remainingPhases = Math.max(1, Math.ceil(boss.hp / phaseHp));
+    const previousPhaseIndex = Math.max(
+      0,
+      Math.min(phaseCount - 1, phaseCount - previousRemainingPhases),
+    );
+    const phaseIndex = Math.max(
+      0,
+      Math.min(phaseCount - 1, phaseCount - remainingPhases),
+    );
+    const lastSummonedPhase = Math.max(
+      boss.lastSummonedHealthPhase ?? previousPhaseIndex,
+      previousPhaseIndex,
+    );
+    if (phaseIndex > lastSummonedPhase) {
+      for (let transition = lastSummonedPhase; transition < phaseIndex; transition += 1) {
+        if (typeof spawnFinalBossPhaseMinions === "function") {
+          spawnFinalBossPhaseMinions(boss);
+        }
+      }
+      boss.lastSummonedHealthPhase = phaseIndex;
+      const centerX = boss.x + boss.width / 2;
+      const centerY = boss.y + boss.height * 0.52;
+      burst(
+        centerX,
+        centerY,
+        phaseIndex >= phaseCount - 1 ? "#ff234f" : "#ffd84f",
+        scaledEffectCount(24, effectDensity),
+        280,
+      );
+      shake = Math.max(shake, phaseIndex >= phaseCount - 1 ? 16 : 11);
+    }
+  }
+  if (boss.hp <= 0) resolveBossDeath(boss, effectDensity);
+  return true;
+}
+
+function triggerTestFinalBossDeath() {
+  if (!TEST_MODE) return false;
+  const boss = midBosses.find((candidate) => candidate.finalBoss && candidate.alive);
+  if (!boss) return false;
+  return resolveBossDeath(boss);
+}
+
 function updatePlayerUltimateLaserHits(
   laser,
   targets = playerUltimateLaserTargetSnapshot(),
@@ -441,7 +549,7 @@ function updatePlayerUltimateLaserHits(
     if (!playerUltimateLaserOverlapsRect(laser, rect, segment)) continue;
     currentContacts.add(boss);
     if (previousContacts.has(boss)) continue;
-    boss.hp = Math.max(0, boss.hp - damage);
+    damageBoss(boss, damage, effectDensity, false);
     if (shouldEmitPlayerUltimateHitFeedback(feedbackGroup, boss)) {
       playGroupedPlayerUltimateHitSound("boss", playedHitSoundGroups);
       emitPurpleBulletHitElectricity(laser, "boss");
@@ -451,18 +559,6 @@ function updatePlayerUltimateLaserHits(
         "#e28bff",
         scaledEffectCount(16, effectDensity),
         250,
-      );
-    }
-    if (boss.hp <= 0) {
-      boss.alive = false;
-      addPlayerScore(boss.score ?? MID_BOSS.score);
-      shake = Math.max(shake, 18);
-      burst(
-        boss.x + boss.width / 2,
-        boss.y + boss.height / 2,
-        "#ff4fd8",
-        scaledEffectCount(42, effectDensity),
-        390,
       );
     }
   }
@@ -786,6 +882,7 @@ function emitPlayerHitImpact(source) {
 
 function combatantHitSoundGroup(kind) {
   if (kind === "monster3" || kind === "turret") return "metal";
+  if (kind === "boss") return "boss";
   if (["monster1", "monster2", "monster4", "monster5"].includes(kind)) {
     return "organic";
   }
@@ -800,7 +897,7 @@ function playCombatantHitSound(kind) {
     } else if (typeof playMetalHitSound === "function") {
       playMetalHitSound();
     }
-  } else if (group === "organic") {
+  } else if (group === "organic" || group === "boss") {
     if (typeof playGunHitSound === "function") playGunHitSound();
   }
   return group;
@@ -984,19 +1081,14 @@ function updatePlayerRevivalWave(dt) {
       )
     ) continue;
     wave.hitTargets.add(boss);
-    boss.hp = Math.max(0, boss.hp - PLAYER_REVIVAL_DAMAGE);
+    damageBoss(boss, PLAYER_REVIVAL_DAMAGE);
     burst(
       boss.x + boss.width / 2,
       boss.y + boss.height / 2,
       "#ff8bf2",
-      boss.hp <= 0 ? 42 : 12,
-      boss.hp <= 0 ? 390 : 210,
+      12,
+      210,
     );
-    if (boss.hp <= 0) {
-      boss.alive = false;
-      addPlayerScore(boss.score ?? MID_BOSS.score);
-      shake = Math.max(shake, 16);
-    }
   }
   if (wave.elapsed >= PLAYER_REVIVAL_WAVE_DURATION) playerRevivalWave = null;
   return true;
@@ -1147,17 +1239,21 @@ function emitPurpleBulletHitElectricity(bullet, targetKind) {
 
 function burstCombatantExplosion(target, kind, effectDensity = 1) {
   const isTurret = kind === "turret";
+  const isBoss = kind === "boss";
   const isCrimson = kind === "monster1" && target.crimsonVariant;
-  const isLarge = isCrimson || isTurret || kind === "monster2" ||
+  const isLarge = isBoss || isCrimson || isTurret || kind === "monster2" ||
     kind === "monster3" || kind === "monster4" || kind === "monster5";
   const centerX = target.x + target.width / 2;
   const centerY = target.y + target.height * 0.52;
-  const color = isCrimson ? "#ff3048"
+  const color = isBoss ? "#ff3f91"
+    : isCrimson ? "#ff3048"
     : kind === "monster1" ? "#99ff52"
     : kind === "monster4" ? "#ff764c"
     : kind === "monster5" ? "#4bcfff"
     : kind === "monster3" ? "#ffaf62" : "#ed81fa";
-  const debrisColors = isCrimson
+  const debrisColors = isBoss
+    ? ["#ff91bd", "#b62f72", "#721d57", "#35142e", "#d6a5d2"]
+    : isCrimson
     ? ["#ff3348", "#c71935", "#74182c", "#391827"]
     : kind === "monster1"
     ? ["#358329", "#5bac35", "#6b396f", "#34233b"]
@@ -1181,13 +1277,13 @@ function burstCombatantExplosion(target, kind, effectDensity = 1) {
       life: flashLife,
       maxLife: flashLife,
       color,
-      size: isLarge ? 82 : 54,
+      size: isBoss ? 190 : isLarge ? 82 : 54,
       explosionFlash: true,
     });
   }
 
   const sparkCount = scaledEffectCount(
-    isCrimson ? 46 : isLarge ? 34 : 24,
+    isBoss ? 58 : isCrimson ? 46 : isLarge ? 34 : 24,
     effectDensity,
   );
   for (let spark = 0; spark < sparkCount; spark += 1) {
@@ -1209,7 +1305,7 @@ function burstCombatantExplosion(target, kind, effectDensity = 1) {
     });
   }
 
-  const smokeCount = scaledEffectCount(isLarge ? 10 : 6, effectDensity);
+  const smokeCount = scaledEffectCount(isBoss ? 16 : isLarge ? 10 : 6, effectDensity);
   for (let smoke = 0; smoke < smokeCount; smoke += 1) {
     const life = 0.65 + Math.random() * 0.55;
     particles.push({
@@ -1227,7 +1323,7 @@ function burstCombatantExplosion(target, kind, effectDensity = 1) {
   }
 
   const debrisCount = scaledEffectCount(
-    isCrimson ? 30 : isTurret ? 24 : isLarge ? 20 : 12,
+    isBoss ? 30 : isCrimson ? 30 : isTurret ? 24 : isLarge ? 20 : 12,
     effectDensity,
   );
   let excess = particles.filter((particle) => particle.debris).length +
@@ -1240,7 +1336,7 @@ function burstCombatantExplosion(target, kind, effectDensity = 1) {
   }
 
   for (let chunk = 0; chunk < debrisCount; chunk += 1) {
-    const debrisScale = isTurret ? 1.5 : 2.5;
+    const debrisScale = isBoss ? 1.9 : isTurret ? 1.5 : 2.5;
     const size = ((isLarge ? 5 : 3.5) + Math.random() * (isLarge ? 7 : 5)) *
       debrisScale;
     particles.push({
@@ -1253,7 +1349,7 @@ function burstCombatantExplosion(target, kind, effectDensity = 1) {
       maxLife: 3,
       groundLife: 2.8 + Math.random() * 1.4,
       color: debrisColors[Math.floor(Math.random() * debrisColors.length)],
-      highlightColor: isTurret ? "#bbc4d2" : color,
+      highlightColor: isTurret ? "#bbc4d2" : isBoss ? "#ffd3e9" : color,
       size,
       debrisWidth: size * (1.2 + Math.random() * 0.7),
       debrisHeight: size * (0.45 + Math.random() * 0.4),
@@ -1266,13 +1362,14 @@ function burstCombatantExplosion(target, kind, effectDensity = 1) {
         organicDebris: true,
         splatProgress: 0,
         organicVariant: chunk % 3,
-        shadowColor: isCrimson ? "#4b101e"
+        shadowColor: isBoss ? "#3f0b27"
+          : isCrimson ? "#4b101e"
           : kind === "monster1" ? "#203b24"
           : kind === "monster4" ? "#3d201d" : "#42203e",
       } : {}),
     });
   }
-  shake = Math.max(shake, isLarge ? 13 : 8);
+  shake = Math.max(shake, isBoss ? 24 : isLarge ? 13 : 8);
 }
 
 function emitCrimsonMonsterExplosion(source, effectDensity = 1) {
@@ -1755,7 +1852,11 @@ function burstTurretLaserImpact(bullet, collision, finalImpact = false) {
   const tangentX = -normalY;
   const tangentY = normalX;
   const sparkCount = finalImpact ? 18 : 12;
-  const colors = ["#ffd0e5", "#ff74ad", "#d52e7e", "#67143f"];
+  const colors = bullet.turretVariant === 2
+    ? ["#fff8c7", "#ffe16a", "#d89a18", "#71440c"]
+    : bullet.turretVariant === 3
+      ? ["#d7fffa", "#62ffe8", "#20bdc2", "#0b5c69"]
+      : ["#ffd0e5", "#ff74ad", "#d52e7e", "#67143f"];
 
   for (let spark = 0; spark < sparkCount; spark += 1) {
     const outwardSpeed = 95 + Math.random() * (finalImpact ? 250 : 190);
@@ -1782,7 +1883,8 @@ function burstTurretLaserImpact(bullet, collision, finalImpact = false) {
     vy: 0,
     life: flashLife,
     maxLife: flashLife,
-    color: "#ff87bb",
+    color: bullet.turretVariant === 2 ? "#ffe66f"
+      : bullet.turretVariant === 3 ? "#5affe8" : "#ff87bb",
     size: finalImpact ? 34 : 27,
     lightImpact: true,
   });
@@ -1923,7 +2025,9 @@ function moveRicochetingBullet(bullet, dt, ricochetColor) {
     bullet.ricochets += 1;
     if (
       bullet.kind === "player-bullet" ||
-      bullet.kind === "player-ultimate-laser"
+      bullet.kind === "player-ultimate-laser" ||
+      bullet.kind === "boss-laser" ||
+      bullet.kind?.startsWith("final-boss-")
     ) playGroupedPlayerRicochetSound(bullet);
   }
   return true;
@@ -2108,22 +2212,10 @@ function updateBullets(dt) {
     if (!hit) {
       for (const boss of midBosses) {
         if (!boss.alive || !overlapsCircleRect(bullet, boss)) continue;
-        boss.hp -= 1;
+        damageBoss(boss, 1);
         hit = true;
         emitPurpleBulletHitElectricity(bullet, "boss");
         burst(bullet.x, bullet.y, "#ff8bf2", 9, 185);
-        if (boss.hp <= 0) {
-          boss.alive = false;
-          addPlayerScore(boss.score ?? MID_BOSS.score);
-          shake = 16;
-          burst(
-            boss.x + boss.width / 2,
-            boss.y + boss.height / 2,
-            "#ff4fd8",
-            42,
-            390,
-          );
-        }
         break;
       }
     }

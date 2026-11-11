@@ -112,7 +112,7 @@ test("HUD numerals use a distinct nine-row pixel face for every digit", () => {
   assert.ok(calls.some((call) => call.operation === "fillRect" && call.color === "#a6cdd6"));
 });
 
-test("five HUD regions keep score, hearts, map, empty ultimates and stage separated", () => {
+test("four HUD regions keep score, hearts, map and empty ultimates separated", () => {
   const { scope } = createGame();
   read(scope, `
     globalThis.hudLabels=[]; globalThis.hudNumbers=[]; globalThis.hudHearts=[];
@@ -137,35 +137,28 @@ test("five HUD regions keep score, hearts, map, empty ultimates and stage separa
     assert.equal(hearts.length, 3);
     assert.equal(ultimates.length, 3);
     assert.ok(ultimates.every((slot) => slot.filled === false));
-    assert.equal(labels[0].color, labels[1].color);
+    assert.equal(labels.length, 1);
+    assert.equal(labels[0].text, "SCORE");
+    assert.equal(numbers.length, 1);
     assert.equal(labels[0].scale, 1);
     assert.equal(numbers[0].scale, 7 / 9);
-    assert.ok(numbers.every((number) => number.scale === numbers[0].scale));
     assert.equal(labels[0].scale * 7, numbers[0].scale * 9);
     assert.ok(Math.abs(labels[0].y - numbers[0].y) <= 1);
-    assert.ok(Math.abs(labels[1].y - numbers[1].y) <= 1);
     assert.ok(numbers[0].x > labels[0].x, "score stays on one line");
-    assert.ok(numbers[1].x > labels[1].x, "stage stays on one line");
     assert.equal(read(scope, "HUD_INFO_TEXT_VISUAL_SCALE"), 1.55);
     assert.ok(hearts.every((heart) => heart.scale === hearts[0].scale));
     assert.ok(hearts[0].scale > 1.5 && hearts[0].scale <= 2.9);
     assert.ok(ultimates.every((slot) => slot.scale === ultimates[0].scale));
     assert.ok(ultimates[0].scale > 1.5 && ultimates[0].scale <= 2.9);
     const scoreEnd = numbers[0].x + scope.hudNumeralWidth(numbers[0].text, numbers[0].scale);
-    const stageEnd = numbers[1].x + scope.hudNumeralWidth(numbers[1].text, numbers[1].scale);
     const scoreRowWidth = scoreEnd - labels[0].x;
-    const stageRowWidth = stageEnd - labels[1].x;
     const infoVisualScale = Math.min(
       read(scope, "HUD_INFO_TEXT_VISUAL_SCALE"),
       header.score.width / scoreRowWidth,
-      header.stage.width / stageRowWidth,
     );
     const scoreCenterX = header.score.x + header.score.width / 2;
-    const stageCenterX = header.stage.x + header.stage.width / 2;
     const visualScoreStart = scoreCenterX + (labels[0].x - scoreCenterX) * infoVisualScale;
     const visualScoreEnd = scoreCenterX + (scoreEnd - scoreCenterX) * infoVisualScale;
-    const visualStageStart = stageCenterX + (labels[1].x - stageCenterX) * infoVisualScale;
-    const visualStageEnd = stageCenterX + (stageEnd - stageCenterX) * infoVisualScale;
     const layoutTolerance = 1e-9;
     assert.ok(visualScoreEnd <= header.score.x + header.score.width + layoutTolerance,
       `${width}px score leaves its region`);
@@ -179,10 +172,7 @@ test("five HUD regions keep score, hearts, map, empty ultimates and stage separa
       assert.equal(header.score.y, 13);
     }
     assert.equal(header.map.y, 7);
-    assert.ok(visualStageStart >= header.stage.x - layoutTolerance &&
-      visualStageEnd <= header.stage.x + header.stage.width + layoutTolerance,
-    `${width}px stage leaves its region`);
-    assert.ok(header.stage.x < header.score.x, `${width}px stage and score overlap`);
+    assert.equal(header.stage, undefined);
     assert.ok(header.hearts.x < header.ultimate.x &&
       header.ultimate.x + header.ultimate.width <= width / 2,
     `${width}px hearts and ultimates are not grouped on the left`);
@@ -241,14 +231,14 @@ test("gaining score changes only the numerals in discrete digital steps", () => 
   calls.length = 0;
   scope.drawHud();
   const numbers = read(scope, "hudNumbers");
-  assert.equal(numbers.length, 2);
+  assert.equal(numbers.length, 1);
   assert.ok(Number(numbers[0].text) > 0 && Number(numbers[0].text) < 150);
   assert.equal(calls.filter((call) => call.operation === "rotate").length, 0);
 
   read(scope, `gameTime+=HUD_SCORE_DIGITAL_DURATION; hudNumbers.length=0;`);
   calls.length = 0;
   scope.drawHud();
-  assert.equal(read(scope, "hudNumbers.length"), 2);
+  assert.equal(read(scope, "hudNumbers.length"), 1);
   assert.equal(read(scope, "hudNumbers[0].text"), "150");
   assert.equal(calls.filter((call) => call.operation === "rotate").length, 0);
 });

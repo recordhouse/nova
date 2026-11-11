@@ -66,8 +66,15 @@ test("organic and metal targets play their matching bullet-hit sounds", () => {
   `, scope);
   scope.updateBullets(0);
 
+  vm.runInContext(`
+    enemies.length=0; turrets.length=0; midBosses.length=0; bullets.length=0;
+    midBosses.push({x:1400,y:480,width:118,height:96,hp:28,maxHp:28,alive:true});
+    bullets.push({kind:'player-bullet',x:1450,y:520,vx:0,vy:0,radius:4,ricochets:0});
+  `, scope);
+  scope.updateBullets(0);
+
   assert.deepEqual(soundCalls,
-    ["gun_hit", "gun_hit", "metal", "gun_hit", "gun_hit", "turret_metal"]);
+    ["gun_hit", "gun_hit", "metal", "gun_hit", "gun_hit", "turret_metal", "gun_hit"]);
 });
 
 test("player bullets add one purple electric hit effect to every enemy class", () => {

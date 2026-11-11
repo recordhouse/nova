@@ -31,7 +31,7 @@ function createDisplay(cssWidth = 390, pixelRatio = 3, mobile = false) {
         assert.ok(args.filter((arg) => typeof arg === "number").every(Number.isFinite));
         calls.push({ operation: key, args, alpha: target.globalAlpha,
           color: target.fillStyle, strokeColor: target.strokeStyle,
-          shadowColor: target.shadowColor });
+          shadowColor: target.shadowColor, filter: target.filter });
       };
     },
   });
@@ -74,6 +74,56 @@ function createDisplay(cssWidth = 390, pixelRatio = 3, mobile = false) {
 }
 
 function read(scope, expression) { return vm.runInContext(expression, scope); }
+
+test("the final boss gauge reveals yellow, then red, then the empty track", () => {
+  const { scope, calls } = createDisplay();
+  const gaugeFills = () => calls.filter((call) => call.operation === "fillRect");
+
+  read(scope, `drawPixelGauge(
+    200, 80, 220, 0.5,
+    MONSTER_GAUGE_STYLES[2], MONSTER_GAUGE_STYLES[1]
+  )`);
+  let fills = gaugeFills();
+  assert.ok(fills.some((call) => call.color === "hsl(60, 92%, 52%)" && call.args[2] === 216));
+  assert.ok(fills.some((call) => call.color === "hsl(120, 92%, 52%)" && call.args[2] === 108));
+
+  calls.length = 0;
+  read(scope, `drawPixelGauge(
+    200, 80, 220, 0.5,
+    MONSTER_GAUGE_STYLES[1], MONSTER_GAUGE_STYLES[0]
+  )`);
+  fills = gaugeFills();
+  assert.ok(fills.some((call) => call.color === "hsl(0, 92%, 52%)" && call.args[2] === 216));
+  assert.ok(fills.some((call) => call.color === "hsl(60, 92%, 52%)" && call.args[2] === 108));
+
+  calls.length = 0;
+  read(scope, `drawPixelGauge(
+    200, 80, 220, 0.5,
+    MONSTER_GAUGE_STYLES[0], null
+  )`);
+  fills = gaugeFills();
+  assert.equal(fills.filter((call) => String(call.color).startsWith("hsl(")).length, 2);
+  assert.ok(fills.some((call) => call.color === "rgba(33, 38, 43, 0.94)"));
+});
+
+test("the final boss sprite turns visibly red during its last health phase", () => {
+  const { scope, calls } = createDisplay();
+  scope.bossStandSprite = {
+    loaded: true,
+    image: { naturalWidth: 4400, naturalHeight: 800 },
+  };
+  const drawBoss = (hp) => {
+    calls.length = 0;
+    read(scope, `drawFinalBossStand({
+      x:260,y:220,width:250,height:250,hp:${hp},maxHp:360,
+      healthPhaseHp:120,healthPhaseCount:3,facing:-1,
+      animationTime:0,moving:false,airborne:false
+    })`);
+    return calls.find((call) => call.operation === "drawImage")?.filter;
+  };
+  assert.equal(drawBoss(121), "none");
+  assert.match(drawBoss(120), /sepia\(0\.55\).*saturate\(1\.8\)/);
+});
 
 test("the boss entrance is a larger red vortex without a BOSS label", () => {
   const { scope, calls, gradients } = createDisplay();
@@ -302,6 +352,23 @@ test("the final-boss fan projectile is rendered as a round purple laser orb", ()
   assert.equal(calls.some((call) => call.operation === "lineTo"), false);
 });
 
+test("the final boss hand swipe renders a bright forward slash arc", () => {
+  const { scope, calls } = createDisplay();
+  const image = { naturalWidth: 4400, naturalHeight: 800 };
+  scope.bossStandSprite = { loaded: true, image };
+  read(scope, `drawFinalBossStand({
+    x:260,y:220,width:250,height:250,hp:360,maxHp:360,
+    healthPhaseHp:120,healthPhaseCount:3,facing:1,animationTime:0,
+    finalBoss:true,attackPattern:'swipe',attackState:'fire',
+    fireProgress:0.5,chargeProgress:1
+  })`);
+  const slashArcs = calls.filter((call) => (
+    call.operation === "arc" && call.args[2] >= 165
+  ));
+  assert.ok(slashArcs.length >= 3);
+  assert.ok(slashArcs.some((call) => call.strokeColor === "#fff1ff"));
+});
+
 test("the final-boss jump has no extra effects before its landing shock rings", () => {
   const { scope, calls, gradients } = createDisplay();
   const image = { naturalWidth: 4400, naturalHeight: 800 };
@@ -440,7 +507,7 @@ test("the looping space video replaces the generated star background", () => {
     "the old star layer should not be duplicated over the video");
 });
 
-test("the HUD groups hearts and ultimates left and stage and score right of the centered map", () => {
+test("the HUD groups hearts and ultimates left and score right of the centered map", () => {
   const { scope } = createDisplay();
   for (const [width, height] of [[540, 960], [720, 1280], [960, 540], [1280, 720]]) {
     read(scope, `WIDTH=${width}; HEIGHT=${height}`);
@@ -453,21 +520,19 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
     assert.equal(header.map.height, Math.round(slots.originalHeight * 1.2),
       "the taller minimap keeps its intended proportion beside the videos");
     assert.ok(header.hearts.x + header.hearts.width < header.ultimate.x);
-    assert.ok(header.stage.x + header.stage.width < header.score.x);
+    assert.equal(header.stage, undefined);
     const videoBoundary = portrait ? slots.left[2].x : slots.left[1].x;
     assert.ok(header.hearts.x > videoBoundary,
       "the left HUD group clears the enlarged video");
     assert.ok(header.score.x + header.score.width < width - videoBoundary,
       "the right HUD group clears the enlarged video");
     assert.ok(header.ultimate.x + header.ultimate.width <= width / 2);
-    assert.ok(header.stage.x >= width / 2);
+    assert.ok(header.score.x >= width / 2);
     assert.equal(header.hearts.width, header.ultimate.width);
-    assert.equal(header.stage.width, header.score.width);
-    assert.equal(header.hearts.width, header.stage.width);
+    assert.ok(header.score.width > header.hearts.width);
     assert.ok(header.hearts.width <= 96);
-    assert.equal(header.stage.y, header.score.y);
-    assert.equal(header.hearts.y, header.stage.y);
-    assert.equal(header.ultimate.y, header.stage.y);
+    assert.equal(header.hearts.y, header.score.y);
+    assert.equal(header.ultimate.y, header.score.y);
     if (portrait) {
       assert.ok(header.infoY > slots.height,
         "portrait status rows sit below the enlarged video");
@@ -485,7 +550,7 @@ test("the HUD groups hearts and ultimates left and stage and score right of the 
   }
 });
 
-test("heart, ultimate, stage and score have no underline or background panel", () => {
+test("heart, ultimate and score have no underline or background panel", () => {
   const { scope, calls } = createDisplay();
   calls.length = 0;
   scope.drawHud();

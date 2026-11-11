@@ -27,6 +27,11 @@ function createGame() {
     window: { location: { search: "" }, innerWidth: 720, innerHeight: 1280,
       matchMedia: () => ({ matches: false }) },
     turretSprite: { loaded: true, image: { naturalWidth: 302, naturalHeight: 400 } },
+    turretSprites: {
+      1: { loaded: true, image: { id: "turret1", naturalWidth: 302, naturalHeight: 400 } },
+      2: { loaded: true, image: { id: "turret2", naturalWidth: 351, naturalHeight: 399 } },
+      3: { loaded: true, image: { id: "turret3", naturalWidth: 320, naturalHeight: 424 } },
+    },
   };
   vm.createContext(scope);
   for (const name of ["config", "state", "renderer"]) {
@@ -75,6 +80,21 @@ test("turret artwork sits into the road without moving its physical body", () =>
     turret.y + turret.height + visualGroundOffset,
   ]);
   assert.equal(turret.y, physicalY, "rendering does not move the collision body");
+});
+
+test("turret variants use their matching artwork and preserved aspect widths", () => {
+  const { scope, calls, turret } = createGame();
+  for (const [variant, imageId, width] of [
+    [1, "turret1", 132], [2, "turret2", 153], [3, "turret3", 131],
+  ]) {
+    calls.length = 0;
+    turret.turretVariant = variant;
+    scope.drawTurret(turret);
+    const draw = calls.find((call) => call.operation === "drawImage");
+    assert.equal(draw.args[0].id, imageId);
+    assert.equal(draw.args[3], width);
+    assert.equal(draw.args[4], 174);
+  }
 });
 
 test("cracks mirror with turret facing and stay stable across redraws and hit flashes", () => {

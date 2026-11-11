@@ -119,10 +119,10 @@ test("images, videos and audio must all settle before shared loading reaches 100
     );
   }
 
-  assert.equal(vm.runInContext("visualAssetLoadTasks.length", scope), 42);
-  assert.equal(vm.runInContext("audioAssetLoadTasks.length", scope), 33);
-  assert.equal(pendingAudioFetches.length, 33);
-  assert.equal(images.length, 26);
+  assert.equal(vm.runInContext("visualAssetLoadTasks.length", scope), 44);
+  assert.equal(vm.runInContext("audioAssetLoadTasks.length", scope), 34);
+  assert.equal(pendingAudioFetches.length, 34);
+  assert.equal(images.length, 28);
   assert.equal(videos.length, 16);
   assert.equal(scope.visualAssetsAreReady(), false);
   assert.equal(scope.gameAssetsAreReady(), false);
@@ -135,8 +135,12 @@ test("images, videos and audio must all settle before shared loading reaches 100
 
   const bossImage = images.find((image) => image.currentSrc.includes("images/boss/stand.png"));
   const bossRunImage = images.find((image) => image.currentSrc.includes("images/boss/run.png"));
+  const turret2Image = images.find((image) => image.currentSrc.includes("turret_02.png"));
+  const turret3Image = images.find((image) => image.currentSrc.includes("turret_03.png"));
   assert.ok(bossImage);
   assert.ok(bossRunImage);
+  assert.ok(turret2Image);
+  assert.ok(turret3Image);
   assert.match(bossImage.currentSrc, /^\.\/assets\/images\/boss\/stand\.png/);
   assert.match(bossRunImage.currentSrc, /^\.\/assets\/images\/boss\/run\.png/);
   for (const image of images) {
@@ -161,7 +165,7 @@ test("images, videos and audio must all settle before shared loading reaches 100
   const snapshot = await ready;
   assert.deepEqual(
     { total: snapshot.total, loaded: snapshot.loaded, failed: snapshot.failed },
-    { total: 75, loaded: 75, failed: 1 },
+    { total: 78, loaded: 78, failed: 1 },
   );
   assert.equal(scope.gameAssetsAreReady(), true);
   assert.equal(gameReady, true);

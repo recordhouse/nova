@@ -76,14 +76,26 @@ test("test controls expose four final-boss attacks without sky rain", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
   const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
-  for (const pattern of ["beam", "fan", "dash", "jump-slam"]) {
+  for (const pattern of ["beam", "fan", "swipe", "jump-slam"]) {
     assert.match(html, new RegExp(`data-test-boss-attack="${pattern}"`));
   }
+  assert.doesNotMatch(html, /data-test-boss-attack="dash"/);
   assert.doesNotMatch(html, /data-test-boss-attack="rain"/);
   assert.doesNotMatch(html, /data-test-boss-attack="ground-wave"/);
-  assert.match(css, /\.test-boss-attack-button\[hidden\]\s*\{[^}]*display:\s*none/s);
+  assert.match(css, /\.test-boss-attack-button\[hidden\],[\s\S]*\.test-boss-death-button\[hidden\]\s*\{[^}]*display:\s*none/s);
   assert.match(input, /for \(const button of testBossAttackButtons\)/);
   assert.match(input, /triggerTestFinalBossAttack\(button\.dataset\.testBossAttack\)/);
+});
+
+test("test controls include an immediate final-boss death button", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+  const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
+  assert.match(html, /data-test-boss-death/);
+  assert.match(html, />B·KILL<\/button>/);
+  assert.match(css, /\.test-boss-death-button\s*\{/);
+  assert.match(input, /testBossDeathButton\?\.addEventListener\("click"/);
+  assert.match(input, /triggerTestFinalBossDeath\(\)/);
 });
 
 test("touch controls place ultimate above jump to the left of fire with uppercase labels", () => {

@@ -38,8 +38,9 @@
     <link rel="preload" href="./assets/sound/voice_monster_03.mp3?v=20261021-1" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/voice_turret_01.mp3?v=20261021-1" as="fetch" crossorigin="anonymous" />
     <link rel="preload" href="./assets/sound/voice_boss.mp3?v=20261107-1" as="fetch" crossorigin="anonymous" />
-    <link rel="preload" href="./assets/music/stage_01.mp3?v=20260924-1" as="audio" />
-    <link rel="stylesheet" href="./styles.css?v=20261107-1" />
+    <link rel="preload" href="./assets/music/stage.mp3?v=20261109-1" as="audio" />
+    <link rel="preload" href="./assets/music/boss.mp3?v=20261109-1" as="audio" />
+    <link rel="stylesheet" href="./styles.css?v=20261109-1" />
   </head>
   <body>
     <main class="game-shell" aria-label="NOVA 게임 프로토타입">
@@ -115,10 +116,12 @@
           data-test-boss-attack="beam" aria-label="보스 직선 레이저 공격 실행" hidden>B·BEAM</button>
         <button type="button" class="test-boss-attack-button fan"
           data-test-boss-attack="fan" aria-label="보스 3방향 구형 레이저 공격 실행" hidden>B·ORB</button>
-        <button type="button" class="test-boss-attack-button dash"
-          data-test-boss-attack="dash" aria-label="보스 돌진 공격 실행" hidden>B·DASH</button>
+        <button type="button" class="test-boss-attack-button swipe"
+          data-test-boss-attack="swipe" aria-label="보스 손 휘두르기 공격 실행" hidden>B·SWIPE</button>
         <button type="button" class="test-boss-attack-button jump-slam"
           data-test-boss-attack="jump-slam" aria-label="보스 점프 강타 공격 실행" hidden>B·JUMP</button>
+        <button type="button" class="test-boss-death-button"
+          data-test-boss-death aria-label="보스 즉시 사망 효과 실행" hidden>B·KILL</button>
         <button
           type="button"
           class="test-loading-button"
@@ -253,15 +256,15 @@
       </section>
     </main>
 
-    <script src="./js/config.js?v=20261109-7"></script>
-    <script src="./js/assets.js?v=20261109-1"></script>
+    <script src="./js/config.js?v=20261109-12"></script>
+    <script src="./js/assets.js?v=20261109-4"></script>
     <script src="./js/state.js?v=20261107-1"></script>
-    <script src="./js/world.js?v=20261109-6"></script>
-    <script src="./js/combat.js?v=20261107-3"></script>
+    <script src="./js/world.js?v=20261109-12"></script>
+    <script src="./js/combat.js?v=20261109-4"></script>
     <script src="./js/player.js?v=20261106-1"></script>
-    <script src="./js/enemies.js?v=20261109-6"></script>
-    <script src="./js/renderer.js?v=20261109-3"></script>
-    <script src="./js/input.js?v=20261107-1"></script>
+    <script src="./js/enemies.js?v=20261109-10"></script>
+    <script src="./js/renderer.js?v=20261109-9"></script>
+    <script src="./js/input.js?v=20261109-1"></script>
     <script src="./js/main.js?v=20261107-1"></script>
   </body>
 </html>

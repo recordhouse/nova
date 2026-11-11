@@ -154,7 +154,7 @@ test("boss upper roads form layered spider webs without changing collision geome
   const before = read(scope, "JSON.stringify(platforms)");
   scope.drawTerrain();
   const webRoads = read(scope, "platforms.filter(platform=>platform.bossWebRoad).length");
-  assert.equal(webRoads, 6);
+  assert.equal(webRoads, 11);
   assert.ok(calls.some((call) => call.operation === "quadraticCurveTo"),
     "diagonal support strands should sag like a web");
   assert.ok(calls.some((call) => call.operation === "stroke" &&

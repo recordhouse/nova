@@ -14,6 +14,7 @@ const testMapButton = document.querySelector("[data-test-map]");
 const testPortalButton = document.querySelector("[data-test-portal]");
 const testLoadingButton = document.querySelector("[data-test-loading]");
 const testBossButton = document.querySelector("[data-test-boss]");
+const testBossDeathButton = document.querySelector("[data-test-boss-death]");
 const testBossAttackButtons = [
   ...(document.querySelectorAll?.("[data-test-boss-attack]") ?? []),
 ];
@@ -361,7 +362,7 @@ const ENEMY_SPAWN_MIN_LENGTH = 92;
 const ENEMY_SPAWN_SLOT_LENGTH = 420;
 const ENEMY_SPAWN_MAX_SLOTS = 5;
 const ENEMY_SPAWN_DENSITY = 1;
-const ENEMY_ELITE_START_PROGRESS = 0.72;
+const ENEMY_ELITE_START_DISTANCE = 42000;
 const ENEMY_ELITE_HP_MULTIPLIER = 1.5;
 const ENEMY_ELITE_SPEED_MULTIPLIER = 1.16;
 const ENEMY_ELITE_ATTACK_INTERVAL_MULTIPLIER = 0.82;
@@ -405,6 +406,80 @@ const TURRET = {
   minimumSeparation: 520,
   score: 350,
 };
+const TURRET_VARIANTS = Object.freeze({
+  1: Object.freeze({
+    variant: 1,
+    spriteWidth: 132,
+    spriteHeight: 174,
+    spriteBottomOffset: 3,
+    visualGroundOffset: 12,
+    muzzleHeightRatio: 0.2,
+    fireInterval: 4.2,
+    burstMinShots: 1,
+    burstMaxShots: 3,
+    burstShotInterval: 0.45,
+    chargeDuration: 0.95,
+    laserSpeed: 420,
+    laserRadius: 10,
+    laserRicochets: 5,
+    laserColor: "#dc347f",
+    chargeColor: "#ff609f",
+    chargeDimColor: "#9a245f",
+    muzzleColor: "#f04b96",
+    muzzleDimColor: "#6d153f",
+    laneOffsets: Object.freeze([0]),
+  }),
+  2: Object.freeze({
+    variant: 2,
+    spriteWidth: 153,
+    spriteHeight: 174,
+    spriteBottomOffset: 3,
+    visualGroundOffset: 12,
+    muzzleHeightRatio: 0.275,
+    fireInterval: 4.2,
+    burstMinShots: 1,
+    burstMaxShots: 1,
+    burstShotInterval: 0.45,
+    chargeDuration: 0.95,
+    laserSpeed: 460,
+    laserRadius: 8,
+    laserRicochets: 3,
+    laserColor: "#ffd24f",
+    chargeColor: "#fff08a",
+    chargeDimColor: "#b87813",
+    muzzleColor: "#ffd95f",
+    muzzleDimColor: "#8e5810",
+    laneOffsets: Object.freeze([-11, 11]),
+  }),
+  3: Object.freeze({
+    variant: 3,
+    spriteWidth: 131,
+    spriteHeight: 174,
+    spriteBottomOffset: 3,
+    visualGroundOffset: 12,
+    muzzleHeightRatio: 0.42,
+    fireInterval: 4.2,
+    burstMinShots: 1,
+    burstMaxShots: 3,
+    burstShotInterval: 0.45,
+    chargeDuration: 0.95,
+    laserSpeed: 520,
+    laserRadius: 8,
+    laserRicochets: 0,
+    laserColor: "#3fffe4",
+    chargeColor: "#8ffff0",
+    chargeDimColor: "#147f82",
+    muzzleColor: "#42f5e0",
+    muzzleDimColor: "#0e6870",
+    laneOffsets: Object.freeze([0]),
+  }),
+});
+
+function turretVariantDefinition(turretOrVariant = 1) {
+  const variant = typeof turretOrVariant === "number"
+    ? turretOrVariant : turretOrVariant?.turretVariant ?? 1;
+  return TURRET_VARIANTS[variant] ?? TURRET_VARIANTS[1];
+}
 const MID_BOSS_ENABLED = false;
 const MID_BOSS = {
   width: 118,
@@ -433,9 +508,12 @@ const FINAL_BOSS = {
   standGroundOffset: 25,
   runGroundOffset: 14,
   hp: 120,
+  healthPhaseCount: 3,
+  phaseMinionCount: 4,
+  redPhaseSpeedMultiplier: 1.5,
   score: 6000,
   activationRangeX: 1100,
-  activationRangeY: 680,
+  activationRangeY: 1100,
   idleDuration: 1.1,
   moveDuration: 1.85,
   moveSpeed: 205,
@@ -446,6 +524,7 @@ const FINAL_BOSS = {
   platformJumpMaxHeightDifference: 260,
   platformJumpMinimumPlayerGap: 260,
   platformJumpCooldown: 0.35,
+  maximumPlatformTier: 4,
   chargeDuration: 0.88,
   fireDuration: 0.82,
   recoveryDuration: 0.95,
@@ -458,7 +537,7 @@ const FINAL_BOSS = {
   beamProjectileLife: 8,
   beamMaxAngle: Math.PI / 3,
   beamDamage: 1,
-  attackPatterns: ["beam", "fan", "dash", "jump-slam"],
+  attackPatterns: ["beam", "fan", "swipe", "jump-slam"],
   fanChargeDuration: 0.6,
   fanFireDuration: 0.7,
   fanProjectileCount: 6,
@@ -474,10 +553,12 @@ const FINAL_BOSS = {
   rainProjectileInterval: 0.12,
   rainSpacing: 92,
   rainProjectileSpeed: 930,
-  dashChargeDuration: 0.48,
-  dashFireDuration: 0.6,
-  dashSpeed: 980,
-  dashPassDistance: 180,
+  swipeChargeDuration: 0.72,
+  swipeFireDuration: 0.52,
+  swipeRange: 300,
+  swipeVerticalRange: 190,
+  swipeImpactProgress: 0.34,
+  swipeDamage: 1,
   jumpChargeDuration: 0.58,
   jumpFireDuration: 0.9,
   jumpHeight: 270,

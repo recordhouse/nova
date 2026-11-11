@@ -1860,7 +1860,7 @@ const MONSTER_GAUGE_STYLES = [0, 60, 120].map((hue) => ({
   highlight: `hsl(${hue}, 92%, 76%)`,
 }));
 
-function drawPixelGauge(centerX, topY, width, ratio, style) {
+function drawPixelGauge(centerX, topY, width, ratio, style, underStyle = null) {
   const height = 8;
   const left = pixelSnap(centerX - width / 2, 1);
   const top = pixelSnap(topY, 1);
@@ -1873,6 +1873,12 @@ function drawPixelGauge(centerX, topY, width, ratio, style) {
   ctx.fillRect(left - 1, top - 1, width + 2, height + 2);
   ctx.fillStyle = style.track;
   ctx.fillRect(left, top, width, height);
+  if (underStyle) {
+    ctx.fillStyle = underStyle.fill;
+    ctx.fillRect(left + 2, top + 2, width - 4, 4);
+    ctx.fillStyle = underStyle.highlight;
+    ctx.fillRect(left + 2, top + 2, width - 4, 2);
+  }
   if (filledWidth > 0) {
     ctx.fillStyle = style.fill;
     ctx.fillRect(left + 2, top + 2, filledWidth, 4);
@@ -1907,14 +1913,15 @@ function drawMonsterHealthGauge(enemy, pose) {
 }
 
 function drawTurretHealthGauge(turret, visualBottomY) {
+  const definition = turretVariantDefinition(turret);
   const ratio = Math.max(0, Math.min(1,
     turret.hp / Math.max(1, turret.maxHp),
   ));
   const colorStage = ratio > 0.6 ? 2 : ratio > 0.3 ? 1 : 0;
   drawPixelGauge(
     turret.x + turret.width / 2,
-    visualBottomY - TURRET.spriteHeight + TURRET.spriteBottomOffset - 13,
-    Math.max(58, Math.min(72, TURRET.spriteWidth * 0.72)),
+    visualBottomY - definition.spriteHeight + definition.spriteBottomOffset - 13,
+    Math.max(58, Math.min(72, definition.spriteWidth * 0.72)),
     ratio,
     MONSTER_GAUGE_STYLES[colorStage],
   );
@@ -2496,10 +2503,14 @@ function drawTurretDamageCracks(turret) {
 }
 
 function drawTurret(turret) {
+  const definition = turretVariantDefinition(turret);
   const bottomY = turret.y + turret.height;
-  const visualBottomY = bottomY + TURRET.visualGroundOffset;
-  const charge = turret.active && turret.burstShotsRemaining === 0 && turret.fireTimer <= TURRET.chargeDuration
-    ? Math.max(0, Math.min(1, 1 - turret.fireTimer / TURRET.chargeDuration))
+  const visualBottomY = bottomY + definition.visualGroundOffset;
+  const charge = (
+    turret.active && turret.burstShotsRemaining === 0 &&
+    turret.fireTimer <= definition.chargeDuration
+  )
+    ? Math.max(0, Math.min(1, 1 - turret.fireTimer / definition.chargeDuration))
     : 0;
   const recoil = Math.max(0, turret.recoilTimer / 0.2);
   const hitPulse = Math.max(0, turret.hitTimer / 0.18);
@@ -2513,23 +2524,24 @@ function drawTurret(turret) {
   ctx.scale(turret.facing, 1);
   if (hitPulse > 0) ctx.filter = "brightness(1.8) saturate(1.35)";
 
-  if (
-    turretSprite.loaded &&
-    turretSprite.image.naturalWidth &&
-    turretSprite.image.naturalHeight
-  ) {
+  const sprite = typeof turretSprites !== "undefined"
+    ? turretSprites[definition.variant] ?? turretSprites[1]
+    : typeof turretSprite !== "undefined" ? turretSprite : null;
+  if (sprite?.loaded && sprite.image.naturalWidth && sprite.image.naturalHeight) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(
-      turretSprite.image,
-      -TURRET.spriteWidth / 2,
-      -TURRET.spriteHeight + TURRET.spriteBottomOffset,
-      TURRET.spriteWidth,
-      TURRET.spriteHeight,
+      sprite.image,
+      -definition.spriteWidth / 2,
+      -definition.spriteHeight + definition.spriteBottomOffset,
+      definition.spriteWidth,
+      definition.spriteHeight,
     );
   } else {
-    ctx.fillStyle = "#351343";
+    ctx.fillStyle = definition.variant === 2 ? "#4a3510"
+      : definition.variant === 3 ? "#0d4147" : "#351343";
     ctx.fillRect(-turret.width / 2, -turret.height, turret.width, turret.height);
-    ctx.fillStyle = "#b735e8";
+    ctx.fillStyle = definition.variant === 2 ? "#f5b82e"
+      : definition.variant === 3 ? "#2ee6da" : "#b735e8";
     ctx.fillRect(0, -turret.height * 0.82, turret.width * 0.62, 13);
   }
   drawTurretDamageCracks(turret);
@@ -2541,13 +2553,15 @@ function drawTurret(turret) {
   const muzzle = turretMuzzlePosition(turret);
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  ctx.shadowColor = "#a71cff";
+  ctx.shadowColor = definition.chargeColor;
   ctx.shadowBlur = 15 + charge * 28;
-  ctx.fillStyle = `rgba(119, 20, 184, ${0.42 + charge * 0.38})`;
+  ctx.fillStyle = definition.chargeDimColor;
+  ctx.globalAlpha = 0.42 + charge * 0.38;
   ctx.beginPath();
   ctx.arc(muzzle.x, muzzle.y, 5 + charge * 9 * pulse, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = `rgba(221, 116, 255, ${0.3 + charge * 0.55})`;
+  ctx.globalAlpha = 0.3 + charge * 0.55;
+  ctx.strokeStyle = definition.chargeColor;
   ctx.lineWidth = 2;
   for (let ring = 0; ring < 2; ring += 1) {
     const ringRadius = 10 + ring * 9 + (1 - charge) * 13;
@@ -2576,10 +2590,10 @@ function finalBossVisualAttackOrigin(boss) {
       y: boss.y - 48,
     };
   }
-  if (pattern === "dash") {
+  if (pattern === "swipe") {
     return {
-      x: boss.x + boss.width / 2,
-      y: boss.y + boss.height * 0.56,
+      x: boss.x + boss.width / 2 + boss.facing * boss.width * 0.42,
+      y: boss.y + boss.height * 0.5,
     };
   }
   if (pattern === "jump-slam") {
@@ -2652,19 +2666,45 @@ function drawFinalBossPatternTelegraph(boss) {
       );
       ctx.stroke();
     }
-  } else if (pattern === "dash") {
+  } else if (pattern === "swipe") {
     const centerX = boss.x + boss.width / 2;
-    const centerY = boss.y + boss.height * 0.58;
-    ctx.globalAlpha = charging ? 0.35 + progress * 0.52 : 0.68;
-    ctx.strokeStyle = "#ff3f78";
-    ctx.lineWidth = charging ? 5 + progress * 7 : 8;
-    for (let line = 0; line < 4; line += 1) {
-      const y = centerY + (line - 1.5) * 22;
-      const length = (charging ? 210 + progress * 250 : 290) - line * 25;
-      ctx.beginPath();
-      ctx.moveTo(centerX - boss.facing * boss.width * 0.25, y);
-      ctx.lineTo(centerX - boss.facing * length, y);
-      ctx.stroke();
+    const centerY = boss.y + boss.height * 0.5;
+    if (charging) {
+      const hand = finalBossVisualAttackOrigin(boss);
+      ctx.globalAlpha = 0.34 + progress * 0.58;
+      ctx.strokeStyle = "#efb8ff";
+      ctx.lineWidth = 3 + progress * 4;
+      for (let ring = 0; ring < 3; ring += 1) {
+        ctx.beginPath();
+        ctx.arc(
+          hand.x,
+          hand.y,
+          22 + ring * 14 + progress * 9,
+          gameTime * (2.8 + ring * 0.35),
+          gameTime * (2.8 + ring * 0.35) + Math.PI * (0.82 + ring * 0.08),
+        );
+        ctx.stroke();
+      }
+    } else {
+      const swingProgress = Math.max(0, Math.min(1, (boss.fireProgress ?? 0) / 0.72));
+      const startAngle = boss.facing > 0 ? -1.05 : Math.PI + 1.05;
+      const endAngle = startAngle + boss.facing * 2.1 * swingProgress;
+      ctx.globalAlpha = Math.max(0.18, 1 - Math.max(0, swingProgress - 0.62) / 0.38);
+      const colors = ["rgba(255, 31, 116, 0.72)", "#dc75ff", "#fff1ff"];
+      for (let trail = 0; trail < 3; trail += 1) {
+        ctx.strokeStyle = colors[trail];
+        ctx.lineWidth = 20 - trail * 7;
+        ctx.beginPath();
+        ctx.arc(
+          centerX,
+          centerY,
+          FINAL_BOSS.swipeRange * (0.58 + trail * 0.035),
+          startAngle,
+          endAngle,
+          boss.facing < 0,
+        );
+        ctx.stroke();
+      }
     }
   }
   ctx.restore();
@@ -2812,9 +2852,35 @@ function drawFinalBossBeam(bullet) {
   ctx.restore();
 }
 
+function finalBossHealthGaugeState(boss) {
+  const phaseHp = Math.max(1, boss.healthPhaseHp ?? FINAL_BOSS.hp);
+  const phaseCount = Math.max(1, boss.healthPhaseCount ?? 1);
+  const remainingPhases = Math.max(1, Math.ceil(Math.max(0, boss.hp) / phaseHp));
+  const phaseIndex = Math.max(0, Math.min(
+    phaseCount - 1,
+    phaseCount - remainingPhases,
+  ));
+  const phaseRemainingHp = boss.hp > 0
+    ? ((boss.hp - 1) % phaseHp) + 1
+    : 0;
+  const phaseColorStages = [2, 1, 0];
+  const underColorStages = [1, 0, null];
+  return {
+    phaseIndex,
+    ratio: Math.max(0, Math.min(1, phaseRemainingHp / phaseHp)),
+    colorStage: phaseColorStages[phaseIndex] ?? 0,
+    underColorStage: underColorStages[phaseIndex] ?? null,
+  };
+}
+
 function drawFinalBossStand(boss) {
   const centerX = boss.x + boss.width / 2;
   const bottomY = boss.y + boss.height;
+  const gauge = finalBossHealthGaugeState(boss);
+  const redPhase = (
+    boss.hp > 0 &&
+    gauge.phaseIndex >= Math.max(0, (boss.healthPhaseCount ?? 1) - 1)
+  );
   const canUseRunSprite = (
     boss.moving && !boss.airborne &&
     typeof bossRunSprite !== "undefined" &&
@@ -2848,6 +2914,9 @@ function drawFinalBossStand(boss) {
   ctx.translate(centerX, bottomY + groundOffset);
   // The source artwork naturally faces left.
   ctx.scale(boss.facing < 0 ? 1 : -1, 1);
+  ctx.filter = redPhase
+    ? "sepia(0.55) saturate(1.8) hue-rotate(-25deg) brightness(1.04) contrast(1.08)"
+    : "none";
   if (
     sprite?.loaded &&
     sprite.image.naturalWidth &&
@@ -2871,7 +2940,7 @@ function drawFinalBossStand(boss) {
       FINAL_BOSS.spriteHeight,
     );
   } else {
-    ctx.fillStyle = "#4d102c";
+    ctx.fillStyle = redPhase ? "#8c1327" : "#4d102c";
     ctx.fillRect(
       -boss.width / 2,
       -boss.height,
@@ -2885,14 +2954,15 @@ function drawFinalBossStand(boss) {
   drawFinalBossCharge(boss);
   drawFinalBossJumpImpact(boss);
 
-  const ratio = Math.max(0, Math.min(1, boss.hp / Math.max(1, boss.maxHp)));
-  const colorStage = ratio > 0.6 ? 2 : ratio > 0.3 ? 1 : 0;
   drawPixelGauge(
     centerX,
     bottomY - FINAL_BOSS.spriteHeight - 16,
     220,
-    ratio,
-    MONSTER_GAUGE_STYLES[colorStage],
+    gauge.ratio,
+    MONSTER_GAUGE_STYLES[gauge.colorStage],
+    gauge.underColorStage === null
+      ? null
+      : MONSTER_GAUGE_STYLES[gauge.underColorStage],
   );
 }
 
@@ -3325,9 +3395,36 @@ function drawProjectiles() {
     }
     if (bullet.kind === "turret-laser") {
       const pulse = 0.86 + Math.sin(gameTime * 28) * 0.14;
+      const turretVariant = bullet.turretVariant ?? 1;
       ctx.save();
       ctx.translate(bullet.x, bullet.y);
       ctx.globalCompositeOperation = "lighter";
+      if (turretVariant === 2 || turretVariant === 3) {
+        const brightColor = turretVariant === 2 ? "#fff6bd" : "#d7fffa";
+        const middleColor = turretVariant === 2 ? "#ffd24f" : "#3fffe4";
+        const outerColor = turretVariant === 2
+          ? "rgba(255, 174, 35, 0.5)" : "rgba(31, 232, 220, 0.5)";
+        ctx.rotate(Math.atan2(bullet.vy, bullet.vx));
+        ctx.lineCap = "round";
+        ctx.shadowColor = middleColor;
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = outerColor;
+        ctx.lineWidth = 14 * pulse;
+        ctx.beginPath();
+        ctx.moveTo(-30, 0);
+        ctx.lineTo(13, 0);
+        ctx.stroke();
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = middleColor;
+        ctx.lineWidth = 6;
+        ctx.stroke();
+        ctx.shadowBlur = 3;
+        ctx.strokeStyle = brightColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+        continue;
+      }
       ctx.shadowColor = "#dc216f";
       ctx.shadowBlur = 22;
       ctx.fillStyle = "rgba(91, 8, 56, 0.94)";
@@ -4436,10 +4533,46 @@ function drawMonster5OrbBlast(particle) {
   ctx.restore();
 }
 
+function drawFinalBossDeathBlast(particle) {
+  const remaining = Math.max(0, particle.life / particle.maxLife);
+  const progress = 1 - remaining;
+  const eased = 1 - (1 - progress) ** 2.4;
+  const radius = particle.size * (0.08 + eased * 0.72);
+  ctx.save();
+  ctx.translate(pixelSnap(particle.x), pixelSnap(particle.y));
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = Math.pow(remaining, 0.68);
+  ctx.shadowColor = "#ff3f91";
+  ctx.shadowBlur = 34 * remaining;
+  for (let ring = 0; ring < 3; ring += 1) {
+    ctx.strokeStyle = ring === 0 ? "#fff4e8"
+      : ring === 1 ? "#ff66aa" : "#8f2dff";
+    ctx.lineWidth = Math.max(2, (9 - ring * 2.4) * remaining);
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * (0.72 + ring * 0.16), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  for (let ray = 0; ray < 20; ray += 1) {
+    ctx.save();
+    ctx.rotate(ray * Math.PI / 10 + (particle.phase ?? 0));
+    const start = radius * 0.36;
+    const length = particle.size * (0.12 + (ray % 5) * 0.018) * remaining;
+    ctx.fillStyle = ray % 3 === 0 ? "#fff4e8"
+      : ray % 2 === 0 ? "#ff6cab" : "#b351ff";
+    ctx.fillRect(start, ray % 2 === 0 ? -2 : -1, length, ray % 2 === 0 ? 4 : 2);
+    ctx.restore();
+  }
+  const coreSize = Math.max(3, particle.size * 0.16 * remaining);
+  ctx.fillStyle = "#fff8ef";
+  ctx.fillRect(-coreSize, -coreSize, coreSize * 2, coreSize * 2);
+  ctx.restore();
+}
+
 function drawParticles() {
   for (const particle of particles) {
     const cullMargin = particle.crimsonGrenadeBlast ||
-      particle.turretMushroomBlast || particle.monster5OrbBlast
+      particle.turretMushroomBlast || particle.monster5OrbBlast ||
+      particle.finalBossDeathBlast
       ? particle.size + 48 : 120;
     if (
       particle.x < cameraX - cullMargin ||
@@ -4449,7 +4582,9 @@ function drawParticles() {
     ) continue;
     ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife);
     ctx.fillStyle = particle.color;
-    if (particle.monster5OrbBlast) {
+    if (particle.finalBossDeathBlast) {
+      drawFinalBossDeathBlast(particle);
+    } else if (particle.monster5OrbBlast) {
       drawMonster5OrbBlast(particle);
     } else if (particle.debris) {
       drawCombatDebris(particle);
@@ -4940,12 +5075,6 @@ function hudHeaderLayout() {
     mainHeight: mapHeight,
     infoY,
     infoHeight,
-    stage: {
-      x: rightGroupX,
-      y: infoY,
-      width: sideRegionWidth,
-      height: infoHeight,
-    },
     hearts: {
       x: leftGroupX,
       y: infoY,
@@ -4960,9 +5089,9 @@ function hudHeaderLayout() {
       height: infoHeight,
     },
     score: {
-      x: rightGroupX + sideRegionWidth + groupGap,
+      x: rightGroupX,
       y: infoY,
-      width: sideRegionWidth,
+      width: sideGroupWidth,
       height: infoHeight,
     },
   };
@@ -5935,7 +6064,6 @@ function drawHud() {
   const valueY = infoCenterY - 9 * hudScale / 2;
   const textGap = 3;
   const scoreText = String(digitalHudScoreValue()).padStart(3, "0");
-  const stageText = String(CURRENT_STAGE).padStart(2, "0");
   const scoreLabelWidth = pixelTextWidth("SCORE", labelScale);
   const scoreValueWidth = hudNumeralWidth(scoreText, hudScale);
   const scoreRowWidth = scoreLabelWidth + textGap + scoreValueWidth;
@@ -5943,14 +6071,9 @@ function drawHud() {
   const scoreValueX = scoreX + scoreLabelWidth + textGap;
   const scoreCenterX = header.score.x + header.score.width / 2;
   const scoreCenterY = infoCenterY;
-  const stageCenterY = infoCenterY;
-  const stageLabelWidth = pixelTextWidth("STAGE", labelScale);
-  const stageValueWidth = hudNumeralWidth(stageText, hudScale);
-  const stageRowWidth = stageLabelWidth + textGap + stageValueWidth;
   const infoVisualScale = Math.min(
     HUD_INFO_TEXT_VISUAL_SCALE,
     header.score.width / scoreRowWidth,
-    header.stage.width / stageRowWidth,
   );
   const canTransformHudText = typeof ctx.translate === "function" &&
     typeof ctx.scale === "function";
@@ -5983,30 +6106,6 @@ function drawHud() {
   drawHudNumerals(
     scoreText,
     scoreValueX,
-    valueY,
-    hudScale,
-  );
-  ctx.restore();
-
-  const stageStartX = header.stage.x + (header.stage.width - stageRowWidth) / 2;
-  const stageValueX = stageStartX + stageLabelWidth + textGap;
-  const stageCenterX = header.stage.x + header.stage.width / 2;
-  ctx.save();
-  if (canTransformHudText) {
-    ctx.translate(stageCenterX, stageCenterY);
-    ctx.scale(infoVisualScale, infoVisualScale);
-    ctx.translate(-stageCenterX, -stageCenterY);
-  }
-  drawPixelText(
-    "STAGE",
-    stageStartX,
-    labelY,
-    labelScale,
-    "#99dce5",
-  );
-  drawHudNumerals(
-    stageText,
-    stageValueX,
     valueY,
     hudScale,
   );

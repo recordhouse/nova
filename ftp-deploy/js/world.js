@@ -1700,6 +1700,7 @@ function generateBossMap() {
   invalidatePlatformSpatialIndex();
   branches.length = 0;
   midBosses.length = 0;
+  heartItems.length = 0;
   bossDoor = null;
   nextPlatformId = 1;
   mapSeed = Math.floor(Math.random() * 4294967295) >>> 0;
@@ -1725,7 +1726,7 @@ function generateBossMap() {
   decorateBossRoad(startingRoad);
 
   // Keep the boss map compact horizontally. The unbroken lower route catches
-  // missed jumps, while the two stacked routes provide the main traversal.
+  // missed jumps, while four stacked routes create five traversable floors.
   const groundPlan = [
     { kind: "flat", width: 260 },
     { kind: "ramp", width: 220, level: -0.35 },
@@ -1774,8 +1775,8 @@ function generateBossMap() {
   decorateBossRoad(arena, "arena");
   arena.bossCombatPlatform = true;
 
-  // Tier 1 leaves deliberate double-jump gaps. Tier 2 uses long combat decks
-  // that bridge those gaps so the boss can climb and keep fighting vertically.
+  // Tier 1 leaves deliberate double-jump gaps. Higher tiers alternate long
+  // combat decks so both the player and boss can climb the five-floor arena.
   const upperPlan = [
     { tier: 1, offset: 80, width: 640, lift: 0.78 },
     { tier: 1, offset: 1060, width: 700, lift: 0.92, tilt: -0.06 },
@@ -1783,6 +1784,11 @@ function generateBossMap() {
     { tier: 2, offset: 380, width: 900, lift: 2.12, tilt: 0.04 },
     { tier: 2, offset: 1380, width: 960, lift: 2.18 },
     { tier: 2, offset: 2360, width: 980, lift: 2.12, tilt: -0.04 },
+    { tier: 3, offset: 580, width: 950, lift: 3.35, tilt: 0.04 },
+    { tier: 3, offset: 1680, width: 920, lift: 3.42 },
+    { tier: 3, offset: 2660, width: 700, lift: 3.32, tilt: -0.03 },
+    { tier: 4, offset: 830, width: 1040, lift: 4.55 },
+    { tier: 4, offset: 2050, width: 1120, lift: 4.58, tilt: 0.03 },
   ];
   for (let index = 0; index < upperPlan.length; index += 1) {
     const step = upperPlan[index];
@@ -1821,6 +1827,20 @@ function generateBossMap() {
     jumpPlatforms.push(platform);
   }
 
+  for (let tier = 1; tier <= FINAL_BOSS.maximumPlatformTier; tier += 1) {
+    const tierPlatforms = jumpPlatforms.filter((platform) => (
+      platform.bossVerticalTier === tier
+    ));
+    const heartPlatform = tierPlatforms[Math.floor(tierPlatforms.length / 2)];
+    if (!heartPlatform) continue;
+    tryAddHeartItem(
+      heartPlatform,
+      heartPlatform.start + 80,
+      heartPlatform.end - 80,
+      false,
+    );
+  }
+
   addFinalBoss(arena);
 
   branches.push({
@@ -1843,6 +1863,20 @@ function generateBossMap() {
         trick: "boss-jumps-high",
         platforms: jumpPlatforms
           .filter((platform) => platform.bossVerticalTier === 2)
+          .map((platform) => platform.id),
+      },
+      {
+        role: "sub",
+        trick: "boss-jumps-upper",
+        platforms: jumpPlatforms
+          .filter((platform) => platform.bossVerticalTier === 3)
+          .map((platform) => platform.id),
+      },
+      {
+        role: "sub",
+        trick: "boss-jumps-top",
+        platforms: jumpPlatforms
+          .filter((platform) => platform.bossVerticalTier === 4)
           .map((platform) => platform.id),
       },
     ],
@@ -2579,10 +2613,12 @@ function addEnemy(platform, x, kind = "monster1", options = {}) {
   return enemy;
 }
 
-function addTurret(platform, x) {
+function addTurret(platform, x, turretVariant = 1) {
+  const definition = turretVariantDefinition(turretVariant);
   const surfaceY = platformSurfaceY(platform, x + TURRET.width / 2);
   turrets.push({
     kind: "turret",
+    turretVariant: definition.variant,
     x,
     y: surfaceY - TURRET.height,
     width: TURRET.width,
@@ -2591,7 +2627,7 @@ function addTurret(platform, x) {
     hp: TURRET.hp,
     maxHp: TURRET.hp,
     facing: -platform.direction,
-    fireTimer: TURRET.fireInterval * (0.55 + mapRandom() * 0.45),
+    fireTimer: definition.fireInterval * (0.55 + mapRandom() * 0.45),
     burstShotsRemaining: 0,
     chargeParticleTimer: 0,
     recoilTimer: 0,
@@ -2642,8 +2678,11 @@ function addFinalBoss(platform) {
     targetY: surfaceY - FINAL_BOSS.height,
     width: FINAL_BOSS.width,
     height: FINAL_BOSS.height,
-    hp: FINAL_BOSS.hp,
-    maxHp: FINAL_BOSS.hp,
+    hp: FINAL_BOSS.hp * FINAL_BOSS.healthPhaseCount,
+    maxHp: FINAL_BOSS.hp * FINAL_BOSS.healthPhaseCount,
+    healthPhaseHp: FINAL_BOSS.hp,
+    healthPhaseCount: FINAL_BOSS.healthPhaseCount,
+    lastSummonedHealthPhase: 0,
     score: FINAL_BOSS.score,
     platform,
     group: platform.group,
@@ -2665,6 +2704,7 @@ function addFinalBoss(platform) {
     beamTravelDistance: 0,
     patternShotsFired: 0,
     patternShotTimer: 0,
+    swipeHitApplied: false,
     rainTargets: [],
     moving: false,
     airborne: false,
@@ -2677,10 +2717,109 @@ function addFinalBoss(platform) {
     jumpImpactTimer: 0,
     attackVoiceCooldown: FINAL_BOSS.attackVoiceInitialDelay,
     finalBoss: true,
+    deathResolved: false,
+    deathExplosionTriggered: false,
     alive: true,
   };
   midBosses.push(boss);
   return boss;
+}
+
+function spawnFinalBossPhaseMinions(
+  boss,
+  count = FINAL_BOSS.phaseMinionCount,
+) {
+  if (
+    !boss?.finalBoss || !boss.alive || currentArea !== "boss" ||
+    !Number.isFinite(count) || count <= 0
+  ) return [];
+
+  const definition = MONSTER_TYPES.monster1;
+  const bossCenterX = boss.x + boss.width / 2;
+  const bossCenterY = boss.y + boss.height / 2;
+  const playerCenterX = player.x + player.width / 2;
+  const playerCenterY = player.y + player.height / 2;
+  const candidates = [];
+
+  for (const platform of platforms) {
+    if (!platform.bossCombatPlatform) continue;
+    const minimumX = platform.start + 34;
+    const maximumX = platform.end - definition.width - 34;
+    if (maximumX < minimumX) continue;
+    const spacing = definition.width + 58;
+    const slotCount = Math.max(1, Math.floor((maximumX - minimumX) / spacing) + 1);
+    const actualSpacing = slotCount > 1
+      ? (maximumX - minimumX) / (slotCount - 1) : 0;
+    for (let slot = 0; slot < slotCount; slot += 1) {
+      const x = minimumX + actualSpacing * slot;
+      const centerX = x + definition.width / 2;
+      const surfaceY = platformSurfaceY(platform, centerX);
+      const y = surfaceY - definition.height;
+      const centerY = y + definition.height / 2;
+      const playerClearanceX = (definition.width + player.width) / 2 + 90;
+      const playerClearanceY = (definition.height + player.height) / 2 + 48;
+      const bossClearanceX = (definition.width + boss.width) / 2 + 54;
+      const bossClearanceY = (definition.height + boss.height) / 2 + 40;
+      if (
+        (
+          Math.abs(centerX - playerCenterX) < playerClearanceX &&
+          Math.abs(centerY - playerCenterY) < playerClearanceY
+        ) || (
+          Math.abs(centerX - bossCenterX) < bossClearanceX &&
+          Math.abs(centerY - bossCenterY) < bossClearanceY
+        ) || enemyRectOverlapsEnemy(
+          x,
+          y,
+          definition.width,
+          definition.height,
+          null,
+          36,
+        )
+      ) continue;
+      const onScreen = (
+        centerX >= cameraX - 80 && centerX <= cameraX + WIDTH + 80 &&
+        centerY >= cameraY - 80 && centerY <= cameraY + HEIGHT + 80
+      );
+      candidates.push({
+        platform,
+        x,
+        centerX,
+        centerY,
+        score: (
+          (platform === boss.platform ? -100000 : 0) +
+          (onScreen ? -12000 : 0) +
+          Math.abs(centerX - bossCenterX) +
+          Math.abs(centerY - bossCenterY) * 1.4
+        ),
+      });
+    }
+  }
+
+  candidates.sort((first, second) => first.score - second.score);
+  const spawned = [];
+  for (const candidate of candidates) {
+    if (spawned.length >= Math.floor(count)) break;
+    const enemy = addEnemy(candidate.platform, candidate.x, "monster1", {
+      eliteVariant: false,
+      crimsonVariant: false,
+      rollCrimson: false,
+    });
+    if (!enemy) continue;
+    enemy.summonedByFinalBoss = true;
+    enemy.facing = Math.sign(playerCenterX - candidate.centerX) || boss.facing || -1;
+    enemy.attackDirection = enemy.facing;
+    enemy.simulationSleeping = false;
+    spawned.push(enemy);
+    if (typeof burst === "function") {
+      burst(candidate.centerX, candidate.centerY, "#ff315f", 14, 170);
+      burst(candidate.centerX, candidate.centerY, "#ffd0dc", 7, 105);
+    }
+  }
+  if (spawned.length > 0) {
+    invalidateHostileSpatialIndexes();
+    if (typeof shake !== "undefined") shake = Math.max(shake, 8);
+  }
+  return spawned;
 }
 
 function stageSpawnIsInStartSafeZone(platform, x, definition) {
@@ -2764,26 +2903,25 @@ function tryAddHeartItem(platform, startX, endX, avoidEnemies = true) {
   return false;
 }
 
-function buildStage() {
-  const lastMainGroup = platforms.reduce((maximum, platform) => (
-    platform.routeRole === "sub"
-      ? maximum : Math.max(maximum, platform.group ?? 0)
-  ), 0);
-  const bossApproachGroup = Math.max(
-    1,
-    bossDoor?.platform?.group ?? lastMainGroup,
-  );
+function assignEnemyEliteStrengthByStartDistance() {
+  const startingRoad = platforms.find((platform) => platform.startingRoad) ?? platforms[0];
+  if (!startingRoad) return;
+  const startX = 110 + player.width / 2;
+  const startY = platformSurfaceY(startingRoad, startX);
   for (const platform of platforms) {
-    const progress = Math.max(
-      0,
-      Math.min(1, (platform.group ?? 0) / bossApproachGroup),
+    const centerX = (platform.start + platform.end) / 2;
+    const centerY = platformSurfaceY(platform, centerX);
+    const distanceFromStart = Math.hypot(
+      centerX - startX,
+      centerY - startY,
     );
-    platform.enemyEliteChance = progress <= ENEMY_ELITE_START_PROGRESS
-      ? 0
-      : (progress - ENEMY_ELITE_START_PROGRESS) /
-        (1 - ENEMY_ELITE_START_PROGRESS);
-    if (bossDoor?.platform === platform) platform.enemyEliteChance = 1;
+    platform.enemyDistanceFromStart = distanceFromStart;
+    platform.enemyEliteChance = distanceFromStart >= ENEMY_ELITE_START_DISTANCE ? 1 : 0;
   }
+}
+
+function buildStage() {
+  assignEnemyEliteStrengthByStartDistance();
   let eligibleHeartPlatforms = 0;
   for (const platform of platforms) {
     if (platform.kind !== "flat") continue;
@@ -2942,7 +3080,10 @@ function buildStage() {
         }
       }
     }
-    if (turretX !== null) addTurret(platform, turretX);
+    if (turretX !== null) {
+      const turretVariant = 1 + Math.floor(mapRandom() * 3);
+      addTurret(platform, turretX, turretVariant);
+    }
 
     if (
       platform.routeRole === "main" && !platform.startingRoad &&
@@ -3171,6 +3312,7 @@ function enterBossMap() {
   invalidateHostileSpatialIndexes();
   midBosses.length = 0;
   currentArea = "boss";
+  if (typeof playCurrentStageMusic === "function") playCurrentStageMusic();
   bossMapCheckpoint = null;
   generateBossMap();
   if (typeof invalidateMinimapCache === "function") invalidateMinimapCache();
@@ -3540,6 +3682,7 @@ function updateTestBossAttackButtons() {
   for (const button of testBossAttackButtons) {
     button.hidden = !bossIsVisible;
   }
+  if (testBossDeathButton) testBossDeathButton.hidden = !bossIsVisible;
 }
 
 function updateTestResolutionButton() {
@@ -3716,6 +3859,7 @@ function resetGame() {
   activeSimulationTurrets.clear();
   invalidateHostileSpatialIndexes();
   currentArea = "stage";
+  if (typeof playCurrentStageMusic === "function") playCurrentStageMusic();
   bossMapCheckpoint = null;
   generateMap();
   if (typeof invalidateMinimapCache === "function") invalidateMinimapCache();

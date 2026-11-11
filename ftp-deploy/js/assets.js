@@ -267,7 +267,12 @@ const enemyEliteSprites = {
   monster5: loadImageAsset("./assets/images/monsters/monster_05_elite.png?v=20261109-1"),
 };
 
-const turretSprite = loadImageAsset("./assets/images/monsters/turret_01.png");
+const turretSprites = Object.freeze({
+  1: loadImageAsset("./assets/images/monsters/turret_01.png"),
+  2: loadImageAsset("./assets/images/monsters/turret_02.png?v=20261109-1"),
+  3: loadImageAsset("./assets/images/monsters/turret_03.png?v=20261109-1"),
+});
+const turretSprite = turretSprites[1];
 const bossStandSprite = loadImageAssetWithFallback([
   "./assets/images/boss/stand.png?v=20261105-1",
   "./ftp-deploy/assets/images/boss/stand.png?v=20261105-1",
@@ -584,27 +589,40 @@ playSpaceBackgroundVideo();
 const GameAudioContext = window.AudioContext ?? window.webkitAudioContext;
 const STAGE_MUSIC_VOLUME = 1.2;
 const stage01Music = typeof Audio === "function"
-  ? new Audio("./assets/music/stage_01.mp3?v=20260924-1") : null;
+  ? new Audio("./assets/music/stage.mp3?v=20261109-1") : null;
+const bossMusic = typeof Audio === "function"
+  ? new Audio("./assets/music/boss.mp3?v=20261109-1") : null;
+const backgroundMusicTracks = [stage01Music, bossMusic].filter(Boolean);
 let stageMusicPaused = TEST_MODE;
-if (stage01Music) {
-  stage01Music.loop = true;
-  stage01Music.preload = "auto";
-  stage01Music.playsInline = true;
+for (const music of backgroundMusicTracks) {
+  music.loop = true;
+  music.preload = "auto";
+  music.playsInline = true;
+}
+
+function currentAreaMusic() {
+  return typeof currentArea !== "undefined" && currentArea === "boss"
+    ? bossMusic : stage01Music;
 }
 
 function playCurrentStageMusic() {
-  if (
-    stageMusicPaused || CURRENT_STAGE !== 1 ||
-    !stage01Music || !stage01Music.paused
-  ) return;
-  const playback = stage01Music.play();
+  if (stageMusicPaused || CURRENT_STAGE !== 1) return;
+  const targetMusic = currentAreaMusic();
+  if (!targetMusic) return;
+  for (const music of backgroundMusicTracks) {
+    if (music === targetMusic || music.paused) continue;
+    music.pause();
+    music.currentTime = 0;
+  }
+  if (!targetMusic.paused) return;
+  const playback = targetMusic.play();
   if (playback?.catch) playback.catch(() => {});
 }
 
 function setCurrentStageMusicPaused(paused) {
   stageMusicPaused = Boolean(paused);
   if (stageMusicPaused) {
-    stage01Music?.pause();
+    for (const music of backgroundMusicTracks) music.pause();
     return;
   }
   resumeGameAudioContext();
@@ -619,7 +637,8 @@ function fetchSoundData(source) {
     : Promise.resolve(null);
 }
 
-const stageMusicData = fetchSoundData("./assets/music/stage_01.mp3?v=20260924-1");
+const stageMusicData = fetchSoundData("./assets/music/stage.mp3?v=20261109-1");
+const bossMusicData = fetchSoundData("./assets/music/boss.mp3?v=20261109-1");
 const playerGunSoundData = fetchSoundData("./assets/sound/gun.mp3");
 const playerGunImpactSoundData = fetchSoundData("./assets/sound/gun_impact.mp3?v=20261019-1");
 const gunHitSoundData = fetchSoundData("./assets/sound/gun_hit.mp3?v=20261019-1");
@@ -664,6 +683,7 @@ function createGameAudioContext() {
 // Decode during page loading; the first input only has to resume the context.
 const gameAudioContext = createGameAudioContext();
 let stageMusicSource = null;
+let bossMusicSource = null;
 let stageMusicOutput = null;
 
 function resumeGameAudioContext() {
@@ -672,24 +692,32 @@ function resumeGameAudioContext() {
 }
 
 function connectStageMusicToAudioGraph() {
-  if (!stage01Music) return false;
+  if (backgroundMusicTracks.length === 0) return false;
   if (!gameAudioContext ||
       typeof gameAudioContext.createMediaElementSource !== "function") {
-    stage01Music.volume = Math.min(1, STAGE_MUSIC_VOLUME);
+    for (const music of backgroundMusicTracks) {
+      music.volume = Math.min(1, STAGE_MUSIC_VOLUME);
+    }
     return false;
   }
   try {
-    const source = gameAudioContext.createMediaElementSource(stage01Music);
     const output = gameAudioContext.createGain();
     output.gain.value = STAGE_MUSIC_VOLUME;
-    source.connect(output);
+    const sources = backgroundMusicTracks.map((music) => {
+      const source = gameAudioContext.createMediaElementSource(music);
+      source.connect(output);
+      music.volume = 1;
+      return source;
+    });
     output.connect(gameAudioContext.destination);
-    stage01Music.volume = 1;
-    stageMusicSource = source;
+    stageMusicSource = sources[0] ?? null;
+    bossMusicSource = sources[1] ?? null;
     stageMusicOutput = output;
     return true;
   } catch {
-    stage01Music.volume = Math.min(1, STAGE_MUSIC_VOLUME);
+    for (const music of backgroundMusicTracks) {
+      music.volume = Math.min(1, STAGE_MUSIC_VOLUME);
+    }
     return false;
   }
 }
@@ -824,7 +852,8 @@ function registerPreparedAudioAsset(source, dataPromise, sound) {
   );
 }
 
-registerAudioAsset("./assets/music/stage_01.mp3", stageMusicData);
+registerAudioAsset("./assets/music/stage.mp3", stageMusicData);
+registerAudioAsset("./assets/music/boss.mp3", bossMusicData);
 registerAudioAsset(
   "./assets/sound/gun.mp3",
   gameAudioContext ? playerGunSoundDecode : playerGunSoundData,
@@ -1066,6 +1095,7 @@ let activeFemaleVoiceSource = null;
 let activeFemaleVoicePriority = 0;
 let activeFemaleVoiceSound = null;
 let queuedFemaleVoiceRequest = null;
+let queuedFemaleEndVoiceAfterDeath = false;
 let femaleStartVoiceVideoActive = false;
 let femaleStartVoiceVideoHoldUntil = -Infinity;
 let lastFemaleAttackVoiceIndex = -1;
@@ -1109,12 +1139,19 @@ function startPreparedFemaleVoice(sound, priority, interrupt) {
   let source = null;
   source = startPreparedGameSound(sound, (endedSource) => {
     if (activeFemaleVoiceSource !== endedSource) return;
+    const shouldPlayQueuedEndVoice = (
+      queuedFemaleEndVoiceAfterDeath && femaleDeathVoices.includes(sound)
+    );
     activeFemaleVoiceSource = null;
     activeFemaleVoicePriority = 0;
     activeFemaleVoiceSound = null;
     if (isStartVoice) {
       femaleStartVoiceVideoActive = false;
       femaleStartVoiceVideoHoldUntil = gameAudioContext.currentTime + 1;
+    }
+    if (shouldPlayQueuedEndVoice) {
+      queuedFemaleEndVoiceAfterDeath = false;
+      playPreparedFemaleVoice(femaleEndVoice, 5, true);
     }
   });
   if (!source) return false;
@@ -1152,6 +1189,11 @@ function playPreparedFemaleVoice(sound, priority = 1, interrupt = false) {
     queuedFemaleVoiceRequest = null;
     if (buffer) {
       startPreparedFemaleVoice(sound, priority, interrupt);
+    } else if (
+      queuedFemaleEndVoiceAfterDeath && femaleDeathVoices.includes(sound)
+    ) {
+      queuedFemaleEndVoiceAfterDeath = false;
+      playPreparedFemaleVoice(femaleEndVoice, 5, true);
     }
   });
   return true;
@@ -1205,6 +1247,14 @@ function playFemaleDeathVoice() {
 }
 
 function playFemaleEndVoice() {
+  const deathVoiceIsActiveOrQueued = (
+    femaleDeathVoices.includes(activeFemaleVoiceSound) ||
+    femaleDeathVoices.includes(queuedFemaleVoiceRequest?.sound)
+  );
+  if (deathVoiceIsActiveOrQueued) {
+    queuedFemaleEndVoiceAfterDeath = true;
+    return true;
+  }
   return playPreparedFemaleVoice(femaleEndVoice, 5, true);
 }
 
@@ -1226,6 +1276,7 @@ function playFemaleResurrectionVoice() {
 
 function resetFemaleVoicePlayback() {
   queuedFemaleVoiceRequest = null;
+  queuedFemaleEndVoiceAfterDeath = false;
   stopActiveFemaleVoice();
   stopPlayerStartVideo();
   femaleStartVoiceVideoActive = false;

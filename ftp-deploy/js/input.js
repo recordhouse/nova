@@ -251,6 +251,11 @@ for (const button of testBossAttackButtons) {
   });
 }
 
+testBossDeathButton?.addEventListener("click", (event) => {
+  event.preventDefault();
+  triggerTestFinalBossDeath();
+});
+
 testLoadingButton?.addEventListener("click", (event) => {
   event.preventDefault();
   if (typeof previewTestLoadingScreen === "function") {

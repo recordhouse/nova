@@ -70,6 +70,17 @@ test("player ricochet sound plays on screen-wall bounces but not the final colli
   assert.equal(scope.impactSoundCalls, 1);
 });
 
+test("boss projectiles use the player's ricochet sound on every real bounce", () => {
+  const scope = createGame();
+  for (const kind of ["boss-laser", "final-boss-beam", "final-boss-fan"]) {
+    const bullet = { kind, x: 714, y: 200, vx: 600, vy: 0,
+      radius: 5, ricochetScreenEdges: true, maxRicochets: 3 };
+    assert.equal(scope.moveRicochetingBullet(bullet, 0.01, "#ff5ba8"), true);
+    assert.equal(bullet.ricochets, 1);
+  }
+  assert.equal(scope.impactSoundCalls, 3);
+});
+
 test("the two bullets in each player fire pair share one ricochet sound per bounce", () => {
   const scope = createGame();
   assert.equal(scope.shootPlayer(), true);

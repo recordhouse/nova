@@ -72,6 +72,61 @@ test("turrets independently choose one, two or three shots for each timed burst"
   assert.equal(read(scope, "burstDraws.length"), 0);
 });
 
+test("turret 2 fires two parallel gold lasers and each ricochets three times", () => {
+  const scope = createGame();
+  const result = read(scope, `(() => {
+    const road=platforms[0];
+    addTurret(road,800,2);
+    const turret=turrets.at(-1);
+    player.x=1080; player.y=420;
+    const before=enemyBullets.length;
+    fireTurretLaser(turret,true);
+    const shots=enemyBullets.slice(before);
+    return {variant:turret.turretVariant,shots:shots.map(shot=>({
+      variant:shot.turretVariant,x:shot.x,y:shot.y,vx:shot.vx,vy:shot.vy,
+      maxRicochets:shot.maxRicochets,color:shot.ricochetColor
+    }))};
+  })()`);
+  assert.equal(result.variant, 2);
+  assert.equal(result.shots.length, 2);
+  assert.ok(result.shots.every((shot) => shot.variant === 2));
+  assert.ok(result.shots.every((shot) => shot.maxRicochets === 3));
+  assert.ok(result.shots.every((shot) => shot.color === "#ffd24f"));
+  assert.equal(result.shots[0].vx, result.shots[1].vx);
+  assert.equal(result.shots[0].vy, result.shots[1].vy);
+  assert.ok(Math.hypot(
+    result.shots[0].x - result.shots[1].x,
+    result.shots[0].y - result.shots[1].y,
+  ) > 20);
+});
+
+test("turret 3 fires one to three cyan lasers at random", () => {
+  for (const [randomValue, expectedShots] of [[0, 1], [0.5, 2], [0.999, 3]]) {
+    const scope = createGame();
+    const result = read(scope, `(() => {
+      turrets.length=0; enemyBullets.length=0;
+      addTurret(platforms[0],400,3);
+      const turret=turrets[0];
+      player.x=650; player.y=420; cameraX=0;
+      turret.fireTimer=0;
+      Math.random=()=>${randomValue};
+      updateTurrets(0);
+      if(turret.burstShotsRemaining>0) {
+        while(turret.burstShotsRemaining>0) updateTurrets(turret.fireTimer);
+      }
+      return {variant:turret.turretVariant,shots:enemyBullets.map(shot=>({
+        variant:shot.turretVariant,color:shot.ricochetColor,
+        maxRicochets:shot.maxRicochets
+      }))};
+    })()`);
+    assert.equal(result.variant, 3);
+    assert.equal(result.shots.length, expectedShots);
+    assert.ok(result.shots.every((shot) => shot.variant === 3));
+    assert.ok(result.shots.every((shot) => shot.color === "#3fffe4"));
+    assert.ok(result.shots.every((shot) => shot.maxRicochets === 0));
+  }
+});
+
 test("turrets still aim nearby and fully sleep when far outside the camera", () => {
   const scope = createGame();
   const turret = scope.fixtureTurret;

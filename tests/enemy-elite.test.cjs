@@ -38,7 +38,7 @@ function createGame() {
   return scope;
 }
 
-test("boss-approach elite strength is one tier above the regular monster", () => {
+test("elite strength is one tier above the regular monster", () => {
   const game = createGame();
   const result = vm.runInContext(`(() => {
     enemies.length = 0;
@@ -87,39 +87,50 @@ test("boss-approach elite strength is one tier above the regular monster", () =>
   assert.ok(result.flyer.cooldownMin < 2.7);
 });
 
-test("elite chance starts late and rises continuously toward the boss door", () => {
+test("elite strength starts at a fixed distance from spawn, independent of the boss door", () => {
   const game = createGame();
   const result = vm.runInContext(`(() => {
-    resetGame();
-    const bossApproachGroup = Math.max(1, bossDoor.platform.group ?? 0);
-    const early = platforms.filter((platform) => (
-      Math.min(1, (platform.group ?? 0) / bossApproachGroup) <=
-        ENEMY_ELITE_START_PROGRESS
-    ));
-    const approach = platforms.filter((platform) => (
-      Math.min(1, (platform.group ?? 0) / bossApproachGroup) >
-        ENEMY_ELITE_START_PROGRESS
-    ));
+    enemies.length=0;
+    platforms.length=0;
+    const start={
+      id:1,kind:'flat',start:-200,end:900,y:600,direction:1,
+      group:0,routeRole:'main',startingRoad:true,
+    };
+    const nearBossDoor={
+      id:2,kind:'flat',start:9000,end:9800,y:600,direction:1,
+      group:99,routeRole:'main',
+    };
+    const farFromSpawn={
+      id:3,kind:'flat',
+      start:ENEMY_ELITE_START_DISTANCE+1200,
+      end:ENEMY_ELITE_START_DISTANCE+2000,
+      y:600,direction:1,group:1,routeRole:'main',
+    };
+    platforms.push(start,nearBossDoor,farFromSpawn);
+    bossDoor={centerX:9400,width:126,height:184,direction:1,platform:nearBossDoor};
+    assignEnemyEliteStrengthByStartDistance();
+    const nearEnemy=addEnemy(nearBossDoor,9200,'monster2');
+    const farEnemy=addEnemy(farFromSpawn,farFromSpawn.start+100,'monster2');
     return {
-      earlyMaximum: Math.max(...early.map((platform) => platform.enemyEliteChance)),
-      approachMinimum: Math.min(...approach.map((platform) => platform.enemyEliteChance)),
-      approachMaximum: Math.max(...approach.map((platform) => platform.enemyEliteChance)),
-      bossDoorChance: bossDoor.platform.enemyEliteChance,
-      eliteCount: enemies.filter((enemy) => enemy.eliteVariant).length,
-      earlyEliteCount: enemies.filter((enemy) => (
-        Math.min(1, (enemy.platform.group ?? 0) / bossApproachGroup) <=
-          ENEMY_ELITE_START_PROGRESS &&
-        enemy.eliteVariant
-      )).length,
+      threshold:ENEMY_ELITE_START_DISTANCE,
+      nearDistance:nearBossDoor.enemyDistanceFromStart,
+      farDistance:farFromSpawn.enemyDistanceFromStart,
+      nearChance:nearBossDoor.enemyEliteChance,
+      farChance:farFromSpawn.enemyEliteChance,
+      bossDoorChance:bossDoor.platform.enemyEliteChance,
+      nearElite:nearEnemy.eliteVariant,
+      farElite:farEnemy.eliteVariant,
     };
   })()`, game);
 
-  assert.equal(result.earlyMaximum, 0);
-  assert.ok(result.approachMinimum > 0);
-  assert.equal(result.approachMaximum, 1);
-  assert.equal(result.bossDoorChance, 1);
-  assert.ok(result.eliteCount > 0);
-  assert.equal(result.earlyEliteCount, 0);
+  assert.ok(result.nearDistance < result.threshold);
+  assert.ok(result.farDistance > result.threshold);
+  assert.equal(result.nearChance, 0);
+  assert.equal(result.farChance, 1);
+  assert.equal(result.bossDoorChance, 0,
+    "placing the boss door nearby must not strengthen that area");
+  assert.equal(result.nearElite, false);
+  assert.equal(result.farElite, true);
 });
 
 test("all five optimized elite sprites are present and wired into loading", () => {

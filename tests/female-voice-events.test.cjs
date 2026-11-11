@@ -179,8 +179,11 @@ test("female voice files preload and share one non-overlapping priority channel"
     "death speech interrupts a lower-priority attack line");
   assert.equal(scope.playFemaleDeathVoice(), true);
   assert.equal(scope.playFemaleEndVoice(), true);
+  assert.equal(started.at(-1).source, "./assets/sound/voice_female_die_02.mp3",
+    "the game-over cue waits instead of cutting off the death voice");
+  finishLatest();
   assert.equal(started.at(-1).source, "./assets/sound/voice_female_end.mp3",
-    "the higher regular cue replaces the damage voice without a special wait");
+    "the game-over cue starts immediately after the death voice ends");
   finishLatest();
   assert.equal(scope.playFemaleResurrectionVoice(), true);
   finishLatest();
@@ -198,6 +201,9 @@ test("female voice files preload and share one non-overlapping priority channel"
   assert.equal(read(scope, "stage01Music.volume"), 1,
     "the damage voice does not lower background music");
   assert.equal(scope.playFemaleEndVoice(), true);
+  assert.equal(started.at(-1).source, "./assets/sound/voice_female_die_01.mp3",
+    "a falling death keeps its character death voice audible first");
+  finishLatest();
   assert.equal(started.at(-1).source, "./assets/sound/voice_female_end.mp3");
   assert.equal(read(scope, "gameSfxOutput.gain.value"), 5,
     "effects remain at their boosted volume when the damage voice ends");
@@ -221,7 +227,7 @@ test("female voice files preload and share one non-overlapping priority channel"
     "./assets/sound/voice_female_die_01.mp3",
     "./assets/sound/voice_female_end.mp3",
   ]);
-  assert.equal(stopped.length, 5);
+  assert.equal(stopped.length, 3);
 });
 
 test("control start, maximum-speed collision and new firing holds emit their voice cues", () => {
