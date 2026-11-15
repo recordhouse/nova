@@ -9,10 +9,16 @@ function sourceIsEnemyAttack(source) {
     "monster3",
     "monster4",
     "monster5",
+    "monster6",
+    "monster7",
+    "monster8",
     "monster4-crescent",
     "monster2-fireball",
     "monster3-laser",
     "monster5-orb",
+    "monster6-disc",
+    "monster7-lance",
+    "monster8-mine",
     "turret-laser",
     "turret",
     "boss-laser",
@@ -34,6 +40,9 @@ function playerImpactAccent(sourceKind) {
     : sourceKind === "monster3" ? "#ffd58d"
     : sourceKind === "monster4" ? "#ff9f68"
     : sourceKind === "monster5" || sourceKind === "monster5-orb" ? "#55dcff"
+    : sourceKind === "monster6" || sourceKind === "monster6-disc" ? "#ffd05d"
+    : sourceKind === "monster7" || sourceKind === "monster7-lance" ? "#58ffec"
+    : sourceKind === "monster8" || sourceKind === "monster8-mine" ? "#ff5369"
     : sourceKind === "monster4-crescent" ? "#ff4168"
     : sourceKind === "monster2-fireball" ? "#ffae68"
       : sourceKind === "monster3-laser" ? "#ffd58d"
@@ -573,7 +582,10 @@ function resolveEnemyDeath(enemy, playDeathSound = false, effectDensity = 1) {
   const isCrimsonMonster1 = enemy.kind === "monster1" && enemy.crimsonVariant;
   if (isCrimsonMonster1 && typeof playMonsterDie0101Sound === "function") {
     playMonsterDie0101Sound();
-  } else if (enemy.kind === "monster3" && typeof playMonsterDie03Sound === "function") {
+  } else if (
+    ["monster3", "monster6", "monster7", "monster8"].includes(enemy.kind) &&
+    typeof playMonsterDie03Sound === "function"
+  ) {
     playMonsterDie03Sound();
   } else if (
     playDeathSound &&
@@ -647,7 +659,7 @@ function damageEnemyWithPlayerShieldRam(enemy, direction) {
     enemy.jumpVx = direction * PLAYER_SHIELD_RAM_KNOCKBACK_SPEED;
     enemy.jumpHit = true;
   } else {
-    enemy.state = ["monster3", "monster5"].includes(enemy.kind)
+    enemy.state = ["monster3", "monster5", "monster7"].includes(enemy.kind)
       ? "hover" : "chase";
     enemy.stateTimer = 0;
   }
@@ -881,7 +893,9 @@ function emitPlayerHitImpact(source) {
 }
 
 function combatantHitSoundGroup(kind) {
-  if (kind === "monster3" || kind === "turret") return "metal";
+  if (["monster3", "monster6", "monster7", "monster8", "turret"].includes(kind)) {
+    return "metal";
+  }
   if (kind === "boss") return "boss";
   if (["monster1", "monster2", "monster4", "monster5"].includes(kind)) {
     return "organic";
@@ -1035,7 +1049,7 @@ function updatePlayerRevivalWave(dt) {
       enemy.jumpVx = direction * PLAYER_REVIVAL_KNOCKBACK_SPEED;
       enemy.jumpHit = true;
     } else {
-      enemy.state = ["monster3", "monster5"].includes(enemy.kind)
+      enemy.state = ["monster3", "monster5", "monster7"].includes(enemy.kind)
         ? "hover" : "chase";
       enemy.stateTimer = 0;
     }
@@ -1162,6 +1176,12 @@ function burstMonsterFragments(bullet, enemy, lethal = false, effectDensity = 1)
     ? ["#ff9d65", "#dc593d", "#92372e", "#2ce4d7", "#34202d"]
     : enemy.kind === "monster5"
     ? ["#8deeff", "#34b9ff", "#345cff", "#8a45da", "#172a68"]
+    : enemy.kind === "monster6"
+    ? ["#fff0a4", "#ffc13d", "#a86c18", "#26363d", "#10171d"]
+    : enemy.kind === "monster7"
+    ? ["#b7fff7", "#42ead8", "#167c86", "#223d4d", "#0f1c29"]
+    : enemy.kind === "monster8"
+    ? ["#ffadb3", "#f04458", "#801c2e", "#36212c", "#10171d"]
     : ["#70ff37", "#c9ff55", "#34ba32", "#713aa0", "#2b1647"];
   const count = scaledEffectCount(lethal ? 30 : 16, effectDensity);
   const spread = lethal ? Math.PI * 0.9 : Math.PI * 0.58;
@@ -1242,7 +1262,8 @@ function burstCombatantExplosion(target, kind, effectDensity = 1) {
   const isBoss = kind === "boss";
   const isCrimson = kind === "monster1" && target.crimsonVariant;
   const isLarge = isBoss || isCrimson || isTurret || kind === "monster2" ||
-    kind === "monster3" || kind === "monster4" || kind === "monster5";
+    kind === "monster3" || kind === "monster4" || kind === "monster5" ||
+    kind === "monster6" || kind === "monster7" || kind === "monster8";
   const centerX = target.x + target.width / 2;
   const centerY = target.y + target.height * 0.52;
   const color = isBoss ? "#ff3f91"
@@ -1250,6 +1271,9 @@ function burstCombatantExplosion(target, kind, effectDensity = 1) {
     : kind === "monster1" ? "#99ff52"
     : kind === "monster4" ? "#ff764c"
     : kind === "monster5" ? "#4bcfff"
+    : kind === "monster6" ? "#ffc34d"
+    : kind === "monster7" ? "#43f5df"
+    : kind === "monster8" ? "#ff4059"
     : kind === "monster3" ? "#ffaf62" : "#ed81fa";
   const debrisColors = isBoss
     ? ["#ff91bd", "#b62f72", "#721d57", "#35142e", "#d6a5d2"]
@@ -1263,6 +1287,12 @@ function burstCombatantExplosion(target, kind, effectDensity = 1) {
       ? ["#ffb665", "#e97449", "#70435c", "#314458"]
     : kind === "monster5"
       ? ["#8deeff", "#329ee8", "#455bd0", "#612d99", "#172653"]
+    : kind === "monster6"
+      ? ["#ffeca0", "#d89b31", "#79501e", "#35454b", "#151c21"]
+    : kind === "monster7"
+      ? ["#b7fff8", "#3ddbc9", "#187985", "#294755", "#12222d"]
+    : kind === "monster8"
+      ? ["#ff9ca8", "#d92e48", "#741c30", "#3b2830", "#131a21"]
       : isTurret
       ? ["#687388", "#8f9bae", "#673677", "#3c2947", "#35414d"]
       : ["#af4aaa", "#77327a", "#58305e", "#3c2646"];
@@ -1480,7 +1510,7 @@ function damageNearbyMonstersFromExplosion({
       enemy.jumpVx = direction * knockbackSpeed;
       enemy.jumpHit = true;
     } else {
-      enemy.state = ["monster3", "monster5"].includes(enemy.kind)
+      enemy.state = ["monster3", "monster5", "monster7"].includes(enemy.kind)
         ? "hover" : "chase";
       enemy.stateTimer = 0;
     }
@@ -2115,6 +2145,30 @@ function burstMonster5OrbExplosion(bullet) {
   }
 }
 
+function burstMonster8MineExplosion(bullet) {
+  const radius = bullet.explosionRadius ?? MONSTER_TYPES.monster8.mineExplosionRadius;
+  particles.push({
+    x: bullet.x,
+    y: bullet.y,
+    vx: 0,
+    vy: 0,
+    gravity: 0,
+    life: 0.46,
+    maxLife: 0.46,
+    color: "#ff304d",
+    coreColor: "#fff1dc",
+    size: radius,
+    explosionFlash: true,
+  });
+  burst(bullet.x, bullet.y, "#ff3d58", 26, 340);
+  burst(bullet.x, bullet.y, "#ffe1c7", 9, 210);
+  shake = Math.max(shake, 14);
+  if (typeof playMonsterFire02Sound === "function") playMonsterFire02Sound();
+  if (overlapsCircleRect({ x: bullet.x, y: bullet.y, radius }, getPlayerHitbox())) {
+    takePlayerDamage(bullet.damage ?? 1, bullet);
+  }
+}
+
 function steerMonster5Orb(bullet, dt) {
   const hitbox = getPlayerHitbox();
   const targetX = hitbox.x + hitbox.width / 2;
@@ -2242,6 +2296,21 @@ function updateBullets(dt) {
       }
       if (!moveMonster5Orb(bullet, dt)) {
         burstMonster5OrbExplosion(bullet);
+        enemyBullets.splice(i, 1);
+      }
+      continue;
+    }
+    if (bullet.kind === "monster8-mine") {
+      bullet.life -= dt;
+      const hitbox = getPlayerHitbox();
+      const playerCenterX = hitbox.x + hitbox.width / 2;
+      const playerCenterY = hitbox.y + hitbox.height / 2;
+      const triggerRadius = bullet.triggerRadius ?? MONSTER_TYPES.monster8.mineTriggerRadius;
+      if (
+        bullet.life <= 0 ||
+        Math.hypot(playerCenterX - bullet.x, playerCenterY - bullet.y) <= triggerRadius
+      ) {
+        burstMonster8MineExplosion(bullet);
         enemyBullets.splice(i, 1);
       }
       continue;

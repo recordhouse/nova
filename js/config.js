@@ -27,6 +27,9 @@ const testSpawnMonster2Button = document.querySelector("[data-test-spawn-monster
 const testSpawnMonster3Button = document.querySelector("[data-test-spawn-monster3]");
 const testSpawnMonster4Button = document.querySelector("[data-test-spawn-monster4]");
 const testSpawnMonster5Button = document.querySelector("[data-test-spawn-monster5]");
+const testSpawnMonster6Button = document.querySelector("[data-test-spawn-monster6]");
+const testSpawnMonster7Button = document.querySelector("[data-test-spawn-monster7]");
+const testSpawnMonster8Button = document.querySelector("[data-test-spawn-monster8]");
 const testSpawnTurretButton = document.querySelector("[data-test-spawn-turret]");
 const testUltimateButton = document.querySelector("[data-test-ultimate]");
 const ultimateControlButton = document.querySelector("[data-ultimate-control]");
@@ -126,12 +129,14 @@ let WIDTH = initialCanvasResolution.width;
 let HEIGHT = initialCanvasResolution.height;
 const MAX_RENDER_SCALE = 2;
 const REDUCED_RENDER_SCALE = 1.4;
-const MOBILE_MAX_RENDER_SCALE = 1.25;
+const MOBILE_MAX_RENDER_SCALE = 1.15;
 const MOBILE_REDUCED_RENDER_SCALE = 1;
 const REDUCED_EFFECT_DENSITY = 0.7;
+const MOBILE_EFFECT_DENSITY = 0.88;
 let adaptiveRenderScaleCap = MOBILE_LANDSCAPE_MODE
   ? MOBILE_MAX_RENDER_SCALE : MAX_RENDER_SCALE;
-let adaptiveEffectDensity = 1;
+let adaptiveEffectDensity = MOBILE_LANDSCAPE_MODE
+  ? MOBILE_EFFECT_DENSITY : 1;
 let BASE_GROUND_Y = HEIGHT * BASE_GROUND_SCREEN_RATIO;
 const GRAVITY = 2100;
 const JUMP_SPEED = 950;
@@ -769,6 +774,99 @@ const MONSTER_TYPES = {
     spawnMinPlatformLength: 340,
     score: 260,
   },
+  monster6: {
+    displayName: "몹6",
+    width: 126,
+    height: 82,
+    spriteWidth: 184,
+    spriteHeight: 123,
+    spriteBottomOffset: 4,
+    spriteTopInset: 0.04,
+    hp: 7,
+    speed: 82,
+    chaseRange: 860,
+    chaseVerticalRange: 120,
+    walkableStepHeight: 18,
+    chargeDuration: 0.62,
+    discSpeed: 520,
+    discRadius: 15,
+    discLifetime: 2.3,
+    attackRange: 670,
+    attackVerticalRange: 135,
+    attackCooldownMin: 2.3,
+    attackCooldownMax: 3.4,
+    hitDuration: 0.23,
+    hitKnockbackSpeed: 210,
+    hitKnockbackMaxSpeed: 330,
+    hitKnockbackDamping: 10,
+    hitAirImpulse: 0,
+    spawnChance: 0.16,
+    spawnMinPlatformLength: 420,
+    score: 280,
+  },
+  monster7: {
+    displayName: "몹7",
+    width: 138,
+    height: 68,
+    spriteWidth: 204,
+    spriteHeight: 102,
+    spriteBottomOffset: 1,
+    spriteTopInset: 0.04,
+    hp: 6,
+    hoverHeight: 250,
+    hoverAmplitude: 30,
+    hoverSpeed: 1.7,
+    patrolRadius: 190,
+    patrolSpeed: 0.72,
+    hoverMoveSpeed: 125,
+    chargeDuration: 0.48,
+    lanceSpeed: 760,
+    lanceRadius: 7,
+    lanceLifetime: 1.45,
+    attackRange: 760,
+    attackCooldownMin: 2.5,
+    attackCooldownMax: 3.8,
+    hitDuration: 0.2,
+    hitKnockbackSpeed: 180,
+    hitKnockbackMaxSpeed: 300,
+    hitKnockbackDamping: 8,
+    hitAirImpulse: 0,
+    spawnChance: 0.14,
+    spawnMinPlatformLength: 380,
+    score: 250,
+  },
+  monster8: {
+    displayName: "몹8",
+    width: 132,
+    height: 76,
+    spriteWidth: 198,
+    spriteHeight: 106,
+    spriteBottomOffset: 3,
+    spriteTopInset: 0.04,
+    hp: 8,
+    speed: 96,
+    chaseRange: 760,
+    chaseVerticalRange: 125,
+    walkableStepHeight: 18,
+    chargeDuration: 0.52,
+    mineRadius: 18,
+    mineTriggerRadius: 105,
+    mineExplosionRadius: 132,
+    mineLifetime: 6,
+    mineLimit: 2,
+    attackRange: 540,
+    attackVerticalRange: 125,
+    attackCooldownMin: 3.2,
+    attackCooldownMax: 4.6,
+    hitDuration: 0.22,
+    hitKnockbackSpeed: 220,
+    hitKnockbackMaxSpeed: 340,
+    hitKnockbackDamping: 10,
+    hitAirImpulse: 0,
+    spawnChance: 0.14,
+    spawnMinPlatformLength: 430,
+    score: 320,
+  },
 };
 const RUN_FRAME_WIDTH = 400;
 const RUN_FRAME_HEIGHT = 500;
@@ -862,7 +960,9 @@ function setAdaptivePerformanceMode(reduced) {
   const nextScaleCap = MOBILE_LANDSCAPE_MODE
     ? reduced ? MOBILE_REDUCED_RENDER_SCALE : MOBILE_MAX_RENDER_SCALE
     : reduced ? REDUCED_RENDER_SCALE : MAX_RENDER_SCALE;
-  const nextEffectDensity = reduced ? REDUCED_EFFECT_DENSITY : 1;
+  const nextEffectDensity = reduced
+    ? REDUCED_EFFECT_DENSITY
+    : MOBILE_LANDSCAPE_MODE ? MOBILE_EFFECT_DENSITY : 1;
   if (
     adaptiveRenderScaleCap === nextScaleCap &&
     adaptiveEffectDensity === nextEffectDensity

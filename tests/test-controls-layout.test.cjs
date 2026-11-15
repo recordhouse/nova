@@ -32,6 +32,17 @@ test("test controls include the monster5 spawn button", () => {
   assert.match(input, /spawnTestMonster\("monster5"\)/);
 });
 
+test("test controls include the three new monster spawn buttons", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+  const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
+  for (const number of [6, 7, 8]) {
+    assert.match(html, new RegExp(`data-test-spawn-monster${number}`));
+    assert.match(input, new RegExp(`spawnTestMonster\\("monster${number}"\\)`));
+    assert.match(css, new RegExp(`\\.test-monster-spawn-button\\.monster${number}\\s*\\{`));
+  }
+});
+
 test("test controls include an immediate ultimate button", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");

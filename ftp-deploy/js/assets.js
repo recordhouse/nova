@@ -257,7 +257,14 @@ const enemySprites = {
   monster3: loadImageAsset("./assets/images/monsters/monster_03.png"),
   monster4: loadImageAsset("./assets/images/monsters/monster_04.png?v=20260923-1"),
   monster5: loadImageAsset("./assets/images/monsters/monster_05.png?v=20261107-1"),
+  monster6: loadImageAsset("./assets/images/monsters/monster_06.png?v=20261111-1"),
+  monster7: loadImageAsset("./assets/images/monsters/monster_07.png?v=20261111-1"),
+  monster8: loadImageAsset("./assets/images/monsters/monster_08.png?v=20261111-1"),
 };
+
+const titleScreenBackgroundImage = loadImageAsset(
+  "./assets/images/ui/nova-title-screen-v1.webp?v=20261113-1",
+);
 
 const enemyEliteSprites = {
   monster1: loadImageAsset("./assets/images/monsters/monster_01_elite.png?v=20261109-1"),
@@ -362,6 +369,48 @@ const monster2AttackVideoAsset = enemyAttackVideoAssets.monster2;
 const spaceBackgroundVideoAsset = loadVideoAsset(
   "./assets/video/bg/space_new-optimized.mp4?v=20261107-2",
 );
+let gameMediaVisibilityHidden = false;
+const managedGameVideoAssets = Object.freeze([
+  ...playerGunVideoAssets,
+  ...playerRunVideoAssets,
+  playerStandVideoAsset,
+  playerDownVideoAsset,
+  playerStartVideoAsset,
+  playerFinishingVideoAsset,
+  monsterBasicVideoAsset,
+  ...Object.values(enemyAttackVideoAssets),
+  spaceBackgroundVideoAsset,
+]);
+
+function setGameMediaVisibility(hidden) {
+  gameMediaVisibilityHidden = Boolean(hidden);
+  for (const asset of managedGameVideoAssets) {
+    const video = asset?.video;
+    if (!video) continue;
+    if (gameMediaVisibilityHidden) {
+      asset.visibilityPaused = Boolean(asset.active && !video.paused);
+      if (asset.visibilityPaused) video.pause?.();
+      continue;
+    }
+    if (asset.visibilityPaused && asset.active) {
+      const playback = video.play?.();
+      if (playback?.catch) playback.catch(() => {});
+    } else if (asset.pendingPlay && asset.loaded) {
+      startVideoAssetPlayback(asset);
+    }
+    asset.visibilityPaused = false;
+  }
+
+  if (typeof backgroundMusicTracks === "undefined") return;
+  if (gameMediaVisibilityHidden) {
+    for (const music of backgroundMusicTracks) {
+      music.visibilityWasPlaying = !music.paused;
+      if (music.visibilityWasPlaying) music.pause();
+    }
+  } else if (!stageMusicPaused) {
+    playCurrentStageMusic();
+  }
+}
 let enemyAttackVideoCooldownUntil = -Infinity;
 const introducedEnemyVideoKinds = new Set();
 const pendingEnemyIntroductionVideos = [];
@@ -371,6 +420,10 @@ function startVideoAssetPlayback(asset) {
   const video = asset.video;
   if (!video || (!asset.loaded && video.readyState < 2)) return false;
   if (asset.active) return false;
+  if (gameMediaVisibilityHidden) {
+    asset.pendingPlay = true;
+    return false;
+  }
   asset.loaded = true;
   asset.pendingPlay = false;
   asset.active = true;
@@ -593,7 +646,10 @@ const stage01Music = typeof Audio === "function"
 const bossMusic = typeof Audio === "function"
   ? new Audio("./assets/music/boss.mp3?v=20261109-1") : null;
 const backgroundMusicTracks = [stage01Music, bossMusic].filter(Boolean);
-let stageMusicPaused = TEST_MODE;
+const mainMenuStartsVisible = !TEST_MODE && Boolean(
+  document.querySelector?.("[data-start-screen]"),
+);
+let stageMusicPaused = TEST_MODE || mainMenuStartsVisible;
 for (const music of backgroundMusicTracks) {
   music.loop = true;
   music.preload = "auto";

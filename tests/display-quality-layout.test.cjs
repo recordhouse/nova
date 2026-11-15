@@ -445,8 +445,9 @@ test("reduced performance mode lowers backing resolution and effect density", ()
 test("touch devices start with a landscape game even in a portrait viewport", () => {
   const { scope, canvas, shellClasses, shellStyles } = createDisplay(390, 3, true);
   assert.equal(read(scope, "MOBILE_LANDSCAPE_MODE"), true);
-  assert.equal(read(scope, "MOBILE_MAX_RENDER_SCALE"), 1.25);
-  assert.equal(read(scope, "adaptiveRenderScaleCap"), 1.25);
+  assert.equal(read(scope, "MOBILE_MAX_RENDER_SCALE"), 1.15);
+  assert.equal(read(scope, "adaptiveRenderScaleCap"), 1.15);
+  assert.equal(read(scope, "adaptiveEffectDensity"), 0.88);
   assert.equal(read(scope, "MINIMAP_RENDER_INTERVAL"), 1 / 15);
   assert.equal(read(scope, "WIDTH"), 1280);
   assert.equal(read(scope, "HEIGHT"), 720);
@@ -454,14 +455,14 @@ test("touch devices start with a landscape game even in a portrait viewport", ()
   assert.equal(shellClasses.has("mobile-landscape-portrait"), true);
   assert.equal(shellStyles.get("--mobile-game-width"), "693px");
   assert.equal(shellStyles.get("--mobile-game-height"), "389.81px");
-  assert.equal(canvas.width, 1600);
-  assert.equal(canvas.height, 900);
+  assert.equal(canvas.width, 1472);
+  assert.equal(canvas.height, 828);
   assert.equal(scope.setAdaptivePerformanceMode(true), true);
   assert.equal(canvas.width, 1280);
   assert.equal(canvas.height, 720);
   assert.equal(scope.setAdaptivePerformanceMode(false), true);
-  assert.equal(canvas.width, 1600);
-  assert.equal(canvas.height, 900);
+  assert.equal(canvas.width, 1472);
+  assert.equal(canvas.height, 828);
   const transformedDelta = scope.screenDeltaToGameDelta(40, 0);
   assert.equal(transformedDelta.dx, 0);
   assert.equal(transformedDelta.dy, -40);

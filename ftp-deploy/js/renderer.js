@@ -2385,6 +2385,38 @@ function drawMonster4SpearCharge(enemy) {
   ctx.restore();
 }
 
+function drawNewMonsterCharge(enemy) {
+  const charging = enemy.kind === "monster8"
+    ? enemy.state === "mine-charge" : enemy.state === "charge";
+  if (!charging) return;
+  const progress = Math.max(0, Math.min(1,
+    1 - enemy.stateTimer / enemy.chargeDuration,
+  ));
+  const origins = enemy.kind === "monster6"
+    ? [monster6DiscOrigin(enemy)]
+    : enemy.kind === "monster7"
+      ? [-24, 24].map((offset) => monster7LanceOrigin(enemy, offset))
+      : [monster8MineOrigin(enemy)];
+  const color = enemy.kind === "monster6" ? "#ffd250"
+    : enemy.kind === "monster7" ? "#51ffeb" : "#ff4059";
+  for (const origin of origins) {
+    ctx.save();
+    ctx.translate(pixelSnap(origin.x), pixelSnap(origin.y));
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.55 + progress * 0.45;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10 + progress * 18;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 7 + progress * 13, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(-2, -2, 4, 4);
+    ctx.restore();
+  }
+}
+
 function drawEnemy(enemy) {
   const eliteSprite = enemy.eliteVariant
     ? enemyEliteSprites[enemy.kind]
@@ -2394,6 +2426,9 @@ function drawEnemy(enemy) {
   const isMonster3 = enemy.kind === "monster3";
   const isMonster4 = enemy.kind === "monster4";
   const isMonster5 = enemy.kind === "monster5";
+  const isMonster6 = enemy.kind === "monster6";
+  const isMonster7 = enemy.kind === "monster7";
+  const isMonster8 = enemy.kind === "monster8";
   const pose = enemySpritePose(enemy);
 
   ctx.save();
@@ -2402,7 +2437,7 @@ function drawEnemy(enemy) {
     pose.feetY,
   );
   ctx.translate(pose.hitOffsetX, 0);
-  if (!isMonster3 && !isMonster4 && !isMonster5) {
+  if (!isMonster3 && !isMonster4 && !isMonster5 && !isMonster7) {
     const groundGlow = enemy.eliteVariant
       ? enemy.kind === "monster2" ? "255, 91, 25" : "118, 255, 37"
       : enemy.crimsonVariant ? "255, 42, 65" : "72, 255, 48";
@@ -2416,7 +2451,15 @@ function drawEnemy(enemy) {
 
   if (sprite?.loaded && sprite.image.naturalWidth && sprite.image.naturalHeight) {
     ctx.imageSmoothingEnabled = false;
-    if (isMonster5 && enemy.state === "charge") {
+    if (
+      (isMonster6 || isMonster7 || isMonster8) &&
+      (enemy.state === "charge" || enemy.state === "mine-charge")
+    ) {
+      const chargeProgress = Math.max(0, Math.min(1,
+        1 - enemy.stateTimer / enemy.chargeDuration,
+      ));
+      ctx.filter = `saturate(${1.08 + chargeProgress * 0.75}) brightness(${1 + chargeProgress * 0.28})`;
+    } else if (isMonster5 && enemy.state === "charge") {
       const chargeProgress = Math.max(0, Math.min(1,
         1 - enemy.stateTimer / enemy.chargeDuration,
       ));
@@ -2443,7 +2486,10 @@ function drawEnemy(enemy) {
   } else {
     ctx.fillStyle = "#21123c";
     ctx.fillRect(-enemy.width / 2, -enemy.height, enemy.width, enemy.height);
-    ctx.fillStyle = isMonster5 ? "#2463bb"
+    ctx.fillStyle = isMonster8 ? "#a51e34"
+      : isMonster7 ? "#168f91"
+      : isMonster6 ? "#b7781b"
+      : isMonster5 ? "#2463bb"
       : enemy.crimsonVariant ? "#d51d37" : "#34d728";
     ctx.fillRect(-enemy.width * 0.35, -enemy.height * 0.76, enemy.width * 0.7, enemy.height * 0.52);
     ctx.fillStyle = enemy.crimsonVariant ? "#ff8a91" : "#b7ff6a";
@@ -2454,6 +2500,7 @@ function drawEnemy(enemy) {
   if (isMonster3) drawMonster3Charge(enemy);
   if (isMonster4) drawMonster4SpearCharge(enemy);
   if (isMonster5) drawMonster5Charge(enemy);
+  if (isMonster6 || isMonster7 || isMonster8) drawNewMonsterCharge(enemy);
   drawMonsterHealthGauge(enemy, pose);
 }
 
@@ -3363,6 +3410,68 @@ function drawProjectiles() {
     }
     if (bullet.kind === "monster5-orb") {
       drawMonster5Orb(bullet);
+      continue;
+    }
+    if (bullet.kind === "monster6-disc") {
+      const pulse = 0.88 + Math.sin(gameTime * 30) * 0.12;
+      ctx.save();
+      ctx.translate(bullet.x, bullet.y);
+      ctx.rotate(gameTime * 13 * Math.sign(bullet.vx || 1));
+      ctx.globalCompositeOperation = "lighter";
+      ctx.shadowColor = "#ffc438";
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = "rgba(255, 157, 30, 0.42)";
+      ctx.fillRect(-22 * pulse, -7, 44 * pulse, 14);
+      ctx.fillStyle = "#ffd85e";
+      ctx.fillRect(-17 * pulse, -4, 34 * pulse, 8);
+      ctx.fillStyle = "#fffbe2";
+      ctx.fillRect(-11 * pulse, -1.5, 22 * pulse, 3);
+      ctx.restore();
+      continue;
+    }
+    if (bullet.kind === "monster7-lance") {
+      const pulse = 0.86 + Math.sin(gameTime * 34) * 0.14;
+      ctx.save();
+      ctx.translate(bullet.x, bullet.y);
+      ctx.rotate(Math.atan2(bullet.vy, bullet.vx));
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round";
+      ctx.shadowColor = "#37ffe5";
+      ctx.shadowBlur = 20;
+      ctx.strokeStyle = "rgba(52, 244, 224, 0.48)";
+      ctx.lineWidth = 17 * pulse;
+      ctx.beginPath();
+      ctx.moveTo(-42, 0);
+      ctx.lineTo(16, 0);
+      ctx.stroke();
+      ctx.strokeStyle = "#49fce8";
+      ctx.lineWidth = 7;
+      ctx.stroke();
+      ctx.strokeStyle = "#efffff";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.restore();
+      continue;
+    }
+    if (bullet.kind === "monster8-mine") {
+      const pulse = 0.86 + Math.sin(gameTime * 8) * 0.14;
+      ctx.save();
+      ctx.translate(bullet.x, bullet.y);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.shadowColor = "#ff314f";
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = "#ff5369";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, 15 * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "#7d1025";
+      ctx.fillRect(-9, -9, 18, 18);
+      ctx.fillStyle = "#ff4059";
+      ctx.fillRect(-5, -5, 10, 10);
+      ctx.fillStyle = "#fff2dc";
+      ctx.fillRect(-2, -2, 4, 4);
+      ctx.restore();
       continue;
     }
     if (bullet.kind === "monster3-laser") {
@@ -6078,6 +6187,12 @@ function drawHud() {
   const canTransformHudText = typeof ctx.translate === "function" &&
     typeof ctx.scale === "function";
 
+  if (typeof syncGameOverScorePanel === "function") {
+    syncGameOverScorePanel(
+      gameOver && !playerIsDown() && !(TEST_MODE && showFullMap),
+    );
+  }
+
   if (TEST_MODE && showFullMap) {
     drawMinimap(true);
     drawGameScreenFrame();
@@ -6174,7 +6289,6 @@ function drawHud() {
     drawOverlay("PORTAL", "구역 진입 준비");
   }
 
-  if (gameOver && !playerIsDown()) drawOverlay("GAME OVER", "화면을 눌러 재시작");
   drawGameScreenFrame();
 }
 

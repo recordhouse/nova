@@ -159,6 +159,7 @@ function updateParticles(dt) {
 }
 
 function update(dt) {
+  if (typeof mainMenuActive !== "undefined" && mainMenuActive) return;
   if (TEST_MODE && showFullMap) return;
   gameTime += dt;
   shake = Math.max(0, shake - dt * 48);
@@ -236,13 +237,40 @@ const PERFORMANCE_REDUCE_FRAME_SECONDS = 1 / 50;
 const PERFORMANCE_RESTORE_FRAME_SECONDS = 1 / 57;
 const PERFORMANCE_REDUCE_HOLD_SECONDS = 1.5;
 const PERFORMANCE_RESTORE_HOLD_SECONDS = 5;
-const MAX_RENDER_FPS = 60;
-const MIN_RENDER_FRAME_MILLISECONDS = 1000 / MAX_RENDER_FPS;
+const MAX_RENDER_FPS = typeof MOBILE_LANDSCAPE_MODE !== "undefined" &&
+  MOBILE_LANDSCAPE_MODE ? 50 : 60;
+const IDLE_RENDER_FPS = 20;
 const RENDER_FRAME_TOLERANCE_MILLISECONDS = 0.5;
 let adaptivePerformanceReduced = false;
 let adaptiveAverageFrameSeconds = 1 / 60;
 let adaptiveSlowFrameTime = 0;
 let adaptiveRecoveryFrameTime = 0;
+let nextRenderAt = 0;
+let previousRenderInterval = 0;
+let pageVisibilityPaused = typeof document !== "undefined" &&
+  Boolean(document.hidden);
+
+function currentRenderFrameMilliseconds() {
+  const menuIdle = typeof mainMenuActive !== "undefined" && mainMenuActive;
+  const gameOverIdle = typeof gameOver !== "undefined" && gameOver &&
+    (typeof playerIsDown !== "function" || !playerIsDown());
+  const idle = menuIdle || gameOverIdle;
+  return 1000 / (idle ? IDLE_RENDER_FPS : MAX_RENDER_FPS);
+}
+
+if (typeof document !== "undefined" && document.addEventListener) {
+  document.addEventListener("visibilitychange", () => {
+    pageVisibilityPaused = Boolean(document.hidden);
+    previousTime = performance.now();
+    nextRenderAt = 0;
+    if (pageVisibilityPaused && typeof resetAllInputs === "function") {
+      resetAllInputs();
+    }
+    if (typeof setGameMediaVisibility === "function") {
+      setGameMediaVisibility(pageVisibilityPaused);
+    }
+  });
+}
 
 function updateAdaptivePerformance(frameSeconds) {
   if (!Number.isFinite(frameSeconds) || frameSeconds <= 0) return false;
@@ -288,16 +316,28 @@ function updateAdaptivePerformance(frameSeconds) {
 }
 
 function loop(currentTime) {
+  if (pageVisibilityPaused) {
+    previousTime = currentTime;
+    nextRenderAt = 0;
+    requestAnimationFrame(loop);
+    return;
+  }
+  const renderInterval = currentRenderFrameMilliseconds();
+  if (nextRenderAt <= 0 || renderInterval !== previousRenderInterval) {
+    nextRenderAt = currentTime;
+    previousRenderInterval = renderInterval;
+  }
   const elapsedMilliseconds = currentTime - previousTime;
   if (
-    Number.isFinite(elapsedMilliseconds) &&
-    elapsedMilliseconds < (
-      MIN_RENDER_FRAME_MILLISECONDS - RENDER_FRAME_TOLERANCE_MILLISECONDS
-    )
+    Number.isFinite(currentTime) &&
+    currentTime + RENDER_FRAME_TOLERANCE_MILLISECONDS < nextRenderAt
   ) {
     requestAnimationFrame(loop);
     return;
   }
+  do {
+    nextRenderAt += renderInterval;
+  } while (nextRenderAt <= currentTime);
   const frameSeconds = elapsedMilliseconds / 1000;
   previousTime = currentTime;
   updateAdaptivePerformance(frameSeconds);

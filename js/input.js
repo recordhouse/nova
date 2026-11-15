@@ -125,6 +125,7 @@ function resetAllInputs() {
 }
 
 window.addEventListener("keydown", (event) => {
+  if (event.target?.closest?.("[data-game-over-panel], [data-start-screen]")) return;
   const control = keyboardControl(event);
   if (!control) return;
   event.preventDefault();
@@ -134,6 +135,7 @@ window.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("keyup", (event) => {
+  if (event.target?.closest?.("[data-game-over-panel], [data-start-screen]")) return;
   const control = keyboardControl(event);
   if (!control) return;
   event.preventDefault();
@@ -205,13 +207,12 @@ const releasePointerAnywhere = (event) => {
 window.addEventListener("pointerup", releasePointerAnywhere, true);
 window.addEventListener("pointercancel", releasePointerAnywhere, true);
 
-const preventBrowserAction = (event) => event.preventDefault();
+const preventBrowserAction = (event) => {
+  if (event.target?.closest?.("[data-game-over-name]")) return;
+  event.preventDefault();
+};
 ["contextmenu", "dragstart", "selectstart", "copy", "cut"].forEach((eventName) => {
   document.addEventListener(eventName, preventBrowserAction, true);
-});
-
-canvas.addEventListener("pointerdown", () => {
-  if (gameOver && !playerIsDown()) resetGame();
 });
 
 testJumpPathButton?.addEventListener("click", (event) => {
@@ -343,6 +344,21 @@ testSpawnMonster4Button?.addEventListener("click", (event) => {
 testSpawnMonster5Button?.addEventListener("click", (event) => {
   event.preventDefault();
   spawnTestMonster("monster5");
+});
+
+testSpawnMonster6Button?.addEventListener("click", (event) => {
+  event.preventDefault();
+  spawnTestMonster("monster6");
+});
+
+testSpawnMonster7Button?.addEventListener("click", (event) => {
+  event.preventDefault();
+  spawnTestMonster("monster7");
+});
+
+testSpawnMonster8Button?.addEventListener("click", (event) => {
+  event.preventDefault();
+  spawnTestMonster("monster8");
 });
 
 testSpawnTurretButton?.addEventListener("click", (event) => {

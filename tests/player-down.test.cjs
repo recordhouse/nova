@@ -912,7 +912,6 @@ test("lethal damage finishes the down motion, then shows game over without reviv
   assert.equal(read(scope, "gameOver"), true);
   scope.drawHud();
   assert.deepEqual(overlays, []);
-  canvas.listeners.pointerdown();
   assert.equal(read(scope, "player.hp"), 0, "held mobile input cannot skip the lethal motion");
   scope.update(downDuration(scope));
   assert.equal(read(scope, "player.downPhase"), "hold");
@@ -922,8 +921,10 @@ test("lethal damage finishes the down motion, then shows game over without reviv
   scope.drawPlayer();
   assert.equal(body(calls).args[1], 1608);
   scope.drawHud();
-  assert.deepEqual(overlays, ["GAME OVER"]);
-  canvas.listeners.pointerdown();
+  assert.deepEqual(overlays, [], "the DOM leaderboard replaces the old canvas game-over copy");
+  assert.equal(read(scope, "gameOver"), true,
+    "a canvas tap cannot skip score registration");
+  scope.resetGame();
   assert.equal(read(scope, "gameOver"), false);
   assert.equal(read(scope, "player.hp"), 3);
   assert.equal(read(scope, "player.downPhase"), "");

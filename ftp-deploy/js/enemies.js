@@ -857,6 +857,227 @@ function updateMonster5(enemy, dt, playerHitbox, playerCenterX) {
   }
 }
 
+function monster6DiscOrigin(enemy) {
+  return {
+    x: enemy.x + enemy.width / 2 + enemy.facing * enemy.width * 0.46,
+    y: enemySurfaceY(enemy) - 20,
+  };
+}
+
+function fireMonster6Disc(enemy) {
+  const definition = MONSTER_TYPES.monster6;
+  const origin = monster6DiscOrigin(enemy);
+  const speed = enemy.discSpeed ?? definition.discSpeed;
+  enemyBullets.push({
+    kind: "monster6-disc",
+    x: origin.x,
+    y: origin.y,
+    vx: enemy.facing * speed,
+    vy: 0,
+    radius: definition.discRadius,
+    life: definition.discLifetime,
+    ignoreTerrain: true,
+    ricochetColor: "#ffc74e",
+    phase: Math.random() * Math.PI * 2,
+  });
+  burst(origin.x, origin.y, "#ffd45f", 13, 150);
+  if (
+    origin.x >= cameraX - 80 && origin.x <= cameraX + WIDTH + 80 &&
+    origin.y >= cameraY - 80 && origin.y <= cameraY + HEIGHT + 80 &&
+    typeof playTurretLaserSound === "function"
+  ) playTurretLaserSound();
+}
+
+function updateMonster6(enemy, dt, playerHitbox, playerCenterX, playerFeetY) {
+  const definition = MONSTER_TYPES.monster6;
+  enemy.y = enemySurfaceY(enemy) - enemy.height;
+  const distance = playerCenterX - (enemy.x + enemy.width / 2);
+  const verticalDistance = Math.abs(playerFeetY - enemySurfaceY(enemy));
+  faceHostileTowardX(enemy, playerCenterX);
+
+  if (enemy.hitTimer > 0) {
+    updateEnemyHitReaction(enemy, dt);
+    return;
+  }
+  if (enemy.state === "charge") {
+    enemy.moving = false;
+    enemy.stateTimer -= dt;
+    if (enemy.stateTimer <= 0) {
+      fireMonster6Disc(enemy);
+      enemy.state = "chase";
+      enemy.attackTimer = enemy.attackCooldownMin + Math.random() * (
+        enemy.attackCooldownMax - enemy.attackCooldownMin
+      );
+    }
+    return;
+  }
+  if (
+    Math.abs(distance) <= definition.attackRange &&
+    verticalDistance <= definition.attackVerticalRange &&
+    enemy.attackTimer <= 0
+  ) {
+    enemy.state = "charge";
+    enemy.stateTimer = enemy.chargeDuration;
+    enemy.moving = false;
+    return;
+  }
+  if (Math.abs(distance) > 260 && Math.abs(distance) < enemy.chaseRange) {
+    moveEnemyAlongGround(enemy, Math.sign(distance), dt);
+  } else {
+    enemy.moving = false;
+  }
+}
+
+function monster7LanceOrigin(enemy, offset) {
+  return {
+    x: enemy.x + enemy.width / 2 + offset,
+    y: enemy.y + enemy.height * 0.72,
+  };
+}
+
+function fireMonster7Lances(enemy, playerHitbox) {
+  const definition = MONSTER_TYPES.monster7;
+  const targetX = playerHitbox.x + playerHitbox.width / 2;
+  const targetY = playerHitbox.y + playerHitbox.height * 0.55;
+  for (const offset of [-24, 24]) {
+    const origin = monster7LanceOrigin(enemy, offset);
+    const dx = targetX - origin.x;
+    const dy = Math.max(80, targetY - origin.y);
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const speed = definition.lanceSpeed;
+    enemyBullets.push({
+      kind: "monster7-lance",
+      x: origin.x,
+      y: origin.y,
+      vx: dx / distance * speed,
+      vy: dy / distance * speed,
+      radius: definition.lanceRadius,
+      life: definition.lanceLifetime,
+      ricochets: 0,
+      maxRicochets: 0,
+      ricochetColor: "#47ffe8",
+    });
+    burst(origin.x, origin.y, "#62ffed", 7, 100);
+  }
+  if (
+    enemy.x + enemy.width >= cameraX - 80 && enemy.x <= cameraX + WIDTH + 80 &&
+    enemy.y + enemy.height >= cameraY - 80 && enemy.y <= cameraY + HEIGHT + 80 &&
+    typeof playTurretLaserSound === "function"
+  ) playTurretLaserSound();
+}
+
+function updateMonster7(enemy, dt, playerHitbox, playerCenterX) {
+  enemy.y = enemy.hoverBaseY + Math.sin(
+    enemy.animationTime * enemy.hoverSpeed + enemy.animationPhase,
+  ) * enemy.hoverAmplitude;
+  const patrolX = enemy.hoverAnchorX + Math.sin(
+    enemy.animationTime * enemy.patrolSpeed + enemy.animationPhase,
+  ) * enemy.patrolRadius;
+  const minX = enemy.platform.start + 28;
+  const maxX = enemy.platform.end - enemy.width - 28;
+  const moveLimit = enemy.hoverMoveSpeed * dt;
+  const targetX = Math.max(minX, Math.min(maxX, patrolX));
+  const nextX = Math.max(minX, Math.min(maxX,
+    enemy.x + Math.max(-moveLimit, Math.min(moveLimit, targetX - enemy.x)) +
+      enemy.hitKnockbackVelocity * dt,
+  ));
+  if (!enemyRectOverlapsEnemy(nextX, enemy.y, enemy.width, enemy.height, enemy)) {
+    enemy.moving = Math.abs(nextX - enemy.x) > 0.5;
+    if (enemy.moving) enemy.facing = Math.sign(nextX - enemy.x) || enemy.facing;
+    enemy.x = nextX;
+  }
+  enemy.hitKnockbackVelocity *= Math.exp(-enemy.hitKnockbackDamping * dt);
+
+  if (enemy.state === "charge") {
+    enemy.stateTimer -= dt;
+    if (enemy.stateTimer <= 0) {
+      fireMonster7Lances(enemy, playerHitbox);
+      enemy.state = "hover";
+      enemy.attackTimer = enemy.attackCooldownMin + Math.random() * (
+        enemy.attackCooldownMax - enemy.attackCooldownMin
+      );
+    }
+    return;
+  }
+  const horizontalDistance = Math.abs(playerCenterX - (enemy.x + enemy.width / 2));
+  if (horizontalDistance <= MONSTER_TYPES.monster7.attackRange && enemy.attackTimer <= 0) {
+    faceHostileTowardX(enemy, playerCenterX);
+    enemy.state = "charge";
+    enemy.stateTimer = enemy.chargeDuration;
+  }
+}
+
+function monster8MineOrigin(enemy) {
+  return {
+    x: enemy.x + enemy.width / 2 - enemy.facing * enemy.width * 0.2,
+    y: enemySurfaceY(enemy) - 13,
+  };
+}
+
+function deployMonster8Mine(enemy) {
+  const definition = MONSTER_TYPES.monster8;
+  const origin = monster8MineOrigin(enemy);
+  const activeMines = enemyBullets.filter((bullet) => (
+    bullet.kind === "monster8-mine" && bullet.owner === enemy
+  ));
+  if (activeMines.length >= definition.mineLimit) {
+    activeMines.sort((first, second) => first.life - second.life)[0].life = 0;
+  }
+  enemyBullets.push({
+    kind: "monster8-mine",
+    owner: enemy,
+    x: origin.x,
+    y: origin.y,
+    vx: 0,
+    vy: 0,
+    radius: definition.mineRadius,
+    life: definition.mineLifetime,
+    triggerRadius: definition.mineTriggerRadius,
+    explosionRadius: definition.mineExplosionRadius,
+    ignoreTerrain: true,
+    phase: Math.random() * Math.PI * 2,
+  });
+  burst(origin.x, origin.y, "#ff4059", 11, 105);
+}
+
+function updateMonster8(enemy, dt, playerCenterX, playerFeetY) {
+  const definition = MONSTER_TYPES.monster8;
+  enemy.y = enemySurfaceY(enemy) - enemy.height;
+  const distance = playerCenterX - (enemy.x + enemy.width / 2);
+  const verticalDistance = Math.abs(playerFeetY - enemySurfaceY(enemy));
+  faceHostileTowardX(enemy, playerCenterX);
+  if (enemy.hitTimer > 0) {
+    updateEnemyHitReaction(enemy, dt);
+    return;
+  }
+  if (enemy.state === "mine-charge") {
+    enemy.moving = false;
+    enemy.stateTimer -= dt;
+    if (enemy.stateTimer <= 0) {
+      deployMonster8Mine(enemy);
+      enemy.state = "chase";
+      enemy.attackTimer = enemy.attackCooldownMin + Math.random() * (
+        enemy.attackCooldownMax - enemy.attackCooldownMin
+      );
+    }
+    return;
+  }
+  if (
+    Math.abs(distance) <= definition.attackRange &&
+    verticalDistance <= definition.attackVerticalRange &&
+    enemy.attackTimer <= 0
+  ) {
+    enemy.state = "mine-charge";
+    enemy.stateTimer = enemy.chargeDuration;
+    return;
+  }
+  if (Math.abs(distance) > 150 && Math.abs(distance) < enemy.chaseRange) {
+    moveEnemyAlongGround(enemy, Math.sign(distance), dt);
+  } else {
+    enemy.moving = false;
+  }
+}
+
 function hostileAttackVideoIsVisible(hostile) {
   const margin = 100;
   const centerX = hostile.x + hostile.width / 2;
@@ -978,6 +1199,24 @@ function updateEnemies(dt) {
 
     if (enemy.kind === "monster5") {
       updateMonster5(enemy, dt, playerHitbox, playerCenterX);
+      damagePlayerOnHostileContact(enemy, playerHitbox, getEnemyHitbox(enemy));
+      continue;
+    }
+
+    if (enemy.kind === "monster7") {
+      updateMonster7(enemy, dt, playerHitbox, playerCenterX);
+      damagePlayerOnHostileContact(enemy, playerHitbox, getEnemyHitbox(enemy));
+      continue;
+    }
+
+    if (enemy.kind === "monster6") {
+      updateMonster6(enemy, dt, playerHitbox, playerCenterX, playerFeetY);
+      damagePlayerOnHostileContact(enemy, playerHitbox, getEnemyHitbox(enemy));
+      continue;
+    }
+
+    if (enemy.kind === "monster8") {
+      updateMonster8(enemy, dt, playerCenterX, playerFeetY);
       damagePlayerOnHostileContact(enemy, playerHitbox, getEnemyHitbox(enemy));
       continue;
     }

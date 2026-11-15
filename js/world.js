@@ -2527,6 +2527,22 @@ function addEnemy(platform, x, kind = "monster1", options = {}) {
     orbLifetime: definition.orbLifetime,
     orbTurnSpeed: definition.orbTurnSpeed,
     orbExplosionRadius: definition.orbExplosionRadius,
+    discSpeed: eliteScale(
+      definition.discSpeed,
+      ENEMY_ELITE_PROJECTILE_SPEED_MULTIPLIER,
+    ),
+    discRadius: definition.discRadius,
+    discLifetime: definition.discLifetime,
+    lanceSpeed: eliteScale(
+      definition.lanceSpeed,
+      ENEMY_ELITE_PROJECTILE_SPEED_MULTIPLIER,
+    ),
+    lanceRadius: definition.lanceRadius,
+    lanceLifetime: definition.lanceLifetime,
+    mineRadius: definition.mineRadius,
+    mineLifetime: definition.mineLifetime,
+    mineTriggerRadius: definition.mineTriggerRadius,
+    mineExplosionRadius: definition.mineExplosionRadius,
     attackCooldownMin: eliteScale(
       definition.attackCooldownMin,
       ENEMY_ELITE_ATTACK_INTERVAL_MULTIPLIER,
@@ -2541,7 +2557,7 @@ function addEnemy(platform, x, kind = "monster1", options = {}) {
       definition.attackCooldown,
       ENEMY_ELITE_ATTACK_INTERVAL_MULTIPLIER,
     ),
-    attackTimer: kind === "monster3" || kind === "monster5"
+    attackTimer: ["monster3", "monster5", "monster6", "monster7", "monster8"].includes(kind)
       ? 0.8 + mapRandom() * 2.2 : 0,
     spearAttackRange: definition.spearAttackRange,
     spearAttackVerticalRange: definition.spearAttackVerticalRange,
@@ -2875,6 +2891,29 @@ function tryAddMonster5(...args) {
   return tryAddFlyingMonster("monster5", ...args);
 }
 
+function tryAddMonster7(...args) {
+  return tryAddFlyingMonster("monster7", ...args);
+}
+
+function tryAddGroundMonster(
+  kind,
+  platform,
+  startX,
+  endX,
+  attempts = 8,
+  avoidStartSafeZone = false,
+) {
+  const definition = MONSTER_TYPES[kind];
+  if (!definition || endX - startX < definition.width) return null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const x = startX + mapRandom() * (endX - startX - definition.width);
+    if (avoidStartSafeZone && stageSpawnIsInStartSafeZone(platform, x, definition)) continue;
+    const enemy = addEnemy(platform, x, kind);
+    if (enemy) return enemy;
+  }
+  return null;
+}
+
 function tryAddHeartItem(platform, startX, endX, avoidEnemies = true) {
   if (endX - startX < 52) return false;
   for (let attempt = 0; attempt < 12; attempt += 1) {
@@ -2883,7 +2922,7 @@ function tryAddHeartItem(platform, startX, endX, avoidEnemies = true) {
       turret.platform === platform && Math.abs(x - turret.x - turret.width / 2) < 95
     ) || enemies.some((enemy) =>
       avoidEnemies && enemy.platform === platform &&
-      !["monster3", "monster5"].includes(enemy.kind) &&
+      !["monster3", "monster5", "monster7"].includes(enemy.kind) &&
       Math.abs(x - enemy.x - enemy.width / 2) < 70
     ) || heartItems.some((heart) =>
       heart.platform === platform && Math.abs(x - heart.x) < 150
@@ -3101,6 +3140,30 @@ function buildStage() {
       tryAddMonster5(platform, visibleStart, visibleEnd, 6, true);
     }
 
+    if (
+      platform.routeRole === "main" && !platform.startingRoad &&
+      platformLength >= MONSTER_TYPES.monster6.spawnMinPlatformLength &&
+      mapRandom() < MONSTER_TYPES.monster6.spawnChance
+    ) {
+      tryAddGroundMonster("monster6", platform, visibleStart, visibleEnd, 8, true);
+    }
+
+    if (
+      platform.routeRole === "main" && !platform.startingRoad &&
+      platformLength >= MONSTER_TYPES.monster7.spawnMinPlatformLength &&
+      mapRandom() < MONSTER_TYPES.monster7.spawnChance
+    ) {
+      tryAddMonster7(platform, visibleStart, visibleEnd, 6, true);
+    }
+
+    if (
+      platform.routeRole === "main" && !platform.startingRoad &&
+      platformLength >= MONSTER_TYPES.monster8.spawnMinPlatformLength &&
+      mapRandom() < MONSTER_TYPES.monster8.spawnChance
+    ) {
+      tryAddGroundMonster("monster8", platform, visibleStart, visibleEnd, 8, true);
+    }
+
     if (platform.routeRole === "main" && !platform.startingRoad) {
       eligibleHeartPlatforms += 1;
       if (eligibleHeartPlatforms % 2 === 0) {
@@ -3139,6 +3202,19 @@ function buildStage() {
         12,
         true,
       )) break;
+    }
+  }
+  for (const kind of ["monster6", "monster7", "monster8"]) {
+    if (enemies.some((enemy) => enemy.kind === kind)) continue;
+    const definition = MONSTER_TYPES[kind];
+    const offset = Math.floor(mapRandom() * Math.max(1, routeRoads.length));
+    for (let index = 0; index < routeRoads.length; index += 1) {
+      const platform = routeRoads[(offset + index) % routeRoads.length];
+      if (platform.end - platform.start < definition.spawnMinPlatformLength) continue;
+      const spawned = kind === "monster7"
+        ? tryAddMonster7(platform, platform.start + 24, platform.end - 24, 12, true)
+        : tryAddGroundMonster(kind, platform, platform.start + 24, platform.end - 24, 12, true);
+      if (spawned) break;
     }
   }
   if (heartItems.length < 7) {
@@ -3457,7 +3533,10 @@ function spawnTestMonster(kind) {
   burst(
     enemy.x + enemy.width / 2,
     enemy.y + enemy.height / 2,
-    kind === "monster5" ? "#50d8ff"
+    kind === "monster8" ? "#ff4059"
+      : kind === "monster7" ? "#35f6df"
+      : kind === "monster6" ? "#ffc44d"
+      : kind === "monster5" ? "#50d8ff"
       : kind === "monster3" ? "#ff9c59"
       : kind === "monster2" ? "#dc55e9"
         : kind === "monster4" ? "#ff794f" : "#7cff48",
@@ -3752,7 +3831,7 @@ function resizeGameResolution(width, height) {
   player.fallReferenceY += verticalShift;
   for (const enemy of enemies) enemy.y += verticalShift;
   for (const enemy of enemies) {
-    if (["monster3", "monster5"].includes(enemy.kind)) {
+    if (["monster3", "monster5", "monster7"].includes(enemy.kind)) {
       enemy.hoverBaseY += verticalShift;
     }
   }
@@ -3846,6 +3925,9 @@ function toggleTestMap() {
 }
 
 function resetGame() {
+  if (typeof resetGameOverScorePanel === "function") {
+    resetGameOverScorePanel();
+  }
   if (typeof resetFemaleVoicePlayback === "function") {
     resetFemaleVoicePlayback();
   }
