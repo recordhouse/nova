@@ -6,6 +6,15 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
+test("keyboard fire uses Enter and ultimate uses only right Shift", () => {
+  const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
+  assert.match(input, /Enter:\s*"fire"/);
+  assert.match(input, /ShiftRight:\s*"ultimate"/);
+  assert.doesNotMatch(input, /KeyJ:\s*"fire"/);
+  assert.doesNotMatch(input, /KeyK:\s*"ultimate"/);
+  assert.doesNotMatch(input, /(?:^|\n)\s*Shift:\s*"ultimate"/);
+});
+
 test("test controls are centered at the very bottom of the screen", () => {
   const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
   const rule = css.match(/\.test-controls\s*\{([^}]+)\}/s)?.[1] ?? "";

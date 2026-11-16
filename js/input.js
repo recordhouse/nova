@@ -12,8 +12,8 @@ const keyMap = {
   ArrowUp: "up",
   KeyW: "up",
   Space: "jump",
-  KeyJ: "fire",
-  KeyK: "ultimate",
+  Enter: "fire",
+  ShiftRight: "ultimate",
 };
 
 function keyboardControl(event) {
