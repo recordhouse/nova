@@ -25,10 +25,7 @@ test("the NOVA menu uses the neon pixel-art treatment", () => {
   assert.match(css, /\.start-screen-button\s*\{[^}]*clip-path:/s);
   assert.match(css, /start-screen-title-pulse/);
   assert.match(css, /\.start-screen-grid\s*\{[^}]*perspective/s);
-  assert.match(css, /nova-title-screen-v1\.webp/);
-  assert.ok(fs.existsSync(
-    path.join(root, "assets", "images", "ui", "nova-title-screen-v1.webp"),
-  ));
+  assert.doesNotMatch(css, /nova-title-screen-v1/);
 });
 
 test("START pauses gameplay and music until the player chooses it", () => {

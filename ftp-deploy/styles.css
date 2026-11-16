@@ -482,17 +482,9 @@ button {
   overflow: hidden;
   color: #f4f0ff;
   background:
-    radial-gradient(circle at 50% 43%, rgb(128 43 223 / 18%) 0%, transparent 34%),
-    linear-gradient(
-      90deg,
-      rgb(2 2 11 / 12%) 0%,
-      rgb(3 2 14 / 34%) 32%,
-      rgb(3 2 14 / 48%) 50%,
-      rgb(3 2 14 / 32%) 67%,
-      rgb(2 2 11 / 10%) 100%
-    ),
-    linear-gradient(180deg, rgb(1 2 10 / 8%), rgb(5 1 15 / 25%)),
-    url("./assets/images/ui/nova-title-screen-v1.webp?v=20261113-1") center / cover no-repeat;
+    radial-gradient(circle at 50% 46%, rgb(151 53 255 / 26%) 0%, transparent 31%),
+    radial-gradient(circle at 50% 100%, rgb(30 217 255 / 15%) 0%, transparent 45%),
+    linear-gradient(180deg, rgb(2 2 11 / 91%), rgb(8 1 20 / 96%));
   font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
   touch-action: manipulation;
 }

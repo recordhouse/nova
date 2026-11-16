@@ -262,10 +262,6 @@ const enemySprites = {
   monster8: loadImageAsset("./assets/images/monsters/monster_08.png?v=20261111-1"),
 };
 
-const titleScreenBackgroundImage = loadImageAsset(
-  "./assets/images/ui/nova-title-screen-v1.webp?v=20261113-1",
-);
-
 const enemyEliteSprites = {
   monster1: loadImageAsset("./assets/images/monsters/monster_01_elite.png?v=20261109-1"),
   monster2: loadImageAsset("./assets/images/monsters/monster_02_elite.png?v=20261109-1"),
