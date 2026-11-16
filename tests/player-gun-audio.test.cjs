@@ -154,11 +154,11 @@ test("combat sounds preload and use their intended audio segments", async () => 
   assert.ok(musicInstances.every((music) => music.volume === 1),
     "the media element stays at full volume so mobile cannot bypass attenuation");
   assert.deepEqual(mediaSourceElements, musicInstances);
-  assert.equal(vm.runInContext("stageMusicOutput.gain.value", scope), 0.6,
+  assert.equal(vm.runInContext("stageMusicOutput.gain.value", scope), 0.48,
     "background music uses the same Web Audio gain path on every device");
-  assert.equal(vm.runInContext("gameSfxOutput.gain.value", scope), 2.5);
-  assert.equal(vm.runInContext("femaleVoiceOutput.gain.value", scope), 3.5);
-  assert.equal(vm.runInContext("enemyVoiceOutput.gain.value", scope), 1);
+  assert.equal(vm.runInContext("gameSfxOutput.gain.value", scope), 2);
+  assert.equal(vm.runInContext("femaleVoiceOutput.gain.value", scope), 2.8);
+  assert.equal(vm.runInContext("enemyVoiceOutput.gain.value", scope), 0.8);
   assert.ok(musicInstances.every((music) => music.preload === "auto"));
   assert.ok(musicInstances.every((music) => music.playsInline === true));
   assert.equal(vm.runInContext("stageMusicPaused", scope), false);

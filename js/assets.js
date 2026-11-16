@@ -640,7 +640,7 @@ playMonsterBasicVideo();
 playSpaceBackgroundVideo();
 
 const GameAudioContext = window.AudioContext ?? window.webkitAudioContext;
-const STAGE_MUSIC_VOLUME = 0.6;
+const STAGE_MUSIC_VOLUME = 0.48;
 const stage01Music = typeof Audio === "function"
   ? new Audio("./assets/music/stage.mp3?v=20261109-1") : null;
 const bossMusic = typeof Audio === "function"
@@ -787,9 +787,9 @@ if (!stageMusicPaused) playCurrentStageMusic();
 const gameSfxOutput = gameAudioContext ? gameAudioContext.createGain() : null;
 const femaleVoiceOutput = gameAudioContext ? gameAudioContext.createGain() : null;
 const enemyVoiceOutput = gameAudioContext ? gameAudioContext.createGain() : null;
-const GAME_SFX_MASTER_GAIN = 2.5;
-const FEMALE_VOICE_MASTER_GAIN = 3.5;
-const ENEMY_VOICE_MASTER_GAIN = 1;
+const GAME_SFX_MASTER_GAIN = 2;
+const FEMALE_VOICE_MASTER_GAIN = 2.8;
+const ENEMY_VOICE_MASTER_GAIN = 0.8;
 if (gameSfxOutput) {
   gameSfxOutput.gain.value = GAME_SFX_MASTER_GAIN;
   gameSfxOutput.connect(gameAudioContext.destination);
