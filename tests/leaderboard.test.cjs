@@ -37,12 +37,16 @@ test("game over uses an English neon pixel-art registration panel", () => {
   assert.match(panel, />GAME OVER</);
   assert.match(panel, />FINAL SCORE</);
   assert.match(panel, />ENTER NAME</);
-  assert.match(panel, />\s*REGISTER\s*</);
+  assert.match(panel, /placeholder="NAME"/);
+  assert.match(panel, />\s*OK\s*</);
   assert.match(panel, />\s*RESTART\s*</);
   assert.doesNotMatch(panel, /[가-힣]/);
   assert.match(css, /\.game-over-title\s*\{[^}]*text-shadow:/s);
   assert.match(css, /game-over-neon-pulse/);
   assert.match(css, /\.game-over-panel\s*\{[^}]*repeating-linear-gradient/s);
+  assert.match(css, /\.game-over-layout\s*\{[^}]*height:\s*min\(84%,\s*620px\)/s);
+  assert.match(css, /\.game-over-form\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto/s);
+  assert.match(css, /\.game-over-name-label\s*\{[^}]*clip-path:\s*inset\(50%\)/s);
 });
 
 test("leaderboard keeps only the best 100 scores and resolves ties by registration time", () => {

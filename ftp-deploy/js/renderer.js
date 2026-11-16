@@ -1847,10 +1847,11 @@ function drawPlayer() {
 
 const PLAYER_GAUGE_STYLE = {
   outer: "rgba(14, 6, 27, 0.9)",
-  border: "#7145a2",
-  track: "#241331",
-  fill: "#a653f5",
-  highlight: "#e6b5ff",
+  border: "#eddaff",
+  track: "#21102f",
+  fill: "#b56cff",
+  highlight: "#fffaff",
+  glow: "#b35cff",
 };
 const MONSTER_GAUGE_STYLES = [0, 60, 120].map((hue) => ({
   outer: "rgba(4, 7, 10, 0.88)",
@@ -1869,8 +1870,13 @@ function drawPixelGauge(centerX, topY, width, ratio, style, underStyle = null) {
   ctx.save();
   ctx.fillStyle = style.outer;
   ctx.fillRect(left - 3, top - 3, width + 6, height + 6);
+  if (style.glow) {
+    ctx.shadowColor = style.glow;
+    ctx.shadowBlur = 10;
+  }
   ctx.fillStyle = style.border;
   ctx.fillRect(left - 1, top - 1, width + 2, height + 2);
+  ctx.shadowBlur = 0;
   ctx.fillStyle = style.track;
   ctx.fillRect(left, top, width, height);
   if (underStyle) {
@@ -1880,8 +1886,13 @@ function drawPixelGauge(centerX, topY, width, ratio, style, underStyle = null) {
     ctx.fillRect(left + 2, top + 2, width - 4, 2);
   }
   if (filledWidth > 0) {
+    if (style.glow) {
+      ctx.shadowColor = style.glow;
+      ctx.shadowBlur = 9;
+    }
     ctx.fillStyle = style.fill;
     ctx.fillRect(left + 2, top + 2, filledWidth, 4);
+    ctx.shadowBlur = 0;
     ctx.fillStyle = style.highlight;
     ctx.fillRect(left + 2, top + 2, filledWidth, 2);
   }

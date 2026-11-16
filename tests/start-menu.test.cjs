@@ -21,11 +21,15 @@ test("the first screen presents NOVA with exactly the three requested actions", 
 
 test("the NOVA menu uses the neon pixel-art treatment", () => {
   const css = fs.readFileSync(path.join(root, "styles.css"), "utf8");
-  assert.match(css, /\.start-screen-title\s*\{[^}]*text-shadow:/s);
+  assert.match(css, /assets\/images\/title\/main\.webp/);
+  assert.ok(fs.existsSync(path.join(root, "assets", "images", "title", "main.webp")));
+  assert.match(css, /\.start-screen-title[^}]*clip-path:\s*inset\(50%\)/s);
+  assert.match(css, /\.start-screen-main\s*\{[^}]*right:\s*7%/s);
+  assert.match(css, /\.start-screen-main\s*\{[^}]*top:\s*calc\(55%\s*\+\s*30px\)/s);
   assert.match(css, /\.start-screen-button\s*\{[^}]*clip-path:/s);
-  assert.match(css, /start-screen-title-pulse/);
-  assert.match(css, /\.start-screen-grid\s*\{[^}]*perspective/s);
-  assert.doesNotMatch(css, /nova-title-screen-v1/);
+  assert.match(css, /\.start-ranking-view\s*\{[^}]*height:\s*min\(82%,\s*620px\)/s);
+  assert.match(css, /\.start-ranking-view\s*\{[^}]*min-height:\s*0[^}]*overflow:\s*hidden/s);
+  assert.match(css, /\.start-ranking-list\s*\{[^}]*min-height:\s*0/s);
 });
 
 test("START pauses gameplay and music until the player chooses it", () => {

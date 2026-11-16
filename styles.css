@@ -482,9 +482,9 @@ button {
   overflow: hidden;
   color: #f4f0ff;
   background:
-    radial-gradient(circle at 50% 46%, rgb(151 53 255 / 26%) 0%, transparent 31%),
-    radial-gradient(circle at 50% 100%, rgb(30 217 255 / 15%) 0%, transparent 45%),
-    linear-gradient(180deg, rgb(2 2 11 / 91%), rgb(8 1 20 / 96%));
+    linear-gradient(90deg, transparent 0 52%, rgb(2 2 13 / 8%) 67%, rgb(2 1 12 / 18%) 100%),
+    linear-gradient(180deg, transparent 58%, rgb(3 1 12 / 18%) 100%),
+    url("./assets/images/title/main.webp?v=20261116-2") center / cover no-repeat;
   font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
   touch-action: manipulation;
 }
@@ -519,16 +519,7 @@ button {
 }
 
 .start-screen-grid {
-  position: absolute;
-  inset: 43% -18% -34%;
-  background-image:
-    linear-gradient(rgb(103 229 255 / 16%) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(174 105 255 / 15%) 1px, transparent 1px);
-  background-size: clamp(24px, 4vw, 52px) clamp(18px, 3vw, 38px);
-  mask-image: linear-gradient(transparent, #000 24%, #000 82%, transparent);
-  transform: perspective(330px) rotateX(57deg) scale(1.35);
-  transform-origin: center bottom;
-  pointer-events: none;
+  display: none;
 }
 
 .start-screen-main,
@@ -538,8 +529,11 @@ button {
 }
 
 .start-screen-main {
+  position: absolute;
+  top: calc(55% + 30px);
+  right: 7%;
   display: flex;
-  width: min(70%, 510px);
+  width: min(34%, 380px);
   flex-direction: column;
   align-items: center;
   text-align: center;
@@ -561,6 +555,20 @@ button {
   color: #78efff;
   font-size: clamp(8px, 1.15vw, 14px);
   text-shadow: 0 0 8px #32dfff;
+}
+
+.start-screen-signal,
+.start-screen-title,
+.start-screen-subtitle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .start-screen-title {
@@ -589,9 +597,9 @@ button {
 
 .start-screen-actions {
   display: grid;
-  width: min(100%, 310px);
+  width: min(100%, 330px);
   gap: clamp(7px, 1.1vw, 12px);
-  margin-top: clamp(15px, 3vw, 32px);
+  margin-top: 0;
 }
 
 .start-screen-button {
@@ -652,9 +660,12 @@ button {
 .start-ranking-view {
   display: flex;
   width: min(72%, 620px);
-  max-height: 82%;
+  height: min(82%, 620px);
+  min-height: 0;
+  max-height: calc(100% - 24px);
   flex-direction: column;
   padding: clamp(12px, 2vw, 24px);
+  overflow: hidden;
   border: 1px solid rgb(144 238 255 / 76%);
   background: rgb(4 5 20 / 90%);
   box-shadow:
@@ -674,6 +685,8 @@ button {
 
 .start-ranking-list {
   flex: 1 1 auto;
+  min-height: 0;
+  overscroll-behavior: contain;
 }
 
 .start-screen-button.back {
@@ -688,7 +701,9 @@ button {
 
 @media (max-height: 470px) {
   .start-screen-main {
-    width: min(66%, 440px);
+    top: calc(54% + 30px);
+    right: 6%;
+    width: min(34%, 300px);
   }
 
   .start-screen-title {
@@ -697,7 +712,7 @@ button {
 
   .start-screen-actions {
     width: min(100%, 270px);
-    margin-top: 11px;
+    margin-top: 0;
     gap: 6px;
   }
 
@@ -707,7 +722,6 @@ button {
 
   .start-ranking-view {
     width: min(72%, 570px);
-    max-height: 86%;
     padding: 9px 14px;
   }
 }
@@ -784,7 +798,9 @@ button {
   grid-template-columns: minmax(250px, 0.9fr) minmax(300px, 1.1fr);
   gap: clamp(14px, 3vw, 44px);
   width: min(88%, 980px);
-  max-height: 84%;
+  height: min(84%, 620px);
+  min-height: 0;
+  max-height: calc(100% - 24px);
   align-items: center;
 }
 
@@ -801,9 +817,13 @@ button {
 
 .game-over-registration {
   display: flex;
+  min-height: 0;
+  max-height: 100%;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   padding: clamp(12px, 2.2vw, 26px);
+  overflow: hidden;
   text-align: center;
 }
 
@@ -842,8 +862,22 @@ button {
 
 .game-over-form {
   display: grid;
-  width: min(100%, 310px);
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: min(100%, 330px);
   gap: clamp(5px, 0.8vw, 9px);
+  margin-top: clamp(7px, 1.1vw, 12px);
+}
+
+.game-over-name-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .game-over-name-input,
@@ -863,6 +897,7 @@ button {
 }
 
 .game-over-name-input {
+  min-width: 0;
   outline: none;
   user-select: text;
   touch-action: auto;
@@ -882,6 +917,11 @@ button {
   background: rgb(83 27 130 / 72%);
   text-shadow: 0 0 8px #c486ff;
   touch-action: manipulation;
+}
+
+.game-over-register-button {
+  min-width: clamp(48px, 7vw, 72px);
+  padding: 0 clamp(9px, 1.5vw, 16px);
 }
 
 .game-over-register-button:disabled {
@@ -908,8 +948,9 @@ button {
 .leaderboard-panel {
   align-self: stretch;
   display: flex;
+  height: 100%;
   min-height: 0;
-  max-height: min(62vh, 470px);
+  max-height: none;
   flex-direction: column;
   padding: clamp(9px, 1.5vw, 18px);
 }
@@ -972,7 +1013,6 @@ button {
 @media (max-height: 470px) {
   .game-over-layout {
     width: min(91%, 980px);
-    max-height: 88%;
   }
 
   .game-over-registration {
@@ -984,7 +1024,29 @@ button {
   }
 
   .leaderboard-panel {
-    max-height: 70vh;
+    max-height: none;
+  }
+
+  .game-over-score-label {
+    margin-top: 5px;
+  }
+
+  .game-over-form {
+    margin-top: 5px;
+  }
+
+  .game-over-name-input,
+  .game-over-register-button,
+  .game-over-restart-button {
+    min-height: 28px;
+  }
+
+  .game-over-result {
+    margin-top: 3px;
+  }
+
+  .game-over-restart-button {
+    margin-top: 3px;
   }
 }
 

@@ -119,10 +119,10 @@ test("images, videos and audio must all settle before shared loading reaches 100
     );
   }
 
-  assert.equal(vm.runInContext("visualAssetLoadTasks.length", scope), 47);
+  assert.equal(vm.runInContext("visualAssetLoadTasks.length", scope), 48);
   assert.equal(vm.runInContext("audioAssetLoadTasks.length", scope), 34);
   assert.equal(pendingAudioFetches.length, 34);
-  assert.equal(images.length, 31);
+  assert.equal(images.length, 32);
   assert.equal(videos.length, 16);
   assert.equal(scope.visualAssetsAreReady(), false);
   assert.equal(scope.gameAssetsAreReady(), false);
@@ -159,13 +159,13 @@ test("images, videos and audio must all settle before shared loading reaches 100
   assert.equal(scope.visualAssetsAreReady(), true);
   assert.equal(scope.gameAssetsAreReady(), false);
   assert.equal(gameReady, false);
-  assert.equal(styleValues.get("--loading-progress"), "58%");
+  assert.equal(styleValues.get("--loading-progress"), "59%");
 
   for (const releaseFetch of pendingAudioFetches) releaseFetch();
   const snapshot = await ready;
   assert.deepEqual(
     { total: snapshot.total, loaded: snapshot.loaded, failed: snapshot.failed },
-    { total: 81, loaded: 81, failed: 1 },
+    { total: 82, loaded: 82, failed: 1 },
   );
   assert.equal(scope.gameAssetsAreReady(), true);
   assert.equal(gameReady, true);

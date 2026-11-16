@@ -262,6 +262,10 @@ const enemySprites = {
   monster8: loadImageAsset("./assets/images/monsters/monster_08.png?v=20261111-1"),
 };
 
+const titleScreenBackgroundImage = loadImageAsset(
+  "./assets/images/title/main.webp?v=20261116-2",
+);
+
 const enemyEliteSprites = {
   monster1: loadImageAsset("./assets/images/monsters/monster_01_elite.png?v=20261109-1"),
   monster2: loadImageAsset("./assets/images/monsters/monster_02_elite.png?v=20261109-1"),
@@ -636,7 +640,7 @@ playMonsterBasicVideo();
 playSpaceBackgroundVideo();
 
 const GameAudioContext = window.AudioContext ?? window.webkitAudioContext;
-const STAGE_MUSIC_VOLUME = 1.2;
+const STAGE_MUSIC_VOLUME = 0.6;
 const stage01Music = typeof Audio === "function"
   ? new Audio("./assets/music/stage.mp3?v=20261109-1") : null;
 const bossMusic = typeof Audio === "function"
@@ -783,9 +787,9 @@ if (!stageMusicPaused) playCurrentStageMusic();
 const gameSfxOutput = gameAudioContext ? gameAudioContext.createGain() : null;
 const femaleVoiceOutput = gameAudioContext ? gameAudioContext.createGain() : null;
 const enemyVoiceOutput = gameAudioContext ? gameAudioContext.createGain() : null;
-const GAME_SFX_MASTER_GAIN = 5;
-const FEMALE_VOICE_MASTER_GAIN = 7;
-const ENEMY_VOICE_MASTER_GAIN = 2;
+const GAME_SFX_MASTER_GAIN = 2.5;
+const FEMALE_VOICE_MASTER_GAIN = 3.5;
+const ENEMY_VOICE_MASTER_GAIN = 1;
 if (gameSfxOutput) {
   gameSfxOutput.gain.value = GAME_SFX_MASTER_GAIN;
   gameSfxOutput.connect(gameAudioContext.destination);

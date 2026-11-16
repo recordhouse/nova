@@ -300,17 +300,19 @@ test("the first start voice holds its dedicated video over movement and firing f
     "the current action footage resumes as soon as the start voice ends");
 });
 
-test("purple gauge tracks the drawn sprite and never blinks with temporary immunity", () => {
+test("bright bullet-colored gauge tracks the sprite and never blinks with temporary immunity", () => {
   const { scope, calls } = createGame();
   scope.drawPlayer();
-  const full = calls.find((call) => call.color === "#a653f5");
-  const frame = calls.find((call) => call.color === "#7145a2");
+  const full = calls.find((call) => call.color === "#b56cff");
+  const frame = calls.find((call) => call.color === "#eddaff");
   assert.equal(full.args[2], 52);
   assert.ok(frame.args[1] < read(scope, "player.y"));
+  assert.equal(read(scope, "PLAYER_GAUGE_STYLE.highlight"), "#fffaff");
+  assert.equal(read(scope, "PLAYER_GAUGE_STYLE.glow"), "#b35cff");
   calls.length = 0;
   read(scope, "player.fireEnergy=50; player.invincible=1; gameTime=0.15");
   scope.drawPlayer();
-  const half = calls.find((call) => call.color === "#a653f5");
+  const half = calls.find((call) => call.color === "#b56cff");
   const sprite = calls.find((call) => call.operation === "drawImage");
   assert.equal(half.args[2], 26);
   assert.equal(half.alpha, 1);
@@ -318,8 +320,8 @@ test("purple gauge tracks the drawn sprite and never blinks with temporary immun
   calls.length = 0;
   read(scope, "player.fireEnergy=0");
   scope.drawPlayer();
-  assert.equal(calls.some((call) => call.color === "#a653f5"), false);
-  assert.ok(calls.some((call) => call.color === "#7145a2"));
+  assert.equal(calls.some((call) => call.color === "#b56cff"), false);
+  assert.ok(calls.some((call) => call.color === "#eddaff"));
 });
 
 test("ultimate floating uses the finishing animation from its first frame", () => {
