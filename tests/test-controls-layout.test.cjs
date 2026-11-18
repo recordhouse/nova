@@ -6,11 +6,12 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-test("keyboard fire uses Enter and ultimate uses only right Shift", () => {
+test("keyboard aliases map Enter to fire, J to jump, and U or right Shift to ultimate", () => {
   const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
   assert.match(input, /Enter:\s*"fire"/);
+  assert.match(input, /KeyJ:\s*"jump"/);
   assert.match(input, /ShiftRight:\s*"ultimate"/);
-  assert.doesNotMatch(input, /KeyJ:\s*"fire"/);
+  assert.match(input, /KeyU:\s*"ultimate"/);
   assert.doesNotMatch(input, /KeyK:\s*"ultimate"/);
   assert.doesNotMatch(input, /(?:^|\n)\s*Shift:\s*"ultimate"/);
 });
@@ -147,15 +148,15 @@ test("rapid taps on touch controls cannot trigger browser zoom", () => {
   assert.match(input, /addEventListener\("dblclick",[\s\S]*?\.closest\?\.\("\.touch-controls"\)[\s\S]*?preventDefault\(\)/);
 });
 
-test("the smaller two-circle joystick uses a larger screen-relative touch zone", () => {
+test("the enlarged two-circle joystick uses a larger screen-relative touch zone", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
   const input = fs.readFileSync(path.join(__dirname, "..", "js", "input.js"), "utf8");
   assert.match(html, /class="move-controls"\s+data-movement-zone/);
   assert.doesNotMatch(html, /joystick-arrow/);
   assert.doesNotMatch(css, /\.movement-joystick::(?:before|after)/);
-  assert.match(css, /\.movement-joystick\s*\{[^}]*width:\s*clamp\(92px,\s*24vw,\s*118px\)/s);
-  assert.match(css, /\.move-controls\s*\{[^}]*width:\s*clamp\(124px,\s*31vw,\s*154px\)/s);
+  assert.match(css, /\.movement-joystick\s*\{[^}]*width:\s*clamp\(120px,\s*30vw,\s*152px\)/s);
+  assert.match(css, /\.move-controls\s*\{[^}]*width:\s*clamp\(154px,\s*38vw,\s*190px\)/s);
   assert.match(input, /movementJoystickOriginX\s*=\s*event\.clientX/);
   assert.match(input, /movementJoystickOriginY\s*=\s*event\.clientY/);
   assert.match(input, /event\.clientX\s*-\s*movementJoystickOriginX/);
@@ -192,6 +193,15 @@ test("joystick movement follows the finger gesture instead of the fixed circle c
     "a touch still left of the fixed center must not briefly move left");
   assert.equal(latestControls.right, true,
     "dragging right from the touch origin immediately moves right");
+
+  scope.updateMovementJoystick({ pointerId: 7, clientX: 150, clientY: 168 });
+  assert.equal(latestControls.right, true);
+  assert.equal(latestControls.down, false,
+    "small vertical finger drift while running must not trigger crouch");
+
+  scope.updateMovementJoystick({ pointerId: 7, clientX: 118, clientY: 180 });
+  assert.equal(latestControls.down, true,
+    "a deliberate mostly-downward gesture still triggers crouch");
 });
 
 test("mobile portrait view rotates the landscape game and declares landscape install mode", () => {

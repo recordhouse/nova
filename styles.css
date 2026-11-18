@@ -1071,8 +1071,8 @@ button {
 
 .move-controls {
   display: grid;
-  width: clamp(124px, 31vw, 154px);
-  height: clamp(124px, 31vw, 154px);
+  width: clamp(154px, 38vw, 190px);
+  height: clamp(154px, 38vw, 190px);
   place-items: center;
   pointer-events: auto;
   touch-action: none;
@@ -1091,8 +1091,8 @@ button {
 
 .movement-joystick {
   position: relative;
-  width: clamp(92px, 24vw, 118px);
-  height: clamp(92px, 24vw, 118px);
+  width: clamp(120px, 30vw, 152px);
+  height: clamp(120px, 30vw, 152px);
   padding: 0;
   border: 2px solid rgb(123 221 235 / 34%);
   border-radius: 50%;

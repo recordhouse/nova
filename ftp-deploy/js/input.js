@@ -12,8 +12,10 @@ const keyMap = {
   ArrowUp: "up",
   KeyW: "up",
   Space: "jump",
+  KeyJ: "jump",
   Enter: "fire",
   ShiftRight: "ultimate",
+  KeyU: "ultimate",
 };
 
 function keyboardControl(event) {
@@ -64,11 +66,13 @@ function updateMovementJoystick(event) {
   );
 
   const deadZone = rect.width * 0.14;
+  const downDeadZone = rect.width * 0.24;
+  const deliberateDown = dy > downDeadZone && dy > Math.abs(dx) * 0.85;
   setJoystickControls({
     left: dx < -deadZone,
     right: dx > deadZone,
     up: dy < -deadZone,
-    down: dy > deadZone,
+    down: deliberateDown,
   });
 }
 
